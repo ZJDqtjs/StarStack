@@ -318,6 +318,75 @@ td .tag{margin:2px 4px 2px 0}
   font:400 11.5px/1.7 var(--sans);color:var(--mute)}
 #authmsg:not(:empty){color:var(--bad);font-size:12.5px;margin-top:12px}
 
+/* ---------- Starstack control-center redesign ---------- */
+.app{grid-template-columns:248px minmax(0,1fr)}
+.side{padding:22px 14px 16px;gap:22px}
+.brand{padding:3px 10px 0}
+.mark{width:30px;height:30px;border-radius:8px}
+.brand-txt b{font-size:14px}
+nav{gap:18px;overflow:auto}
+.navgroup{display:flex;flex-direction:column;gap:3px}
+.navgroup>span{padding:0 10px 5px;color:var(--faint);font:500 10px/1.4 var(--mono);letter-spacing:.1em}
+nav button,nav .navlink{height:37px;padding:0 11px;border-radius:7px;font-size:13px}
+nav button.on{background:var(--link-soft);color:var(--link);font-weight:600}
+main{max-width:1440px;padding:34px 42px 88px}
+.viewhead{margin-bottom:24px}
+.viewhead h1{font-size:26px;letter-spacing:-1px}
+.card{border-radius:10px;padding:22px}
+.dash-hero{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin:0 0 24px}
+.dash-eyebrow{font:500 10px/1.5 var(--mono);letter-spacing:.14em;color:var(--link);margin-bottom:9px}
+.dash-hero h1{font-size:30px;letter-spacing:-1.3px;font-weight:650}
+.dash-hero p{margin:7px 0 0;color:var(--mute);font-size:13px}
+.dash-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.dash-metric{min-width:0;padding:18px 19px;border:1px solid var(--hair);border-radius:10px;background:var(--card);box-shadow:var(--shadow)}
+.dash-metric span,.dash-metric small{display:block;color:var(--mute)}
+.dash-metric span{font-size:12px}
+.dash-metric b{display:block;margin:10px 0 5px;font:600 27px/1.1 var(--sans);letter-spacing:-1px;color:var(--ink);font-variant-numeric:tabular-nums}
+.dash-metric small{font-size:11px}
+.dash-layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,.85fr);gap:16px;align-items:stretch}
+.dash-card{min-width:0;margin-bottom:16px}
+.dash-cardhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.dash-cardhead h2{margin:4px 0 0;font-size:16px}
+.dash-live{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--ok)}
+.dash-live i{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+.dash-pool{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.dash-poolitem{padding:13px;border:1px solid var(--hair);border-radius:8px;background:var(--inset);min-width:0}
+.dash-poolitem b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--ink)}
+.dash-poolitem span{display:block;margin-top:5px;font-size:11px;color:var(--mute)}
+.dash-poolitem em{font-style:normal;color:var(--ok);font-weight:600}
+.dash-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dash-actions button{display:flex;align-items:center;gap:10px;text-align:left;padding:12px 10px;border:1px solid var(--hair);border-radius:8px;background:var(--inset);color:var(--body);min-width:0}
+.dash-actions button:hover{border-color:var(--hair-2);background:var(--soft)}
+.dash-actions button>b{display:grid;place-items:center;width:30px;height:30px;flex:0 0 30px;border-radius:8px;background:var(--link-soft);color:var(--link);font-size:17px}
+.dash-actions button>span{min-width:0;font-size:12px;font-weight:600;color:var(--ink)}
+.dash-actions small{display:block;margin-top:3px;font-size:10px;font-weight:400;color:var(--mute);white-space:nowrap}
+.dash-actions button>i{margin-left:auto;font-style:normal;color:var(--mute)}
+.dash-balance{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:18px;padding:14px 0 0;border-top:1px solid var(--hair)}
+.dash-balance span{font-size:12px;color:var(--mute)}
+.dash-balance b{font:600 21px var(--mono);color:var(--ink)}
+.dash-balance small{width:100%;font-size:10px;color:var(--faint)}
+.dash-jobs{display:flex;flex-direction:column}
+.dash-job{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--hair);min-width:0}
+.dash-job:first-child{border-top:0}
+.dash-job .grow{flex:1;min-width:0}
+.dash-job b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--ink)}
+.dash-job small{display:block;margin-top:4px;color:var(--mute);font-size:11px}
+.dash-footnote{padding:2px 2px;color:var(--faint);font-size:11px}
+@media(max-width:1100px){.dash-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-layout{grid-template-columns:1fr}}
+@media(max-width:900px){
+ .app{grid-template-columns:1fr}.side{gap:10px;padding:10px 14px}
+ nav{gap:0}.navgroup{display:flex;flex-direction:row;align-items:center;gap:2px}
+ .navgroup>span{display:none}nav{gap:6px}
+ nav button,nav .navlink{height:35px;padding:0 9px;font-size:12px}
+ main{padding:22px 18px 60px}
+}
+@media(max-width:560px){
+ .dash-hero{align-items:flex-start;flex-direction:column}.dash-hero h1{font-size:25px}
+ .dash-metrics{gap:8px}.dash-metric{padding:13px}.dash-metric b{font-size:23px}
+ .dash-pool{grid-template-columns:1fr}.dash-actions{grid-template-columns:1fr}
+ .dash-card{padding:16px}main{padding:18px 14px 48px}
+}
+
 /* ---------- responsive ---------- */
 @media(max-width:900px){
   .app{grid-template-columns:1fr}
@@ -351,15 +420,24 @@ td .tag{margin:2px 4px 2px 0}
   </div>
 
   <nav id="nav" style="display:none">
-    <button data-v="submit" class="on">提交任务</button>
-    <button data-v="jobs">我的任务</button>
-    <button data-v="vm">云主机</button>
-    <button data-v="forum">论坛</button>
-    <button data-v="api">模型 API</button>
-    <button data-v="market">算力市场</button>
-    <button data-v="nodes">我的节点</button>
-    <button data-v="bill">账单</button>
-    <a class="navlink" href="/comfy/" target="_blank" rel="noreferrer">AI 视频</a>
+    <div class="navgroup"><span>工作台</span>
+      <button data-v="dashboard" class="on">总览</button>
+      <button data-v="submit">提交任务</button>
+      <button data-v="jobs">任务中心</button>
+    </div>
+    <div class="navgroup"><span>算力资源</span>
+      <button data-v="market">算力市场</button>
+      <button data-v="nodes">我的节点</button>
+      <button data-v="vm">云主机</button>
+    </div>
+    <div class="navgroup"><span>AI 平台</span>
+      <button data-v="api">模型 API</button>
+      <a class="navlink" href="/comfy/" target="_blank" rel="noreferrer">AI 视频</a>
+    </div>
+    <div class="navgroup"><span>账户与社区</span>
+      <button data-v="bill">账单</button>
+      <button data-v="forum">社区论坛</button>
+    </div>
   </nav>
 
   <div class="sidefoot">
@@ -399,6 +477,46 @@ td .tag{margin:2px 4px 2px 0}
     <div class="security">口令以 PBKDF2-HMAC-SHA256（20 万次迭代 + 随机盐）存储，服务端不保存明文；
       会话为 HttpOnly Cookie，有效期 30 天。<span id="signupnote"></span></div>
   </div>
+</section>
+
+<!-- ---------- 控制中心总览 ---------- -->
+<section class="view" id="v-dashboard">
+  <div class="dash-hero">
+    <div>
+      <div class="dash-eyebrow">STARSTACK / COMPUTE CONTROL CENTER</div>
+      <h1>算力控制中心</h1>
+      <p>你的分布式算力网络，实时运行状态一览。</p>
+    </div>
+    <button class="btn auto" onclick="showView('submit')">＋ 创建任务</button>
+  </div>
+  <div class="dash-metrics" id="dash-metrics">
+    <div class="dash-metric"><span>在线节点</span><b>—</b><small>等待状态同步</small></div>
+    <div class="dash-metric"><span>可用算力槽</span><b>—</b><small>实时调度余量</small></div>
+    <div class="dash-metric"><span>运行中任务</span><b>—</b><small>当前执行队列</small></div>
+    <div class="dash-metric"><span>GPU 显存总量</span><b>—</b><small>在线节点上报值</small></div>
+  </div>
+  <div class="dash-layout">
+    <div class="card dash-card">
+      <div class="dash-cardhead"><div><span class="kicker">LIVE COMPUTE POOL</span><h2>算力池状态</h2></div><span class="dash-live"><i></i>实时同步</span></div>
+      <div id="dash-pool" class="dash-pool"><div class="empty">正在读取节点状态…</div></div>
+      <button class="ghost" onclick="showView('market')">查看算力市场 →</button>
+    </div>
+    <div class="card dash-card">
+      <div class="dash-cardhead"><div><span class="kicker">QUICK ACCESS</span><h2>常用入口</h2></div></div>
+      <div class="dash-actions">
+        <button onclick="showView('submit')"><b>＋</b><span>提交新任务<small>转码、渲染与编译</small></span><i>→</i></button>
+        <button onclick="showView('jobs')"><b>▤</b><span>任务中心<small>进度、日志与产物</small></span><i>→</i></button>
+        <button onclick="showView('nodes')"><b>⌘</b><span>节点管理<small>接入、收益与调度</small></span><i>→</i></button>
+        <button onclick="showView('api')"><b>◇</b><span>模型 API<small>上游与模型目录</small></span><i>→</i></button>
+      </div>
+      <div class="dash-balance"><span>账户可用余额</span><b id="dash-balance">—</b><small>算力点 · 以账单结算为准</small></div>
+    </div>
+  </div>
+  <div class="card dash-card">
+    <div class="dash-cardhead"><div><span class="kicker">RECENT ACTIVITY</span><h2>最近任务</h2></div><button class="ghost" onclick="showView('jobs')">全部任务 →</button></div>
+    <div id="dash-jobs" class="dash-jobs"><div class="empty">暂无任务记录</div></div>
+  </div>
+  <div class="dash-footnote">数据来自当前 Broker 的实时状态接口；显存、节点与任务统计仅包含节点实际上报的数据。</div>
 </section>
 
 <!-- ---------- 提交任务 ---------- -->
@@ -1003,7 +1121,7 @@ const api=async(u,o)=>{const r=await fetch(u,o);const t=await r.text();
 const post=(u,body)=>api(u,{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify(body)});
 
-let ME=null, POOL=[], LIVE={}, TIMER=null, DUR=0, POL=null, VIEW='submit';
+let ME=null, POOL=[], LIVE={}, TIMER=null, DUR=0, POL=null, VIEW='dashboard';
 
 /* ---------------- 视图切换 ---------------- */
 function showView(v){
@@ -1137,10 +1255,38 @@ async function refresh(){
   TIMER=setTimeout(refresh,1000);
 }
 
+function paintDashboard(){
+  const online=POOL.filter(w=>w.online);
+  const free=online.reduce((n,w)=>n+Math.max(0,Number(w.slots||0)-Number(w.active||0)),0);
+  const running=Object.values(LIVE).filter(j=>j.status==='running').length;
+  const gpuMem=online.reduce((n,w)=>n+(w.gpus||[]).reduce((m,g)=>m+Number(g.mem_mb||0),0),0);
+  const jobs=Object.values(LIVE).sort((a,b)=>Number(b.created_at||b.created||0)-Number(a.created_at||a.created||0));
+  const fmtMem=mb=>mb>=1024?(mb/1024).toFixed(1)+' GB':Math.round(mb)+' MB';
+  $('#dash-metrics').innerHTML=[
+    ['在线节点',online.length,'共 '+POOL.length+' 台已登记节点'],
+    ['可用算力槽',free,'在线节点剩余并发槽'],
+    ['运行中任务',running,'任务总数 '+jobs.length],
+    ['GPU 显存总量',gpuMem?fmtMem(gpuMem):'—',gpuMem?'在线节点上报合计':'当前无可用显存数据']
+  ].map((x,i)=>'<div class="dash-metric"><span>'+x[0]+'</span><b>'+x[1]+'</b><small>'+x[2]+'</small></div>').join('');
+  $('#dash-balance').textContent=f2(ME&&ME.credits||0)+' 点';
+  const top=online.slice(0,4);
+  $('#dash-pool').innerHTML=top.length?top.map(w=>{
+    const gpu=(w.gpus||[]).reduce((n,g)=>n+Number(g.mem_mb||0),0);
+    return '<div class="dash-poolitem"><b>'+esc(w.name||w.id)+'</b><span><em>在线</em> · '+Number(w.cpus||0)+' 核 · '+(w.mem_mb?fmtMem(w.mem_mb)+' RAM':'内存未知')+'</span><span>GPU '+(gpu?fmtMem(gpu):'未上报')+' · 槽位 '+Math.max(0,Number(w.slots||0)-Number(w.active||0))+'/'+Number(w.slots||0)+'</span></div>';
+  }).join(''):'<div class="empty" style="grid-column:1/-1">算力池暂无在线节点。可前往「我的节点」接入设备。</div>';
+  const recent=jobs.slice(0,5);
+  $('#dash-jobs').innerHTML=recent.length?recent.map(j=>{
+    const label=({queued:'排队中',running:'运行中',done:'已完成',failed:'失败',cancelled:'已取消'})[j.status]||j.status||'未知';
+    const tone=j.status==='done'?'done':j.status==='failed'?'failed':j.status==='running'?'running':'queued';
+    return '<div class="dash-job"><div class="grow"><b>'+esc(j.name||j.id||'未命名任务')+'</b><small>'+esc(j.kind||'任务')+' · '+esc(j.id||'')+'</small></div><span class="st '+tone+'">'+label+'</span></div>';
+  }).join(''):'<div class="empty">还没有任务记录，创建第一个任务开始使用算力池。</div>';
+}
+
 function activeView(){return VIEW}
 
 function paint(){
   const v=activeView();
+  if(v==='dashboard') paintDashboard();
   if(v==='market') paintMarket();
   if(v==='vm') paintVM();
   if(v==='nodes') paintNodes();
