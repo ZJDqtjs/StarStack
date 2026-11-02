@@ -259,6 +259,7 @@ td .tag{margin:2px 4px 2px 0}
 .pos,.neg{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
 /* ---------- stats ---------- */
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.quick-grid .ghost{height:auto;min-height:42px;white-space:normal}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px;margin-top:16px}
 .stat{background:var(--inset);border:1px solid var(--hair);border-radius:6px;padding:11px 13px;
   transition:border-color .12s}
@@ -351,7 +352,8 @@ td .tag{margin:2px 4px 2px 0}
   </div>
 
   <nav id="nav" style="display:none">
-    <button data-v="submit" class="on">提交任务</button>
+    <button data-v="overview" class="on">总览</button>
+    <button data-v="submit">提交任务</button>
     <button data-v="jobs">我的任务</button>
     <button data-v="vm">云主机</button>
     <button data-v="forum">论坛</button>
@@ -401,6 +403,7 @@ td .tag{margin:2px 4px 2px 0}
   </div>
 </section>
 
+<section class="view" id="v-overview"><div class="viewhead"><h1>算力工作台</h1><p>统一查看账户、任务与节点状态。</p></div><div class="stats" id="overview-stats"></div><div class="grid"><div class="card"><h2>最近任务</h2><div id="overview-jobs"></div><button class="ghost" onclick="showView('jobs')">查看全部任务</button></div><div class="card"><h2>快捷入口</h2><div class="quick-grid"><button class="ghost" onclick="showView('submit')">提交任务</button><button class="ghost" onclick="showView('nodes')">接入节点</button><button class="ghost" onclick="showView('market')">算力市场</button><button class="ghost" onclick="showView('api')">模型 API</button></div></div></div></section>
 <!-- ---------- 提交任务 ---------- -->
 <section class="view" id="v-submit">
   <div class="viewhead">
@@ -1003,7 +1006,7 @@ const api=async(u,o)=>{const r=await fetch(u,o);const t=await r.text();
 const post=(u,body)=>api(u,{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify(body)});
 
-let ME=null, POOL=[], LIVE={}, TIMER=null, DUR=0, POL=null, VIEW='submit';
+let ME=null, POOL=[], LIVE={}, TIMER=null, DUR=0, POL=null, VIEW='overview';
 
 /* ---------------- 视图切换 ---------------- */
 function showView(v){
@@ -1141,6 +1144,7 @@ function activeView(){return VIEW}
 
 function paint(){
   const v=activeView();
+  if(v==='overview') paintOverview();
   if(v==='market') paintMarket();
   if(v==='vm') paintVM();
   if(v==='nodes') paintNodes();
@@ -1150,6 +1154,17 @@ function paint(){
   if(v==='forum') paintForum();
   if(v==='me') paintMe();
   if(v==='submit') quote();
+}
+
+function paintOverview(){
+  if(!ME)return;
+  const jobs=Object.values(LIVE).sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+  const online=POOL.filter(w=>w.online);
+  const running=jobs.filter(j=>j.status==='running').length;
+  const free=online.reduce((n,w)=>n+Math.max(0,(w.slots||0)-(w.active||0)),0);
+  const stats=[[f2(ME.credits)+' 点','账户余额'],[String(running),'运行中任务'],[online.length+' / '+POOL.length,'在线节点'],[String(free),'可用并发槽']];
+  $('#overview-stats').innerHTML=stats.map(x=>'<div class="stat"><b>'+esc(x[0])+'</b><span>'+esc(x[1])+'</span></div>').join('');
+  $('#overview-jobs').innerHTML=jobs.length?jobs.slice(0,5).map(j=>'<div class="postitem"><h3>'+esc(j.name||j.id)+'</h3><div class="postmeta">'+esc(ST[j.status]||j.status)+'</div></div>').join(''):'<div class="empty">还没有任务</div>';
 }
 
 /* ---------------- 模型 API ---------------- */
