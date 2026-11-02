@@ -84,7 +84,7 @@ export default function App() {
   const [policy, setPolicy] = useState<any>(null)
   const [workers, setWorkers] = useState<any[]>([])
   const [jobs, setJobs] = useState<any[]>([])
-  const [view, setView] = useState('submit')
+  const [view, setView] = useState('dashboard')
   const [booting, setBooting] = useState(true)
   const [toast, setToast] = useState<{ msg: string; tone?: string } | null>(null)
   const [targetNode, setTargetNode] = useState<any>(null)
@@ -189,7 +189,7 @@ export default function App() {
               policy={policy}
               onDone={(m: any) => {
                 setMe(m)
-                setView('submit')
+                setView('dashboard')
               }}
             />
           </div>
