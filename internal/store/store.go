@@ -264,6 +264,19 @@ CREATE INDEX IF NOT EXISTS idx_comm_job ON comm_logs(job_id, ts);
 CREATE INDEX IF NOT EXISTS idx_comm_node ON comm_logs(node_id, ts);
 CREATE INDEX IF NOT EXISTS idx_comm_buyer ON comm_logs(buyer_id, ts);
 CREATE INDEX IF NOT EXISTS idx_comm_seller ON comm_logs(seller_id, ts);
+
+CREATE TABLE IF NOT EXISTS service_offers(
+  id         TEXT PRIMARY KEY,
+  category   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  title      TEXT NOT NULL,
+  body       TEXT NOT NULL DEFAULT '',
+  price      REAL NOT NULL DEFAULT 0,
+  unit       TEXT NOT NULL DEFAULT '点/次',
+  image      TEXT NOT NULL DEFAULT '',
+  image_mime TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_offer_cat ON service_offers(category, created_at);
 `
 
 // Column additions for databases written by an earlier build. SQLite has no

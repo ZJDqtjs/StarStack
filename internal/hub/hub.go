@@ -604,6 +604,10 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/forum/posts/", s.handleForumPost)
 	mux.HandleFunc("/api/forum/media/", s.handleForumMedia)
 
+	// Seller listings under each service section (API / 生图 / 生视频 / 渲染 / 编译).
+	mux.HandleFunc("/api/offers", s.handleOffers)
+	mux.HandleFunc("/api/offers/", s.handleOfferOp)
+
 	// IPv6 cloud hosts: buyer/seller console APIs, and the agent's own channel.
 	mux.HandleFunc("/api/vm/offers", s.handleVMOffers)
 	mux.HandleFunc("/api/vm/offers/", s.handleVMOfferOp)
