@@ -2,7 +2,7 @@ const core = require('./core.js')
 
 // 小程序的合法域名白名单需要 HTTPS 的已备案域名；开发/真机调试时在开发者工具里
 // 关闭「不校验合法域名」即可直连演示环境的 HTTP 地址。
-const DEFAULT_BASE = 'http://20.24.210.119:8787'
+const DEFAULT_BASE = 'https://starstack.run'
 
 function baseUrl() {
   return wx.getStorageSync('ss-base') || DEFAULT_BASE

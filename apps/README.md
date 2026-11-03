@@ -46,7 +46,7 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.starstack.compute/.MainActivity
 ```
 
-- APK 内是本地资源，不依赖远程网页；默认连 `http://20.24.210.119:8787`，可在登录页或「我的 → 服务器地址」改。
+- APK 内是本地资源，不依赖远程网页；默认连 `https://starstack.run`，可在登录页或「我的 → 服务器地址」改。
 - `capacitor.config.ts` 里 `androidScheme: 'http'` + `cleartext: true`，否则 `https://localhost` 的页面会被混合内容规则拦住明文请求；`localhost` 仍是安全上下文，剪贴板等 API 可用。
 - Gradle 分发包在 `android/gradle/wrapper/gradle-wrapper.properties` 指向腾讯镜像（`services.gradle.org` 在部分网络下会重置连接）；换回官方源删掉该行即可。
 - 文件上传走 WebView 的原生选择器，大文件没有分片续传，移动端建议只传小样。

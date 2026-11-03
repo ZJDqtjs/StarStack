@@ -1,6 +1,6 @@
 import { createApi } from '../../shared/index.js'
 
-const DEFAULT_BASE = 'http://20.24.210.119:8787'
+const DEFAULT_BASE = 'https://starstack.run'
 
 export const store = {
   get: (k: string) => {

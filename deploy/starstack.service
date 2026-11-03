@@ -28,6 +28,7 @@ ExecStart=/opt/starstack/starstack-server \
   --public \
   --node-bin-dir /opt/starstack/dl \
   --allow-build \
+  --trust-proxy \
   --base-url __STARSTACK_BASE_URL__
 
 Restart=always
