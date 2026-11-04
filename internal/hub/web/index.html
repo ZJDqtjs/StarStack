@@ -85,7 +85,10 @@ a:hover{text-decoration:underline;text-underline-offset:3px}
 .side-row{display:flex;align-items:center;gap:8px}
 .wallet{display:inline-flex;align-items:center;justify-content:space-between;gap:6px;height:32px;
   padding:0 11px;border:1px solid var(--hair);border-radius:6px;background:var(--card);
-  font-size:12px;color:var(--mute);white-space:nowrap}
+  font-size:12px;color:var(--mute);white-space:nowrap;text-align:left;cursor:pointer;
+  transition:border-color .14s,color .14s}
+.wallet:hover{border-color:var(--hair-2);color:var(--ink)}
+.wallet:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .wallet b{color:var(--ink);font-family:var(--mono);font-weight:500;font-variant-numeric:tabular-nums}
 .who{display:flex;align-items:center;gap:7px;min-width:0;font-size:13px;color:var(--body);white-space:nowrap}
 #app.signed .who{cursor:pointer;border-radius:6px;padding:3px 4px;margin:-3px -4px;
@@ -161,6 +164,8 @@ pre{background:var(--inset);border:1px solid var(--hair);border-radius:6px;paddi
   white-space:pre-wrap;word-break:break-word}
 .empty{color:var(--mute);font-size:12.5px;padding:28px 0;text-align:center;
   border:1px dashed var(--hair-2);border-radius:6px;background:var(--inset)}
+/* 表格里的空态不该再套一层虚线框 */
+td.empty{border:0;border-radius:0;background:transparent;padding:26px 0}
 /* 长错误串、URL、节点编号在小窗口里不能把卡片撑破 */
 .hint,.err,.note,td{overflow-wrap:anywhere}
 
@@ -289,6 +294,8 @@ td .tag{margin:2px 4px 2px 0}
   margin-bottom:16px;box-shadow:var(--shadow)}
 .job h3{margin:0 0 8px;font-size:15px;font-weight:600;letter-spacing:-.3px;
   display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* 文件名可能是一长串没有空格的英文，必须允许断行 */
+.job h3 b{min-width:0;overflow-wrap:anywhere}
 .prog{display:flex;align-items:center;gap:12px;margin-top:16px}
 .prog .bar{flex:1}
 .prog .sub-line{font-size:11px}
@@ -434,22 +441,25 @@ a.btn:hover{text-decoration:none}
 .hub-hero{max-width:820px;margin:10px auto 34px;text-align:center}
 .hub-hero h1{margin:0;font-size:26px;font-weight:600;letter-spacing:-1px}
 .hub-sub{margin:6px 0 22px;font-size:12.5px;color:var(--mute)}
-.hub-box{background:var(--card);border:1px solid var(--hair-2);border-radius:16px;
-  padding:14px;box-shadow:var(--shadow-lg);text-align:left;
-  background-image:linear-gradient(180deg,var(--bili-pink-soft),transparent 120px)}
+.hub-box{background:var(--card);border:1px solid var(--hair-2);border-radius:12px;
+  padding:14px;box-shadow:var(--shadow-lg);text-align:left;transition:border-color .14s,box-shadow .14s}
+.hub-box:focus-within{border-color:var(--hair-2);box-shadow:var(--shadow-lg),0 0 0 3px var(--focus)}
 .hub-box textarea{width:100%;height:64px;min-height:64px;resize:vertical;padding:8px 6px;
   border:0!important;box-shadow:none!important;background:transparent;font-size:14px}
 .hub-row{display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap}
 .hub-quick{display:flex;gap:6px;flex-wrap:wrap;flex:1}
 .hub-quick button{height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--hair);
   background:var(--card);color:var(--mute);font:400 11.5px/1 var(--sans);transition:.14s}
-.hub-quick button:hover{border-color:var(--bili-pink);color:var(--bili-pink)}
-.hub-send{height:38px;padding:0 22px;border:0;border-radius:10px;
-  background:linear-gradient(135deg,var(--bili-pink),#ff9db8);color:#fff;
-  font:500 13px/1 var(--sans);box-shadow:0 6px 18px rgba(251,114,153,.25)}
-.hub-send:hover{background:linear-gradient(135deg,#ff8aad,#ffabc2)}
+.hub-quick button:hover{border-color:var(--ink);color:var(--ink)}
+.hub-quick button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+/* 全站主按钮就是墨色，这里不再另起一套粉色渐变 */
+.hub-send{height:38px;padding:0 22px;border:0;border-radius:8px;
+  background:var(--cta);color:var(--cta-ink);font:500 13px/1 var(--sans);
+  transition:background .14s}
+.hub-send:hover{background:var(--cta-hover)}
+.hub-send:disabled{opacity:.5;cursor:not-allowed}
 .hub-result{margin-top:16px;padding:16px 18px;text-align:left;background:var(--card);
-  border:1px solid var(--hair);border-radius:12px;box-shadow:var(--shadow);
+  border:1px solid var(--hair);border-radius:8px;box-shadow:var(--shadow);
   font-size:12.5px;color:var(--body)}
 .hub-result b{display:block;color:var(--ink);font-size:13px;margin-bottom:8px}
 .hub-result p{margin:0;line-height:1.7}
@@ -459,16 +469,17 @@ a.btn:hover{text-decoration:none}
 .hub-links{display:flex;gap:8px;margin-top:10px}
 .hub-links button{height:28px;padding:0 12px;border-radius:999px;border:1px solid var(--hair);
   background:var(--inset);color:var(--ink);font:500 11.5px/1 var(--sans)}
-.hub-links button:hover{border-color:var(--bili-pink);color:var(--bili-pink)}
+.hub-links button:hover{border-color:var(--ink);color:var(--ink)}
+.hub-links button:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 
 /* ---------- 个人中心 ---------- */
 .backlink{display:inline-flex;align-items:center;gap:5px;margin:0 0 12px;height:28px;padding:0 9px;
-  border:1px solid var(--hair);border-radius:5px;background:var(--card);color:var(--body);
+  border:1px solid var(--hair);border-radius:6px;background:var(--card);color:var(--body);
   font:500 11.5px/1 var(--sans);cursor:pointer;transition:background .14s,color .14s}
 .backlink:hover{background:var(--soft);color:var(--ink)}
 .me-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .me-link{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:13px 15px;
-  border:1px solid var(--hair);border-radius:7px;background:var(--inset);text-align:left;
+  border:1px solid var(--hair);border-radius:8px;background:var(--inset);text-align:left;
   transition:border-color .14s,background .14s}
 .me-link:hover{border-color:var(--hair-2);background:var(--card)}
 .me-link b{font-size:13.5px;font-weight:600;color:var(--ink)}
@@ -541,14 +552,15 @@ a.btn:hover{text-decoration:none}
   </nav>
 
   <div class="sidefoot">
-    <div class="wallet" id="wallet" style="display:none"></div>
+    <button type="button" class="wallet" id="wallet" style="display:none"
+      onclick="showView('bill')" title="查看账户流水与充值"></button>
     <div class="side-row">
       <span class="netflag" id="netflag" hidden title="与服务器的连接中断，正在自动重试">离线</span>
       <button class="iconbtn" id="themeBtn" aria-label="切换深色 / 浅色" title="切换深色 / 浅色">
         <svg class="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>
         <svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
       </button>
-      <div class="who" id="who"></div>
+      <div class="who" id="who" role="button" tabindex="0" title="个人中心"></div>
       <button class="ghost" id="logout">退出</button>
     </div>
   </div>
@@ -690,21 +702,7 @@ a.btn:hover{text-decoration:none}
         <label>选择文件</label>
         <input type="file" name="file" id="fileinput" accept="video/*,audio/*">
 
-        <button type="button" class="adv-toggle" id="advbtn" onclick="toggleAdv()" aria-expanded="false">
-          <span id="advbtn-txt">高级设置</span>
-          <span class="aff">编码器 · 分片数 · 硬件要求</span>
-        </button>
-
-        <div id="adv-only" style="display:none">
-        <div id="pathbox">
-        <label>…或使用服务端本机路径</label>
-        <input name="path" placeholder="D:/videos/input.mp4">
-        </div>
-        <div class="row" id="segsbox">
-          <div><label>切分片数</label><input name="segs" value="4" inputmode="numeric"></div>
-          <div></div>
-        </div>
-
+        <!-- 任务本身必需的参数始终可见；只有编码器、硬件要求这类进阶项收进「高级设置」 -->
         <div id="render-blender" style="display:none">
           <fieldset class="fieldset">
             <legend>Blender 场景与输出</legend>
@@ -751,6 +749,21 @@ a.btn:hover{text-decoration:none}
             </div>
             <div class="hint">按实际墙钟分钟结算，预扣 10 分钟；编译失败不结算。</div>
           </fieldset>
+        </div>
+
+        <button type="button" class="adv-toggle" id="advbtn" onclick="toggleAdv()" aria-expanded="false">
+          <span id="advbtn-txt">高级设置</span>
+          <span class="aff">编码器 · 分片数 · 硬件要求</span>
+        </button>
+
+        <div id="adv-only" style="display:none">
+        <div id="pathbox">
+        <label>…或使用服务端本机路径</label>
+        <input name="path" placeholder="D:/videos/input.mp4">
+        </div>
+        <div class="row" id="segsbox">
+          <div><label>切分片数</label><input name="segs" value="4" inputmode="numeric"></div>
+          <div></div>
         </div>
 
         <fieldset class="fieldset" id="transcode-fields">
@@ -1466,6 +1479,7 @@ function showView(v){
 $$('#nav button[data-v]').forEach(b=>b.onclick=()=>showView(b.dataset.v));
 // 个人资料挂在头像上，不再占侧栏一项
 $('#who').onclick=()=>showView('me');
+$('#who').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showView('me')}};
 
 /* ---------------- 登录 / 注册 ---------------- */
 let mode='login';
@@ -2904,23 +2918,22 @@ function applyQuality(){
 }
 $('#quality').addEventListener('change',()=>{applyQuality();quote()});
 function applyMode(){
-  const render=$('#jobkind').value!=='transcode';
-  const open=ADV||render;
-  $('#adv-only').style.display=open?'':'none';
-  $('#qualitybox').style.display=(!ADV&&!render)?'':'none';
+  const transcode=$('#jobkind').value==='transcode';
+  // 任务必需的参数（场景、编译命令等）始终在页面上；编码器、分片数、
+  // 硬件要求这些默认值够用的项才跟着「高级设置」一起展开。
+  $('#adv-only').style.display=ADV?'':'none';
+  $('#qualitybox').style.display=transcode?'':'none';
   if(!ADV) applyQuality();
   $('#advtoggle').checked=ADV;
   const btn=$('#advbtn');
   if(btn){
-    // 渲染/编译本身就需要这些参数，展开开关在这里没有意义
-    btn.style.display=render?'none':'';
-    btn.setAttribute('aria-expanded',(!render&&ADV)?'true':'false');
+    btn.setAttribute('aria-expanded',ADV?'true':'false');
     const txt=$('#advbtn-txt');
     if(txt) txt.textContent=ADV?'收起高级设置':'高级设置';
   }
   $('#advhint').textContent=ADV
     ? '高级选项已展开在渲染 / 编译页的任务表单里。'
-    : '简洁模式只保留文件、任务类型和画质；渲染任务仍会展开必要参数。';
+    : '默认收起编码器、分片数、硬件要求；任务本身必需的参数始终可见。';
 }
 function toggleAdv(){setAdv(!ADV)}
 async function setAdv(on){
