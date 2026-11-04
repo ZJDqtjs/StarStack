@@ -1290,7 +1290,7 @@ a.btn:hover{text-decoration:none}
       <h2><span class="kicker">Ledger</span>账户流水</h2>
       <div id="recharge" style="display:flex;gap:8px;margin-bottom:16px">
         <input id="ramount" type="number" min="1" value="100" placeholder="充值算力点">
-        <button class="ghost" id="dochARGE" style="height:38px;flex:0 0 auto">充值</button>
+        <button class="ghost" id="dorecharge" style="height:38px;flex:0 0 auto">充值</button>
       </div>
       <div class="tablewrap"><table id="spend"><thead><tr><th>时间</th><th>类型</th><th>变动</th><th>余额</th><th>说明</th></tr></thead>
       <tbody><tr><td colspan="5" class="empty">暂无记录</td></tr></tbody></table></div>
@@ -1356,7 +1356,7 @@ a.btn:hover{text-decoration:none}
       <div><label>余额</label><div id="me-credits" class="val">—</div></div>
     </div>
     <div class="stats" style="margin-top:14px">
-      <div class="stat"><b id="me-jobs">0</b><span>我的任务</span></div>
+      <div class="stat"><b id="me-jobs">0</b><span>进行中任务</span></div>
       <div class="stat"><b id="me-nodes">0</b><span>我的在线节点</span></div>
       <div class="stat"><b id="me-vms">0</b><span>我的云主机</span></div>
     </div>
@@ -1367,6 +1367,7 @@ a.btn:hover{text-decoration:none}
       <button class="me-link" onclick="showView('jobs')"><b>我的任务</b><span>进度、分片与结算明细</span></button>
       <button class="me-link" onclick="showView('vm')"><b>我的云主机</b><span>租用中的实例与我发布的配置</span></button>
       <button class="me-link" onclick="showView('nodes')"><b>我的节点</b><span>接入机器、单价与收益</span></button>
+      <button class="me-link" onclick="showView('market')"><b>算力市场</b><span>在线节点按编码器的报价与吞吐</span></button>
       <button class="me-link" onclick="showView('bill')"><b>账单</b><span>账户流水与节点收益</span></button>
       <button class="me-link" onclick="openSkyStack()"><b>我的发布</b><span>去星栈管理已发布的服务</span></button>
     </div>
@@ -1799,34 +1800,56 @@ $('#hub-form').addEventListener('submit',async e=>{
 
 function copySnippet(btn){
   const pre=$('#api-result pre'); if(!pre) return;
-  navigator.clipboard&&navigator.clipboard.writeText(pre.textContent)
-    .then(()=>{btn.textContent='已复制'}).catch(()=>{});
+  const done=()=>{btn.textContent='已复制';setTimeout(()=>{btn.textContent='复制调用示例'},1600);
+    toast('调用示例已复制到剪贴板',{kind:'ok'})};
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(pre.textContent).then(done)
+      .catch(()=>toast('复制失败，请手动选中示例',{kind:'bad'}));
+  else toast('当前浏览器不支持自动复制，请手动选中示例',{kind:'bad'});
 }
+// 多行输入框里回车是换行，Ctrl/⌘+Enter 才发送
+$('#api-prompt').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('#hub-form').requestSubmit()}
+});
 
 /* ---------------- 生图 / 生视频：内嵌工作台表单 ---------------- */
-function copyText(t){if(navigator.clipboard)navigator.clipboard.writeText(t).catch(()=>{})}
+function copyText(t){
+  if(!navigator.clipboard||!navigator.clipboard.writeText)
+    return Promise.reject(new Error('当前浏览器不支持自动复制'));
+  return navigator.clipboard.writeText(t);
+}
 function openComfy(){window.open('/comfy/','_blank','noopener')}
+// 剪贴板被浏览器拦住时，把拼好的提示词直接摊在页面上，至少能手选复制
+function handoff(text,msg){
+  copyText(text).then(()=>{
+    msg.textContent='提示词已复制，正在打开官方工作台…';
+    toast('提示词已复制，工作台已打开',{kind:'ok'});
+  }).catch(()=>{
+    msg.innerHTML='浏览器不允许自动复制，请手动复制下面的内容：'
+      +`<pre style="margin-top:8px">${esc(text)}</pre>`;
+    toast('自动复制被拦截，请手动复制提示词',{kind:'bad'});
+  });
+  openComfy();
+}
 
 $('#img-form').addEventListener('submit',e=>{
   e.preventDefault();
   const p=$('#img-prompt').value.trim();
-  if(!p){$('#img-msg').textContent='先写画面描述';return}
+  const msg=$('#img-msg');
+  if(!p){msg.textContent='先写画面描述';$('#img-prompt').focus();return}
   let text=`画面：${p}\n画幅：${$('#img-size').value}\n风格：${$('#img-style').value}`;
   if($('#img-neg').value.trim()) text+=`\n反向提示词：${$('#img-neg').value.trim()}`;
-  copyText(text);
-  $('#img-msg').textContent='提示词已复制，正在打开官方工作台…';
-  openComfy();
+  handoff(text,msg);
 });
 
 $('#vid-form').addEventListener('submit',e=>{
   e.preventDefault();
   const p=$('#vid-prompt').value.trim();
-  if(!p){$('#vid-msg').textContent='先写镜头描述';return}
+  const msg=$('#vid-msg');
+  if(!p){msg.textContent='先写镜头描述';$('#vid-prompt').focus();return}
   let text=`镜头：${p}\n时长：${$('#vid-dur').value}\n画幅：${$('#vid-size').value}`;
   if($('#vid-motion').value.trim()) text+=`\n运镜/风格：${$('#vid-motion').value.trim()}`;
-  copyText(text);
-  $('#vid-msg').textContent='提示词已复制，正在打开官方工作台…';
-  openComfy();
+  handoff(text,msg);
 });
 
 
@@ -1865,9 +1888,11 @@ function renderKeys(list){
   </tr>`).join(''):'<tr><td colspan="5" class="empty">还没有 API Key</td></tr>';
 }
 async function revokeKey(id){
-  if(!confirm('撤销后使用该密钥的调用会立即失效，确定？'))return;
-  try{await api('/api/keys/'+encodeURIComponent(id),{method:'DELETE'});loadApi()}
-  catch(e){alert('撤销失败：'+e)}
+  if(!confirm('撤销后使用该密钥的调用会立即失效，且无法恢复（服务端只存哈希）。确定？'))return;
+  try{
+    await api('/api/keys/'+encodeURIComponent(id),{method:'DELETE'});
+    toast('密钥已撤销',{kind:'ok'});loadApi();
+  }catch(e){toast('撤销失败：'+e,{kind:'bad'})}
 }
 const capNames={tools:'工具调用',json_object:'JSON 输出',json_schema:'JSON Schema',
   regex:'正则约束',vision:'图像输入',reasoning:'推理',deterministic:'确定性',
@@ -1901,14 +1926,19 @@ function renderUps(list){
   }).join(''):'<div class="empty">还没有登记上游。先在上面填一个可访问的 OpenAI 兼容地址。</div>';
 }
 async function toggleUp(id,enabled){
-  try{await api('/api/models/upstreams/'+encodeURIComponent(id),
-    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});
-    loadApi()}catch(e){alert('操作失败：'+e)}
+  try{
+    await api('/api/models/upstreams/'+encodeURIComponent(id),
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});
+    toast(enabled?'上游已启用，重新参与路由':'上游已停用，不再接新请求',{kind:'ok'});
+    loadApi();
+  }catch(e){toast('操作失败：'+e,{kind:'bad'})}
 }
 async function delUp(id){
-  if(!confirm('删除后这个上游立即退出路由，确定？'))return;
-  try{await api('/api/models/upstreams/'+encodeURIComponent(id),{method:'DELETE'});loadApi()}
-  catch(e){alert('删除失败：'+e)}
+  if(!confirm('删除后这个上游立即退出路由，密钥与登记信息都会丢失。确定？'))return;
+  try{
+    await api('/api/models/upstreams/'+encodeURIComponent(id),{method:'DELETE'});
+    toast('上游已删除',{kind:'ok'});loadApi();
+  }catch(e){toast('删除失败：'+e,{kind:'bad'})}
 }
 function renderCatalog(){
   const sel=$('#apimodel'), cur=sel.value;
@@ -1964,18 +1994,23 @@ $('#newkeybtn').onclick=async()=>{
       }
     };
     $('#keyname').value='';
+    toast('密钥已创建，记得先复制再关掉页面',{kind:'ok'});
     snippet(); loadApi();
-  }catch(e){$('#newkey').innerHTML=`<div class="err">创建失败：${esc(e)}</div>`}
+  }catch(e){$('#newkey').innerHTML=`<div class="err">创建失败：${esc(e)}</div>`;toast('创建失败：'+e,{kind:'bad'})}
   finally{btn.disabled=false}
 };
 $('#probeup').onclick=async()=>{
-  const msg=$('#upmsg'); msg.textContent='正在请求上游 /v1/models…';
+  const msg=$('#upmsg'), btn=$('#probeup');
+  if(!$('#upurl').value.trim()){msg.textContent='先把 Base URL 填上';return}
+  btn.disabled=true; msg.textContent='正在请求上游 /v1/models…';
   try{
     const d=await post('/api/models/upstreams/probe',
       {base_url:$('#upurl').value.trim(),api_key:$('#upkey').value});
     msg.innerHTML=`探测成功（${d.latency_ms} ms）：${(d.models||[]).map(esc).join('、')}`;
+    toast(`探测成功，发现 ${(d.models||[]).length} 个模型`,{kind:'ok'});
     if(!$('#upmodels').value.trim()) $('#upmodels').value=d.models.slice(0,8).join(', ');
   }catch(e){msg.textContent='探测失败：'+e}
+  finally{btn.disabled=false}
 };
 $('#addup').onclick=async()=>{
   const msg=$('#upmsg'), btn=$('#addup');
@@ -1992,6 +2027,7 @@ $('#addup').onclick=async()=>{
   try{
     await post('/api/models/upstreams',body);
     msg.textContent='已登记，模型已进入可用目录';
+    toast('上游已登记，模型已进入可用目录',{kind:'ok'});
     $('#upname').value='';$('#upurl').value='';$('#upkey').value='';$('#upmodels').value='';
     $('#uppriceout').value='0';$('#uppricecached').value='0';$('#upctx').value='32768';
     document.querySelectorAll('#upcaps input:checked').forEach(x=>x.checked=false);
@@ -2138,11 +2174,13 @@ $('#f').addEventListener('submit',async e=>{
     const t=await r.text();let d=null;try{d=JSON.parse(t)}catch(x){}
     if(!r.ok) throw (d&&d.error)||t;
     TARGET=null;updateTargetChip();
-    $('#msg').textContent=kind==='build'?`已入队 ${d.id}，预扣 ${f2(d.hold)} 点（按实际分钟结算）`
+    const note=kind==='build'?`已入队 ${d.id}，预扣 ${f2(d.hold)} 点（按实际分钟结算）`
       :kind==='transcode'?`已入队 ${d.id}，预扣 ${f2(d.hold)} 点`
       :`已入队 ${d.id}（${d.pieces} 段 / ${f1(d.units)} ${d.unit}），预扣 ${f2(d.hold)} 点`;
+    $('#msg').textContent=note;
+    toast(note,{kind:'ok'});
     showView('jobs');
-  }catch(err){$('#msg').textContent='失败：'+err}
+  }catch(err){$('#msg').textContent='失败：'+err;toast('提交失败：'+err,{kind:'bad'})}
   finally{$('#submitbtn').disabled=false}
 });
 
@@ -2288,9 +2326,12 @@ async function openNodeLogs(id){
 $('#cp-close').onclick=()=>{$('#commpanel').style.display='none'};
 
 async function cancelJob(id){
-  if(!confirm('取消任务？未使用的预扣会立即退还。')) return;
-  try{ await api('/api/jobs/'+encodeURIComponent(id)+'/cancel',{method:'POST'}); paintJobs(); refresh(); }
-  catch(e){ alert('取消失败：'+e) }
+  if(!confirm('取消任务后已完成的分片仍会计费，未使用的预扣立即退还。确定？')) return;
+  try{
+    await api('/api/jobs/'+encodeURIComponent(id)+'/cancel',{method:'POST'});
+    toast('任务已取消，未使用的预扣已退还',{kind:'ok'});
+    paintJobs(); refresh();
+  }catch(e){toast('取消失败：'+e,{kind:'bad'})}
 }
 async function paintJobs(){
   try{
@@ -2396,7 +2437,12 @@ async function loadVM(){
     const [o,i]=await Promise.all([api('/api/vm/offers'),api('/api/vm/instances')]);
     VM_OFFERS=o.offers||[]; VM_INSTANCES=i.instances||[];
     renderVMLists();
-  }catch(e){$('#vm-offers').innerHTML=`<div class="empty">读取失败：${esc(e)}</div>`}
+  }catch(e){
+    // 两个列表要一起进错误态，否则「我的云主机」会永远停在“加载中”
+    const msg=`<div class="empty">读取失败：${esc(e)}</div>`;
+    $('#vm-offers').innerHTML=msg;
+    $('#vm-instances').innerHTML=msg;
+  }
 }
 function vmOffersMineHTML(list){
   if(!list.length) return '<div class="empty">还没有发布配置</div>';
@@ -2528,11 +2574,15 @@ function vmRent(id){
 $('#vo-cancel')?.addEventListener('click',()=>{$('#vm-order').style.display='none';VM_OFFER=null});
 $('#vo-submit')?.addEventListener('click',async()=>{
   if(!VM_OFFER) return;
-  const btn=$('#vo-submit'); btn.disabled=true; $('#vo-msg').textContent='正在预扣并下发启动指令…';
+  const btn=$('#vo-submit'), msg=$('#vo-msg');
+  const hours=+$('#vo-hours').value;
+  if(!(hours>=1)){msg.textContent='租期至少 1 小时';$('#vo-hours').focus();return}
+  if(hours>VM_OFFER.max_hours){msg.textContent=`这台配置最长只能租 ${VM_OFFER.max_hours} 小时`;return}
+  btn.disabled=true; msg.textContent='正在预扣并下发启动指令…';
   try{
     const r=await post('/api/vm/orders',{
-      offer_id:VM_OFFER.id, name:$('#vo-hostname').value.trim(),
-      hours:+$('#vo-hours').value||1, ssh_public_key:$('#vo-key').value.trim()});
+      offer_id:VM_OFFER.id, name:$('#vo-hostname').value.trim()||VM_OFFER.name,
+      hours, ssh_public_key:$('#vo-key').value.trim()});
     const ins=r.instance;
     const lines=[
       `主机：${ins.name}（${ins.id}）`,
@@ -2547,11 +2597,12 @@ $('#vo-submit')?.addEventListener('click',async()=>{
     $('#vo-result').textContent=r.warning+'\n\n'+lines.join('\n\n');
     $('#vo-result').style.display='block';
     $('#vo-msg').textContent='下单成功，等待卖方机器启动虚拟机。';
+    toast('云主机已下单，凭据只显示这一次，请及时保存',{kind:'ok'});
     $('#vm-order').style.display='none';
     VM_OFFER=null;
     loadVM();
     setTimeout(()=>loadVM(),4000);
-  }catch(e){$('#vo-msg').textContent='失败：'+e}
+  }catch(e){msg.textContent='失败：'+e;toast('下单失败：'+e,{kind:'bad'})}
   finally{btn.disabled=false}
 });
 $('#vpublish')?.addEventListener('click',async()=>{
@@ -2573,35 +2624,45 @@ $('#vpublish')?.addEventListener('click',async()=>{
     if(!body.image_url) throw new Error('请填写镜像 URL');
     await post('/api/vm/offers',body);
     $('#vmmsg').textContent='已发布，买方现在可以下单。';
+    toast('配置已发布，买方现在可以下单',{kind:'ok'});
     $('#vname').value=''; $('#vsha').value='';
     loadVM(true);
-  }catch(e){$('#vmmsg').textContent='发布失败：'+e}
+  }catch(e){$('#vmmsg').textContent='发布失败：'+e;toast('发布失败：'+e,{kind:'bad'})}
   finally{btn.disabled=false}
 });
 async function vmToggleOffer(id,enabled){
   try{
     await api('/api/vm/offers/'+encodeURIComponent(id),
       {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});
+    toast(enabled?'配置已上架':'配置已下架，已租出的不受影响',{kind:'ok'});
     loadVM(true);
-  }catch(e){alert('操作失败：'+e)}
+  }catch(e){toast('操作失败：'+e,{kind:'bad'})}
 }
 async function vmDeleteOffer(id){
   if(!confirm('删除后这个配置立即下架；已经租出的云主机按订单快照继续运行。确定？')) return;
-  try{ await api('/api/vm/offers/'+encodeURIComponent(id),{method:'DELETE'}); loadVM(true) }
-  catch(e){alert('删除失败：'+e)}
+  try{
+    await api('/api/vm/offers/'+encodeURIComponent(id),{method:'DELETE'});
+    toast('配置已删除',{kind:'ok'}); loadVM(true);
+  }catch(e){toast('删除失败：'+e,{kind:'bad'})}
 }
 async function vmStop(id){
   if(!confirm('确定停机？剩余预扣会按实际运行秒数结算后退回。')) return;
-  try{ await post('/api/vm/instances/'+encodeURIComponent(id)+'/stop',{}); loadVM(true) }
-  catch(e){alert('停机失败：'+e)}
+  try{
+    await post('/api/vm/instances/'+encodeURIComponent(id)+'/stop',{});
+    toast('已发送停机指令，结算完成后预扣会退回',{kind:'ok'});
+    loadVM(true);
+  }catch(e){toast('停机失败：'+e,{kind:'bad'})}
 }
 async function vmExtend(id,price){
   const h=prompt('续费小时数（当前单价 '+f2(price)+' 点/小时）','1');
   if(h===null) return;
   const hours=+h;
-  if(!(hours>0)){alert('请输入大于 0 的小时数');return}
-  try{ await post('/api/vm/instances/'+encodeURIComponent(id)+'/extend',{hours}); loadVM(true) }
-  catch(e){alert('续费失败：'+e)}
+  if(!(hours>0)){toast('请输入大于 0 的小时数',{kind:'bad'});return}
+  try{
+    await post('/api/vm/instances/'+encodeURIComponent(id)+'/extend',{hours});
+    toast(`已续费 ${hours} 小时`,{kind:'ok'});
+    loadVM(true);
+  }catch(e){toast('续费失败：'+e,{kind:'bad'})}
 }
 
 /* ---------------- 算力市场 ---------------- */
@@ -2685,9 +2746,14 @@ function paintMarket(){
 async function reprice(id,cur){
   const v=prompt('这台机器要的单价（算力点 / 视频秒）',cur);
   if(v===null)return;
-  try{await api('/api/nodes/'+encodeURIComponent(id),
-    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({price:+v})});
-    refresh()}catch(e){alert('改价失败：'+e)}
+  const price=+v;
+  if(!(price>=0)){toast('单价不能是负数',{kind:'bad'});return}
+  try{
+    await api('/api/nodes/'+encodeURIComponent(id),
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({price})});
+    toast('单价已改为 '+f2(price)+' 点/秒',{kind:'ok'});
+    refresh();
+  }catch(e){toast('改价失败：'+e,{kind:'bad'})}
 }
 
 /* ---------------- 我的节点 ---------------- */
@@ -2722,16 +2788,27 @@ $('#launchbtn').onclick=async()=>{
   finally{btn.disabled=false}
 };
 async function togglePause(id,paused){
-  try{await api('/api/nodes/'+encodeURIComponent(id)+'/pause',
-    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused})});
-    refresh()}catch(e){alert('操作失败：'+e)}
+  try{
+    await api('/api/nodes/'+encodeURIComponent(id)+'/pause',
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused})});
+    refresh();
+    toast(paused?'已停止派活，进行中的任务会跑完':'已恢复派活',{
+      kind:'ok',
+      // 暂停是可逆操作，给一个直接撤回的入口，比再去表格里点一次省事
+      action:{label:'撤销',run:()=>togglePause(id,!paused)},
+    });
+  }catch(e){toast('操作失败：'+e,{kind:'bad'})}
 }
 $('#pair').onclick=async()=>{
   const code=$('#code').value.trim().toUpperCase();
-  if(!code)return;
-  try{const r=await post('/api/pair',{code});
-    $('#pairmsg').textContent='已认领节点 '+r.node_id;$('#code').value='';refresh()}
-  catch(e){$('#pairmsg').textContent='认领失败：'+e}
+  const msg=$('#pairmsg');
+  if(!code){msg.textContent='先填节点上显示的配对码';return}
+  try{
+    const r=await post('/api/pair',{code});
+    msg.textContent='已认领节点 '+r.node_id;
+    toast('已认领节点 '+r.node_id,{kind:'ok'});
+    $('#code').value='';refresh();
+  }catch(e){msg.textContent='认领失败：'+e;toast('认领失败：'+e,{kind:'bad'})}
 };
 async function paintPending(){
   try{
@@ -2797,13 +2874,23 @@ async function paintBill(){
       <td class="num">${ts(e.ts)}</td><td class="num">${esc(e.node_id||'').slice(0,14)}</td>
       <td class="pos">+${f2(e.amount)}</td><td>${esc(e.note||'')}</td></tr>`).join('')
       :'<tr><td colspan="4" class="empty">暂无收益</td></tr>';
-  }catch(e){/* ignore */}
+  }catch(e){
+    // 不要把失败咽下去：否则两张表会一直显示“暂无记录”，像是账目真的为空
+    const msg=`<tr><td colspan="5" class="empty">读取失败：${esc(e)}</td></tr>`;
+    $('#spend tbody').innerHTML=msg;
+    $('#earn tbody').innerHTML=`<tr><td colspan="4" class="empty">读取失败：${esc(e)}</td></tr>`;
+  }
 }
-$('#dochARGE').onclick=async()=>{
-  const a=+$('#ramount').value;
-  if(!(a>0))return;
-  try{await post('/api/me/recharge',{amount:a});refresh();paintBill()}
-  catch(e){alert('充值失败：'+e)}
+$('#dorecharge').onclick=async()=>{
+  const a=+$('#ramount').value, btn=$('#dorecharge');
+  if(!(a>0)){toast('充值点数需要大于 0',{kind:'bad'});$('#ramount').focus();return}
+  btn.disabled=true;
+  try{
+    await post('/api/me/recharge',{amount:a});
+    toast('已充值 '+f2(a)+' 算力点',{kind:'ok'});
+    refresh();paintBill();
+  }catch(e){toast('充值失败：'+e,{kind:'bad'})}
+  finally{btn.disabled=false}
 };
 
 /* ---------------- 简洁 / 高级模式 ---------------- */
@@ -2863,7 +2950,7 @@ function paintMe(){
   if(Date.now()-ME_VM_LAST>5000){
     ME_VM_LAST=Date.now();
     api('/api/vm/instances').then(d=>{$('#me-vms').textContent=(d.instances||[]).length})
-      .catch(()=>{});
+      .catch(()=>{$('#me-vms').textContent='—'});   // 读不到就显示未知，别伪装成 0 台
   }
 }
 $('#advtoggle').addEventListener('change',e=>{setAdv(e.target.checked)});
@@ -2907,8 +2994,9 @@ $('#fp-send').onclick=async()=>{
     if(!r.ok) throw (d&&d.error)||t;
     $('#fp-title').value='';$('#fp-body').value='';$('#fp-files').value='';
     $('#fp-msg').textContent='已发布';
+    toast('帖子已发布',{kind:'ok'});
     paintForum();
-  }catch(e){$('#fp-msg').textContent='失败：'+e}
+  }catch(e){$('#fp-msg').textContent='失败：'+e;toast('发布失败：'+e,{kind:'bad'})}
   finally{$('#fp-send').disabled=false}
 };
 async function openPost(id){
@@ -2916,7 +3004,7 @@ async function openPost(id){
   $('#forum-detail').style.display='';
   $('#fd-post').innerHTML='<div class="empty">加载中…</div>';
   try{
-    const d=await api('/api/forum/posts/'+id);
+    const d=await api('/api/forum/posts/'+encodeURIComponent(id));
     FORUM_CURRENT=d;
     $('#fd-post').innerHTML=`<h2 style="margin-bottom:2px">${esc(d.post.title)}</h2>
       <div class="postmeta">${esc(d.post.author)} · ${fts(d.post.created_at)}</div>
@@ -2949,8 +3037,9 @@ $('#fd-send').onclick=async()=>{
     const t=await r.text();let d=null;try{d=JSON.parse(t)}catch(e){}
     if(!r.ok) throw (d&&d.error)||t;
     $('#fd-body').value='';$('#fd-image').value='';$('#fd-msg').textContent='';
+    toast('评论已发表',{kind:'ok'});
     openPost(FORUM_CURRENT.post.id);
-  }catch(e){$('#fd-msg').textContent='失败：'+e}
+  }catch(e){$('#fd-msg').textContent='失败：'+e;toast('评论失败：'+e,{kind:'bad'})}
   finally{$('#fd-send').disabled=false}
 };
 
