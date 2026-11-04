@@ -213,6 +213,16 @@ input[type=checkbox]{width:auto;height:auto;accent-color:var(--ink)}
   font-size:12.5px;color:var(--body);cursor:pointer;line-height:1.6}
 .check input{margin-top:2px}
 .check:hover{border-color:var(--hair-2)}
+/* 进阶参数默认收起，展开入口就贴在表单里，不必再去别的页面找开关 */
+.adv-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  height:34px;margin-top:16px;padding:0 11px;border:1px dashed var(--hair-2);border-radius:6px;
+  background:var(--inset);color:var(--body);font:500 12.5px/1 var(--sans);text-align:left;
+  transition:border-color .14s,color .14s,background .14s}
+.adv-toggle:hover{border-color:var(--ink);color:var(--ink);background:var(--soft)}
+.adv-toggle:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.adv-toggle .aff{font:400 10.5px/1.4 var(--mono);letter-spacing:.04em;text-transform:uppercase;
+  color:var(--mute);text-align:right}
+.adv-toggle[aria-expanded=true]{border-style:solid;border-color:var(--hair-2);color:var(--ink)}
 .tabs{display:grid;grid-template-columns:1fr 1fr;gap:2px;padding:3px;background:var(--soft);
   border:1px solid var(--hair);border-radius:8px;margin-bottom:20px}
 .tabs button{margin:0;height:32px;border:0;border-radius:5px;background:transparent;
@@ -564,7 +574,7 @@ a.btn:hover{text-decoration:none}
       </div>
     </div>
     <button class="btn" id="go">登录</button>
-    <div id="authmsg" class="hint"></div>
+    <div id="authmsg" class="hint" role="alert"></div>
     <div class="security">口令以 PBKDF2-HMAC-SHA256（20 万次迭代 + 随机盐）存储，服务端不保存明文；
       会话为 HttpOnly Cookie，有效期 30 天。<span id="signupnote"></span></div>
   </div>
@@ -680,12 +690,17 @@ a.btn:hover{text-decoration:none}
         <label>选择文件</label>
         <input type="file" name="file" id="fileinput" accept="video/*,audio/*">
 
+        <button type="button" class="adv-toggle" id="advbtn" onclick="toggleAdv()" aria-expanded="false">
+          <span id="advbtn-txt">高级设置</span>
+          <span class="aff">编码器 · 分片数 · 硬件要求</span>
+        </button>
+
         <div id="adv-only" style="display:none">
         <div id="pathbox">
         <label>…或使用服务端本机路径</label>
         <input name="path" placeholder="D:/videos/input.mp4">
         </div>
-        <div class="row">
+        <div class="row" id="segsbox">
           <div><label>切分片数</label><input name="segs" value="4" inputmode="numeric"></div>
           <div></div>
         </div>
@@ -805,7 +820,8 @@ a.btn:hover{text-decoration:none}
       </div>
       <div class="card" id="tipcard">
         <h2><span class="kicker">提示</span>想要更多控制？</h2>
-        <p class="hint" style="margin:0">到「个人中心」打开高级选项，可以自选编码器、硬件要求和分片数。</p>
+        <p class="hint" style="margin:0">编码器、分片数、硬件要求和服务端路径都在表单里的「高级设置」中，
+          默认值可以直接提交；展开状态会记到你的账号里。</p>
       </div>
     </div>
   </div>
@@ -1435,6 +1451,9 @@ function showView(v){
     if(k){
       const want=v==='build'?'build':(k.value==='pr'?'pr':'blender');
       if(k.value!==want){k.value=want;syncKind()}
+      // 编译页固定是编译任务；允许在这里切成转码会让页面标题和实际提交的东西对不上
+      k.disabled=v==='build';
+      k.title=v==='build'?'编译页只提交编译任务，转码请到渲染页':'';
     }
   }
   $$('#nav button[data-v]').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
@@ -1455,10 +1474,19 @@ function setMode(m){mode=m;$('#t-login').classList.toggle('on',m==='login');
   $('#t-reg').classList.toggle('on',m==='reg');
   $('#reg2').style.display=m==='reg'?'block':'none';
   $('#go').textContent=m==='reg'?'注册并登录':'登录';$('#authmsg').textContent=''}
+// 输入框里按回车等同于点按钮，登录页不该逼用户去挪鼠标
+['name','pass','pass2','invite'].forEach(id=>{
+  $('#'+id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#go').click()}});
+});
 $('#go').onclick=async()=>{
   const name=$('#name').value.trim(), pass=$('#pass').value;
-  if(mode==='reg' && pass!==$('#pass2').value){$('#authmsg').textContent='两次密码不一致';return}
-  $('#go').disabled=true;$('#authmsg').textContent='正在计算口令哈希…';
+  const msg=$('#authmsg');
+  if(name.length<2||name.length>24){msg.textContent='用户名需要 2-24 个字符';return}
+  if(pass.length<8){msg.textContent='密码至少 8 位';return}
+  if(mode==='reg' && pass!==$('#pass2').value){msg.textContent='两次密码不一致';return}
+  if(mode==='reg' && $('#invitebox').style.display!=='none' && !$('#invite').value.trim()){
+    msg.textContent='请填写邀请码';return}
+  $('#go').disabled=true;msg.textContent='正在计算口令哈希…';
   try{
     const payload={name,password:pass};
     if(mode==='reg') payload.invite=$('#invite').value.trim();
@@ -1975,14 +2003,18 @@ $('#addup').onclick=async()=>{
 /* ---------------- 任务类型 ---------------- */
 const jobkind=$('#jobkind');
 function syncKind(){
-  const k=jobkind.value;
-  $('#transcode-fields').style.display=k==='transcode'?'':'none';
-  $('#pathbox').style.display=k==='transcode'?'':'none';
+  const k=jobkind.value, tc=k==='transcode';
+  // 服务端本机路径和单机基线只在私有部署、且是转码任务时才存在；
+  // 切回其它任务时必须重新按部署策略收起来，否则会露出后端会拒绝的字段。
+  const localPath=!!(POL&&POL.local_path), baseline=!(POL&&POL.public);
+  $('#transcode-fields').style.display=tc?'':'none';
+  $('#pathbox').style.display=(tc&&localPath)?'':'none';
+  $('#segsbox').style.display=tc?'':'none';
   $('#render-blender').style.display=k==='blender'?'':'none';
   $('#render-pr').style.display=k==='pr'?'':'none';
   $('#build-fields').style.display=k==='build'?'':'none';
-  $('#baselinebox').style.display=k==='transcode'?'':'none';
-  $('#durbox').style.display=k==='transcode'?'':'none';
+  $('#baselinebox').style.display=(tc&&baseline)?'flex':'none';
+  $('#durbox').style.display=tc?'':'none';
   $('#fileinput').accept=k==='build'?'.zip':k==='blender'?'.blend,.zip':k==='pr'?'.zip':'video/*,audio/*';
   applyMode();
   quote();
@@ -2786,14 +2818,36 @@ function applyQuality(){
 $('#quality').addEventListener('change',()=>{applyQuality();quote()});
 function applyMode(){
   const render=$('#jobkind').value!=='transcode';
-  $('#adv-only').style.display=(ADV||render)?'':'none';
+  const open=ADV||render;
+  $('#adv-only').style.display=open?'':'none';
   $('#qualitybox').style.display=(!ADV&&!render)?'':'none';
-  $('#tipcard').style.display=ADV?'none':'';
   if(!ADV) applyQuality();
   $('#advtoggle').checked=ADV;
+  const btn=$('#advbtn');
+  if(btn){
+    // 渲染/编译本身就需要这些参数，展开开关在这里没有意义
+    btn.style.display=render?'none':'';
+    btn.setAttribute('aria-expanded',(!render&&ADV)?'true':'false');
+    const txt=$('#advbtn-txt');
+    if(txt) txt.textContent=ADV?'收起高级设置':'高级设置';
+  }
   $('#advhint').textContent=ADV
-    ? '高级选项已显示在提交任务页。'
+    ? '高级选项已展开在渲染 / 编译页的任务表单里。'
     : '简洁模式只保留文件、任务类型和画质；渲染任务仍会展开必要参数。';
+}
+function toggleAdv(){setAdv(!ADV)}
+async function setAdv(on){
+  const prev=ADV;
+  ADV=!!on; applyMode(); quote();          // 本地先生效，点下去立刻有反应
+  try{
+    const r=await api('/api/me/settings',{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({advanced:!!on})});
+    ADV=!!r.advanced; applyMode();
+    toast(on?'高级设置已展开':'高级设置已收起',{kind:'ok'});
+  }catch(err){
+    ADV=prev; applyMode();                // 没存上就回滚，别让界面和后端设置不一致
+    toast('保存失败：'+err,{kind:'bad'});
+  }
 }
 async function loadSettings(){
   try{ADV=!!(await api('/api/me/settings')).advanced}catch(e){ADV=false}
@@ -2812,15 +2866,7 @@ function paintMe(){
       .catch(()=>{});
   }
 }
-$('#advtoggle').addEventListener('change',async e=>{
-  const on=e.target.checked;
-  try{
-    const r=await api('/api/me/settings',{method:'PUT',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({advanced:on})});
-    ADV=!!r.advanced;
-  }catch(err){e.target.checked=!on;$('#advhint').textContent='保存失败：'+err;return}
-  applyMode(); quote();
-});
+$('#advtoggle').addEventListener('change',e=>{setAdv(e.target.checked)});
 
 /* ---------------- 论坛 ---------------- */
 const mediaURL=id=>BASE+'/api/forum/media/'+id;
@@ -2909,6 +2955,20 @@ $('#fd-send').onclick=async()=>{
 };
 
 /* ---------------- 启动 ---------------- */
+// 页面里的 label 大多没写 for，点标题不会聚焦到输入框。这里按“紧邻的下一个控件”
+// 补上关联；内嵌控件（复选、封面选择）本来就是隐式关联，直接跳过。
+(function linkLabels(){
+  let seq=0;
+  $$('label').forEach(l=>{
+    if(l.htmlFor||l.querySelector('input,select,textarea')) return;
+    if(l.closest('#v-sky')) return;          // 星空页面不改动
+    const f=l.nextElementSibling;
+    if(!f||!['INPUT','SELECT','TEXTAREA'].includes(f.tagName)) return;
+    if(!f.id) f.id='fld-'+(++seq);
+    l.htmlFor=f.id;
+  });
+})();
+
 (async()=>{
   try{
     // the login card advertises the signup grant, so the deployment profile is
