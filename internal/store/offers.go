@@ -14,6 +14,7 @@ type ServiceOffer struct {
 	Seller    string  `json:"seller"`
 	Title     string  `json:"title"`
 	Body      string  `json:"body"`
+	Spec      string  `json:"spec"`
 	Price     float64 `json:"price"`
 	Unit      string  `json:"unit"`
 	Image     string  `json:"image"` // 磁盘文件名，空表示没有封面
@@ -21,12 +22,12 @@ type ServiceOffer struct {
 	CreatedAt int64   `json:"created_at"`
 }
 
-const offerCols = `o.id,o.category,o.user_id,COALESCE(u.name,'已注销'),o.title,o.body,
+const offerCols = `o.id,o.category,o.user_id,COALESCE(u.name,'已注销'),o.title,o.body,o.spec,
 	o.price,o.unit,o.image,o.image_mime,o.created_at`
 
 func scanOffer(row interface{ Scan(...any) error }) (*ServiceOffer, error) {
 	o := &ServiceOffer{}
-	err := row.Scan(&o.ID, &o.Category, &o.UserID, &o.Seller, &o.Title, &o.Body,
+	err := row.Scan(&o.ID, &o.Category, &o.UserID, &o.Seller, &o.Title, &o.Body, &o.Spec,
 		&o.Price, &o.Unit, &o.Image, &o.ImageMime, &o.CreatedAt)
 	return o, err
 }
@@ -36,9 +37,9 @@ func (s *Store) CreateServiceOffer(o *ServiceOffer) error {
 		o.CreatedAt = time.Now().Unix()
 	}
 	_, err := s.db.Exec(`INSERT INTO service_offers
-		(id,category,user_id,title,body,price,unit,image,image_mime,created_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?)`,
-		o.ID, o.Category, o.UserID, o.Title, o.Body, o.Price, o.Unit, o.Image, o.ImageMime, o.CreatedAt)
+		(id,category,user_id,title,body,spec,price,unit,image,image_mime,created_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		o.ID, o.Category, o.UserID, o.Title, o.Body, o.Spec, o.Price, o.Unit, o.Image, o.ImageMime, o.CreatedAt)
 	return err
 }
 

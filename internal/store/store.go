@@ -271,6 +271,7 @@ CREATE TABLE IF NOT EXISTS service_offers(
   user_id    TEXT NOT NULL,
   title      TEXT NOT NULL,
   body       TEXT NOT NULL DEFAULT '',
+  spec       TEXT NOT NULL DEFAULT '',
   price      REAL NOT NULL DEFAULT 0,
   unit       TEXT NOT NULL DEFAULT '点/次',
   image      TEXT NOT NULL DEFAULT '',
@@ -294,6 +295,7 @@ ALTER TABLE upstreams ADD COLUMN max_context INTEGER NOT NULL DEFAULT 32768;
 ALTER TABLE upstreams ADD COLUMN caps TEXT NOT NULL DEFAULT '["chat"]';
 ALTER TABLE upstreams ADD COLUMN price_out REAL NOT NULL DEFAULT 0;
 ALTER TABLE upstreams ADD COLUMN price_cached REAL NOT NULL DEFAULT 0;
+ALTER TABLE service_offers ADD COLUMN spec TEXT NOT NULL DEFAULT '';
 `
 
 func Open(path string) (*Store, error) {

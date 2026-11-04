@@ -13,13 +13,14 @@ import (
 	"starstack/internal/store"
 )
 
-// 卖家出价：每个服务版块（API / 生图 / 生视频 / 渲染 / 编译）下方的一张挂牌。
-// 卖家只提供标题、简介、价格与一张封面图；官方供给不由这张表表达，页面固定
-// 展示平台自己的算力，所以这里没有任何“官方”标记。
+// 卖家出价：星空·星海里的一张挂牌，由卖家在星空·星栈自行发布。
+// 卖家提供服务类型、配置、标题、简介、价格与一张封面图；官方供给不由这张表
+// 表达，所以这里没有任何“官方”标记。
 
 const (
 	maxOfferTitleChars = 80
 	maxOfferBodyChars  = 2000
+	maxOfferSpecChars  = 500
 	maxOfferUnitChars  = 20
 )
 
@@ -33,6 +34,7 @@ type offerView struct {
 	Seller    string  `json:"seller"`
 	Title     string  `json:"title"`
 	Body      string  `json:"body"`
+	Spec      string  `json:"spec"`
 	Price     float64 `json:"price"`
 	Unit      string  `json:"unit"`
 	HasImage  bool    `json:"has_image"`
@@ -43,7 +45,7 @@ type offerView struct {
 func viewOffer(o *store.ServiceOffer, u *store.User) offerView {
 	return offerView{
 		ID: o.ID, Category: o.Category, Seller: o.Seller, Title: o.Title, Body: o.Body,
-		Price: o.Price, Unit: o.Unit, HasImage: o.Image != "", Mine: o.UserID == u.ID,
+		Spec: o.Spec, Price: o.Price, Unit: o.Unit, HasImage: o.Image != "", Mine: o.UserID == u.ID,
 		CreatedAt: o.CreatedAt,
 	}
 }
@@ -94,13 +96,14 @@ func (s *Server) createOffer(w http.ResponseWriter, r *http.Request, u *store.Us
 		return
 	}
 	body := strings.TrimSpace(r.FormValue("body"))
+	spec := strings.TrimSpace(r.FormValue("spec"))
 	unit := strings.TrimSpace(r.FormValue("unit"))
 	if unit == "" {
 		unit = "点/次"
 	}
 	if len([]rune(title)) > maxOfferTitleChars || len([]rune(body)) > maxOfferBodyChars ||
-		len([]rune(unit)) > maxOfferUnitChars {
-		http.Error(w, jsonErr("标题、简介或单位过长"), 400)
+		len([]rune(spec)) > maxOfferSpecChars || len([]rune(unit)) > maxOfferUnitChars {
+		http.Error(w, jsonErr("标题、简介、配置或单位过长"), 400)
 		return
 	}
 	price, err := strconv.ParseFloat(strings.TrimSpace(r.FormValue("price")), 64)
@@ -111,7 +114,7 @@ func (s *Server) createOffer(w http.ResponseWriter, r *http.Request, u *store.Us
 
 	offer := &store.ServiceOffer{
 		ID: newID(), Category: category, UserID: u.ID, Seller: u.Name,
-		Title: title, Body: body, Price: price, Unit: unit, CreatedAt: time.Now().Unix(),
+		Title: title, Body: body, Spec: spec, Price: price, Unit: unit, CreatedAt: time.Now().Unix(),
 	}
 	if files := r.MultipartForm.File["image"]; len(files) > 0 {
 		fh := files[0]

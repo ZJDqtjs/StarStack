@@ -318,68 +318,135 @@ td .tag{margin:2px 4px 2px 0}
   font:400 11.5px/1.7 var(--sans);color:var(--mute)}
 #authmsg:not(:empty){color:var(--bad);font-size:12.5px;margin-top:12px}
 
-/* ---------- 服务版块：官方自营 + 卖家出价 ---------- */
-.official{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--hair);
-  border-radius:10px;padding:22px 24px;margin-bottom:22px;box-shadow:var(--shadow)}
-.official::before{content:"";position:absolute;right:-70px;top:-90px;width:260px;height:260px;
-  border-radius:50%;background:radial-gradient(circle,var(--link-soft) 0%,transparent 70%);
-  opacity:.85;pointer-events:none}
-.official-grid{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;
-  gap:22px;align-items:center}
-.official .badge{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--ink);
-  color:var(--page);font:500 10.5px/1.6 var(--mono);letter-spacing:.06em}
-.official h2{margin:9px 0 6px;font-size:19px;font-weight:600;letter-spacing:-.6px}
-.official p{margin:0;font-size:13px;line-height:1.65;color:var(--mute);max-width:640px}
-.official-stats{display:flex;gap:24px;flex-wrap:wrap;margin-top:16px}
-.official-stats div{display:flex;flex-direction:column;gap:3px}
-.official-stats b{font:500 16px/1.2 var(--sans);letter-spacing:-.4px;
-  font-variant-numeric:tabular-nums;color:var(--ink)}
-.official-stats span{font:400 10px/1.3 var(--mono);letter-spacing:.06em;
-  text-transform:uppercase;color:var(--mute)}
-.official-actions{display:flex;flex-direction:column;gap:8px;min-width:170px}
-.official-actions .btn,.official-actions .ghost{width:100%;margin-top:0}
-.official-actions .ghost{height:36px}
+/* ---------- 星空（参考 BewlyBewly 的卡片流与粉色/蓝色强调） ---------- */
+:root{
+  --bili-pink:#fb7299; --bili-blue:#00aeec;
+  --bili-pink-soft:rgba(251,114,153,.13); --bili-blue-soft:rgba(0,174,236,.12);
+}
+[data-theme=dark]{
+  --bili-pink:#ff85a8; --bili-blue:#33c3ff;
+  --bili-pink-soft:rgba(255,133,168,.16); --bili-blue-soft:rgba(51,195,255,.16);
+}
 a.btn{text-decoration:none}
 a.btn:hover{text-decoration:none}
 
-.offers-sec{margin-top:24px}
-.offers-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}
-.offers-head h2{margin:0;font-size:15px;font-weight:600;letter-spacing:-.3px}
-.offers-head h2 .kicker{display:block;font:400 10.5px/1.5 var(--mono);letter-spacing:.06em;
-  text-transform:uppercase;color:var(--mute);margin-bottom:3px}
-.offers{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:16px}
-.offer{position:relative;display:flex;flex-direction:column;background:var(--card);
-  border:1px solid var(--hair);border-radius:8px;overflow:hidden;box-shadow:var(--shadow);
-  transition:transform .16s,border-color .16s,box-shadow .16s}
-.offer:hover{transform:translateY(-2px);border-color:var(--hair-2);box-shadow:var(--shadow-lg)}
-.offer .cover{position:relative;aspect-ratio:16/9;background:var(--soft);overflow:hidden;flex:0 0 auto}
-.offer .cover img{width:100%;height:100%;object-fit:cover;display:block}
-.offer .ph{width:100%;height:100%;display:grid;place-items:center;padding:0 12px;text-align:center;
-  background:linear-gradient(135deg,var(--soft),var(--card) 65%);color:var(--faint);
-  font:600 18px/1.35 var(--sans);letter-spacing:-.4px}
-.offer .pricebadge{position:absolute;right:8px;bottom:8px;padding:2px 7px;border-radius:4px;
+.sky-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  flex-wrap:wrap;margin:0 0 20px}
+.sky-tabs{display:inline-flex;gap:2px;padding:4px;background:var(--soft);
+  border:1px solid var(--hair);border-radius:999px}
+.sky-tabs button{height:32px;padding:0 22px;border:0;border-radius:999px;background:transparent;
+  color:var(--body);font:500 13.5px/1 var(--sans);transition:background .16s,color .16s,box-shadow .16s}
+.sky-tabs button:hover{color:var(--ink)}
+.sky-tabs button.on{background:var(--bili-pink);color:#fff;
+  box-shadow:0 4px 14px rgba(251,114,153,.32)}
+.sky-bar-hint{font-size:12.5px;color:var(--mute)}
+.sky-cats{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.sky-cats button{height:30px;padding:0 15px;border-radius:999px;border:1px solid var(--hair);
+  background:var(--card);color:var(--body);font:400 12.5px/1 var(--sans);
+  transition:border-color .14s,color .14s,background .14s}
+.sky-cats button:hover{border-color:var(--bili-pink);color:var(--bili-pink)}
+.sky-cats button.on{background:var(--bili-pink-soft);border-color:transparent;
+  color:var(--bili-pink);font-weight:500}
+.sky-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+  gap:22px 16px;align-items:start}
+.sky-card{min-width:0}
+.sky-card .sky-cover{position:relative;display:block;aspect-ratio:16/9;border-radius:10px;
+  overflow:hidden;background:var(--soft);transition:transform .18s ease,box-shadow .18s ease}
+.sky-card:hover .sky-cover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(0,0,0,.13)}
+.sky-card .sky-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.sky-card .sky-ph{width:100%;height:100%;display:grid;place-items:center;padding:0 14px;
+  text-align:center;color:#fff;font:600 17px/1.4 var(--sans);letter-spacing:-.3px;
+  background:linear-gradient(135deg,var(--bili-pink),#8f7bff 55%,var(--bili-blue))}
+.sky-card .sky-price{position:absolute;right:7px;bottom:7px;padding:2px 7px;border-radius:4px;
   background:rgba(0,0,0,.72);color:#fff;font:500 11px/1.6 var(--mono);white-space:nowrap}
-.offer .catbadge{position:absolute;left:8px;top:8px;padding:1px 7px;border-radius:4px;
-  background:color-mix(in srgb,var(--card) 88%,transparent);color:var(--body);
-  font:500 10.5px/1.6 var(--mono);border:1px solid var(--hair)}
-.offer .obody{padding:11px 12px 12px;display:flex;flex-direction:column;gap:6px;flex:1}
-.offer h3{margin:0;font-size:13.5px;font-weight:600;line-height:1.45;letter-spacing:-.2px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.offer .odesc{margin:0;font-size:11.5px;color:var(--mute);line-height:1.55;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.offer .ometa{margin-top:auto;display:flex;align-items:center;gap:6px;padding-top:4px;
-  font-size:11px;color:var(--mute);min-width:0}
-.offer .ometa .avatar{width:20px;height:20px;font-size:10px}
-.offer .ometa .oname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.offer .odel{position:absolute;right:6px;top:6px;z-index:2}
-.offer .odel button{height:24px;padding:0 7px;border-radius:5px;border:1px solid var(--hair);
-  background:color-mix(in srgb,var(--card) 90%,transparent);color:var(--body);
-  font:500 10.5px/1 var(--sans);backdrop-filter:blur(4px)}
-.offer .odel button:hover{color:var(--bad);border-color:var(--bad)}
+.sky-card .sky-cat{position:absolute;left:7px;top:7px;padding:1px 7px;border-radius:4px;
+  background:rgba(255,255,255,.92);color:#5c5c5c;font:500 10.5px/1.6 var(--mono)}
+[data-theme=dark] .sky-card .sky-cat{background:rgba(10,10,10,.82);color:#d4d4d4}
+.sky-card .sky-del{position:absolute;right:7px;top:7px;z-index:2}
+.sky-card .sky-del button{height:24px;padding:0 7px;border-radius:5px;border:1px solid var(--hair);
+  background:rgba(255,255,255,.92);color:#5c5c5c;font:500 10.5px/1 var(--sans)}
+[data-theme=dark] .sky-card .sky-del button{background:rgba(10,10,10,.82);color:#ddd}
+.sky-card .sky-del button:hover{color:var(--bad);border-color:var(--bad)}
+.sky-title{margin:9px 2px 4px;font-size:13.5px;font-weight:600;line-height:1.45;
+  letter-spacing:-.2px;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden}
+.sky-meta{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--mute);
+  min-width:0;padding:0 2px}
+.sky-meta .avatar{width:20px;height:20px;font-size:10px}
+.sky-meta .oname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.sky-spec{margin:5px 2px 0;font:400 11px/1.5 var(--mono);color:var(--faint);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-#offerpanel{display:none;position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.45);padding:16px}
-#offerpanel .panel{max-width:560px;margin:5vh auto;max-height:88vh;overflow:auto;background:var(--card);
-  border:1px solid var(--hair);border-radius:10px;box-shadow:var(--shadow-lg);padding:22px}
+.sky-form{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:24px;
+  box-shadow:var(--shadow);margin-bottom:30px;
+  background-image:linear-gradient(180deg,var(--bili-pink-soft),transparent 170px)}
+.sky-form-head h2{margin:0;font-size:18px;font-weight:600;letter-spacing:-.5px}
+.sky-form-head p{margin:5px 0 0;font-size:12.5px;color:var(--mute);line-height:1.6}
+.sky-field label{margin-top:18px}
+.sky-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.sky-chips button{height:32px;padding:0 16px;border-radius:999px;border:1px solid var(--hair);
+  background:var(--card);color:var(--body);font:500 12.5px/1 var(--sans);
+  transition:border-color .14s,color .14s,background .14s}
+.sky-chips button:hover{border-color:var(--bili-blue);color:var(--bili-blue)}
+.sky-chips button.on{background:var(--bili-blue-soft);border-color:transparent;color:var(--bili-blue)}
+.sky-cover{display:block;margin-top:8px;cursor:pointer;max-width:360px}
+.sky-cover input{display:none}
+.sky-cover .sky-cover-ph{aspect-ratio:16/9;border:1px dashed var(--hair-2);border-radius:10px;
+  display:grid;place-items:center;align-content:center;gap:4px;background:var(--inset)}
+.sky-cover .sky-cover-ph b{font-size:13px;color:var(--ink);font-weight:600}
+.sky-cover .sky-cover-ph span{font-size:11.5px;color:var(--mute)}
+.sky-cover img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;
+  border-radius:10px;border:1px solid var(--hair)}
+.sky-form-foot{display:flex;align-items:center;gap:14px;margin-top:22px;flex-wrap:wrap}
+.sky-form-foot .hint{margin:0}
+.sky-publish{width:auto;min-width:160px;background:linear-gradient(135deg,var(--bili-pink),#ff9db8);
+  color:#fff;border:0;box-shadow:0 6px 18px rgba(251,114,153,.28)}
+.sky-publish:hover:not(:disabled){background:linear-gradient(135deg,#ff8aad,#ffabc2)}
+.sky-mine{margin-top:6px}
+.sky-mine-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin:0 0 14px}
+.sky-mine-head h2{margin:0;font-size:15px;font-weight:600;letter-spacing:-.3px}
+.sky-mine-head h2 .kicker{display:block;font:400 10.5px/1.5 var(--mono);letter-spacing:.06em;
+  text-transform:uppercase;color:var(--mute);margin-bottom:2px}
+
+/* ---------- 服务页信息条 ---------- */
+.svc-meta{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:-6px 0 18px;
+  padding:10px 14px;background:var(--inset);border:1px solid var(--hair);border-radius:8px;
+  font:400 11.5px/1.5 var(--mono);color:var(--mute)}
+.svc-meta .tag{margin:0}
+.svc-meta b{color:var(--ink);font-weight:500}
+.svc-meta .ghost{margin-left:auto}
+
+/* ---------- API 顶部轻量调用助手 ---------- */
+.hub-hero{max-width:820px;margin:10px auto 34px;text-align:center}
+.hub-hero h1{margin:0;font-size:26px;font-weight:600;letter-spacing:-1px}
+.hub-sub{margin:6px 0 22px;font-size:12.5px;color:var(--mute)}
+.hub-box{background:var(--card);border:1px solid var(--hair-2);border-radius:16px;
+  padding:14px;box-shadow:var(--shadow-lg);text-align:left;
+  background-image:linear-gradient(180deg,var(--bili-pink-soft),transparent 120px)}
+.hub-box textarea{width:100%;height:64px;min-height:64px;resize:vertical;padding:8px 6px;
+  border:0!important;box-shadow:none!important;background:transparent;font-size:14px}
+.hub-row{display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap}
+.hub-quick{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.hub-quick button{height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--hair);
+  background:var(--card);color:var(--mute);font:400 11.5px/1 var(--sans);transition:.14s}
+.hub-quick button:hover{border-color:var(--bili-pink);color:var(--bili-pink)}
+.hub-send{height:38px;padding:0 22px;border:0;border-radius:10px;
+  background:linear-gradient(135deg,var(--bili-pink),#ff9db8);color:#fff;
+  font:500 13px/1 var(--sans);box-shadow:0 6px 18px rgba(251,114,153,.25)}
+.hub-send:hover{background:linear-gradient(135deg,#ff8aad,#ffabc2)}
+.hub-result{margin-top:16px;padding:16px 18px;text-align:left;background:var(--card);
+  border:1px solid var(--hair);border-radius:12px;box-shadow:var(--shadow);
+  font-size:12.5px;color:var(--body)}
+.hub-result b{display:block;color:var(--ink);font-size:13px;margin-bottom:8px}
+.hub-result p{margin:0;line-height:1.7}
+.hub-result pre{margin:10px 0 0;background:var(--inset);border:1px solid var(--hair);
+  border-radius:8px;padding:12px;font:11.5px/1.7 var(--mono);overflow:auto}
+.hub-models{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.hub-links{display:flex;gap:8px;margin-top:10px}
+.hub-links button{height:28px;padding:0 12px;border-radius:999px;border:1px solid var(--hair);
+  background:var(--inset);color:var(--ink);font:500 11.5px/1 var(--sans)}
+.hub-links button:hover{border-color:var(--bili-pink);color:var(--bili-pink)}
 
 /* ---------- 个人中心 ---------- */
 .backlink{display:inline-flex;align-items:center;gap:5px;margin:0 0 12px;height:28px;padding:0 9px;
@@ -408,11 +475,12 @@ a.btn:hover{text-decoration:none}
   .viewhead h1{font-size:20px;letter-spacing:-.6px}
   .row,.row3{grid-template-columns:1fr}
   .tablewrap{margin:0 -20px}
-  .official{padding:18px}
-  .official-grid{grid-template-columns:1fr}
-  .official-actions{min-width:0;flex-direction:row;flex-wrap:wrap}
-  .official-actions .btn,.official-actions .ghost{width:auto;flex:1}
-  .offers{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+  .sky-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:18px 12px}
+  .sky-form{padding:18px}
+  .hub-hero{margin-top:0}
+  .hub-hero h1{font-size:21px;letter-spacing:-.7px}
+  .svc-meta{gap:10px 14px}
+  .svc-meta .ghost{margin-left:0}
 }
 @media(max-width:560px){
   .brand-txt span,.who .uname{display:none}
@@ -432,7 +500,8 @@ a.btn:hover{text-decoration:none}
   </div>
 
   <nav id="nav" style="display:none">
-    <button data-v="api" class="on">API</button>
+    <button data-v="sky" class="on">星空</button>
+    <button data-v="api">API</button>
     <button data-v="image">生图</button>
     <button data-v="video">生视频</button>
     <button data-v="render">渲染</button>
@@ -479,14 +548,97 @@ a.btn:hover{text-decoration:none}
   </div>
 </section>
 
-<!-- ---------- 提交任务 ---------- -->
-<section class="view" id="v-submit">
-  <button class="backlink" onclick="showView(SUBMIT_FROM)">← 返回</button>
+<!-- ---------- 星空 ---------- -->
+<section class="view" id="v-sky">
+  <div class="sky-bar">
+    <div class="sky-tabs" role="tablist">
+      <button id="sky-tab-sea" class="on" onclick="skyTab('sea')">星海</button>
+      <button id="sky-tab-stack" onclick="skyTab('stack')">星栈</button>
+    </div>
+    <div class="sky-bar-hint" id="sky-bar-hint">推荐卖家节点 · 按最新发布排序</div>
+  </div>
+
+  <div id="sky-sea">
+    <div class="sky-cats" id="sky-cats">
+      <button class="on" data-cat="all" onclick="skyCat('all')">全部</button>
+      <button data-cat="api" onclick="skyCat('api')">API</button>
+      <button data-cat="image" onclick="skyCat('image')">生图</button>
+      <button data-cat="video" onclick="skyCat('video')">生视频</button>
+      <button data-cat="render" onclick="skyCat('render')">渲染</button>
+      <button data-cat="build" onclick="skyCat('build')">编译</button>
+    </div>
+    <div id="sky-grid" class="sky-grid">
+      <div class="empty" style="grid-column:1/-1">加载中…</div>
+    </div>
+  </div>
+
+  <div id="sky-stack" style="display:none">
+    <div class="sky-form">
+      <div class="sky-form-head">
+        <h2>发布你的服务</h2>
+        <p>选服务类型、写配置、配上标题与封面，发布后就会出现在星海。</p>
+      </div>
+      <div class="sky-field">
+        <label>服务类型</label>
+        <div class="sky-chips" id="stack-cats">
+          <button class="on" data-cat="api" onclick="stackCat('api')">API</button>
+          <button data-cat="image" onclick="stackCat('image')">生图</button>
+          <button data-cat="video" onclick="stackCat('video')">生视频</button>
+          <button data-cat="render" onclick="stackCat('render')">渲染</button>
+          <button data-cat="build" onclick="stackCat('build')">编译</button>
+        </div>
+      </div>
+      <div class="row">
+        <div><label>标题</label><input id="st-title" maxlength="80" placeholder="例如 4090 双卡 · Flux 出图"></div>
+        <div><label>单价（算力点）</label><input id="st-price" type="number" min="0" step="0.01" value="0.8"></div>
+      </div>
+      <div class="row">
+        <div><label>计价单位</label><select id="st-unit">
+          <option>点/次</option><option>点/千 token</option><option>点/视频秒</option>
+          <option>点/小时</option><option>点/帧</option></select></div>
+        <div><label>配置</label><input id="st-spec" maxlength="500" placeholder="例如 双 RTX 4090 · 24G ×2 · ComfyUI"></div>
+      </div>
+      <label>简介（可选）</label>
+      <textarea id="st-body" rows="3" maxlength="2000" placeholder="说明交付时间、模型、售后和联系方式"></textarea>
+      <label>封面配图（可选）</label>
+      <label class="sky-cover" id="st-cover-box">
+        <input type="file" id="st-image" accept="image/*" onchange="stackPreview(this)">
+        <div id="st-cover-ph" class="sky-cover-ph">
+          <b>点击上传封面</b><span>JPG / PNG / WebP，≤8MB</span>
+        </div>
+        <img id="st-cover-img" alt="" style="display:none">
+      </label>
+      <div class="sky-form-foot">
+        <button class="btn sky-publish" id="st-publish">发布到星海</button>
+        <div id="st-msg" class="hint"></div>
+      </div>
+    </div>
+    <div class="sky-mine">
+      <div class="sky-mine-head">
+        <h2><span class="kicker">Mine</span>我的发布</h2>
+        <button class="ghost tiny" onclick="paintSky(true)">刷新</button>
+      </div>
+      <div id="sky-mine-grid" class="sky-grid"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ---------- 渲染 ---------- -->
+<section class="view" id="v-render">
   <div class="viewhead">
-    <h1>提交任务</h1>
+    <h1>渲染</h1>
+    <p>Blender 帧渲染与剪辑时间线；参数直接在本页填写，提交后按实测用量结算。</p>
+  </div>
+  <div class="svc-meta">
+    <span class="tag on">官方集群</span>
+    <span>在线节点 <b id="of-render-nodes">—</b></span>
+    <span>空闲槽位 <b id="of-render-free">—</b></span>
+    <span>最低单价 <b id="of-render-price">—</b></span>
+    <button class="ghost tiny" onclick="showView('sky')">去星海看卖家</button>
   </div>
   <div id="targetchip" class="hint" style="display:none"></div>
-  <div class="grid">
+  <div id="wb-slot-render">
+  <div id="wb" class="grid">
     <div class="card">
       <form id="f">
         <div class="row">
@@ -635,104 +787,6 @@ a.btn:hover{text-decoration:none}
       </div>
     </div>
   </div>
-</section>
-
-<!-- ---------- 生图 ---------- -->
-<section class="view" id="v-image">
-  <div class="viewhead">
-    <h1>生图</h1>
-    <p>官方集群直接可用；往下是其他卖家挂出的出价，价格、封面和交付说明由卖家自己维护。</p>
-  </div>
-  <div class="official">
-    <div class="official-grid">
-      <div>
-        <span class="badge">官方自营</span>
-        <h2>官方生图集群</h2>
-        <p>平台维护的 Comfy 工作流与集群算力，按张结算；模型、显卡与排队情况都在工作台里可见，失败不扣费。</p>
-        <div class="official-stats">
-          <div><b id="of-image-nodes">—</b><span>在线节点</span></div>
-          <div><b id="of-image-free">—</b><span>空闲槽位</span></div>
-          <div><b id="of-image-price">—</b><span>最低单价</span></div>
-        </div>
-      </div>
-      <div class="official-actions">
-        <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer">进入官方工作台</a>
-        <a class="ghost" href="/comfy/" target="_blank" rel="noreferrer" style="display:grid;place-items:center;text-decoration:none">查看工作流</a>
-      </div>
-    </div>
-  </div>
-  <div class="offers-sec">
-    <div class="offers-head">
-      <h2><span class="kicker">Sellers</span>卖家出价</h2>
-      <button class="ghost" onclick="openOfferPanel('image')">发布出价</button>
-    </div>
-    <div id="offers-image" class="offers"><div class="empty" style="grid-column:1/-1">加载中…</div></div>
-  </div>
-</section>
-
-<!-- ---------- 生视频 ---------- -->
-<section class="view" id="v-video">
-  <div class="viewhead">
-    <h1>生视频</h1>
-    <p>官方 Comfy 集群先跑通链路；卖家可以用自己的机器承接同一类工作，在下方按出价排序展示。</p>
-  </div>
-  <div class="official">
-    <div class="official-grid">
-      <div>
-        <span class="badge">官方自营</span>
-        <h2>官方生视频集群</h2>
-        <p>几台机器协同生成一段视频，按视频秒结算；音视频封装由平台完成，失败的分片不结算。</p>
-        <div class="official-stats">
-          <div><b id="of-video-nodes">—</b><span>在线节点</span></div>
-          <div><b id="of-video-free">—</b><span>空闲槽位</span></div>
-          <div><b id="of-video-price">—</b><span>最低单价</span></div>
-        </div>
-      </div>
-      <div class="official-actions">
-        <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer">进入官方工作台</a>
-        <a class="ghost" href="/comfy/" target="_blank" rel="noreferrer" style="display:grid;place-items:center;text-decoration:none">查看工作流</a>
-      </div>
-    </div>
-  </div>
-  <div class="offers-sec">
-    <div class="offers-head">
-      <h2><span class="kicker">Sellers</span>卖家出价</h2>
-      <button class="ghost" onclick="openOfferPanel('video')">发布出价</button>
-    </div>
-    <div id="offers-video" class="offers"><div class="empty" style="grid-column:1/-1">加载中…</div></div>
-  </div>
-</section>
-
-<!-- ---------- 渲染 ---------- -->
-<section class="view" id="v-render">
-  <div class="viewhead">
-    <h1>渲染</h1>
-    <p>官方集群承接 Blender 帧渲染与剪辑时间线；不想排队，可以往下挑卖家的机器和价格。</p>
-  </div>
-  <div class="official">
-    <div class="official-grid">
-      <div>
-        <span class="badge">官方自营</span>
-        <h2>官方渲染集群</h2>
-        <p>Blender 帧渲染与剪辑时间线渲染，按实测用量结算；节点自报哈希与平台复算一致才计费。</p>
-        <div class="official-stats">
-          <div><b id="of-render-nodes">—</b><span>在线节点</span></div>
-          <div><b id="of-render-free">—</b><span>空闲槽位</span></div>
-          <div><b id="of-render-price">—</b><span>最低单价</span></div>
-        </div>
-      </div>
-      <div class="official-actions">
-        <button class="btn auto" onclick="openSubmit('blender')">Blender 渲染</button>
-        <button class="ghost" onclick="openSubmit('pr')">剪辑时间线渲染</button>
-      </div>
-    </div>
-  </div>
-  <div class="offers-sec">
-    <div class="offers-head">
-      <h2><span class="kicker">Sellers</span>卖家出价</h2>
-      <button class="ghost" onclick="openOfferPanel('render')">发布出价</button>
-    </div>
-    <div id="offers-render" class="offers"><div class="empty" style="grid-column:1/-1">加载中…</div></div>
   </div>
 </section>
 
@@ -740,63 +794,132 @@ a.btn:hover{text-decoration:none}
 <section class="view" id="v-build">
   <div class="viewhead">
     <h1>编译</h1>
-    <p>源码打包上传，官方节点执行编译命令并回传产物；也可以找下方卖家承接更轻的构建任务。</p>
+    <p>源码 zip 上传后由官方节点执行编译命令并回传产物；按墙钟分钟结算，失败不结算。</p>
   </div>
-  <div class="official">
-    <div class="official-grid">
-      <div>
-        <span class="badge">官方自营</span>
-        <h2>官方编译集群</h2>
-        <p>上传源码 zip，命令在官方节点上执行，产物按输出目录打包回传；按墙钟分钟结算，编译失败不结算。</p>
-        <div class="official-stats">
-          <div><b id="of-build-nodes">—</b><span>在线节点</span></div>
-          <div><b id="of-build-free">—</b><span>空闲槽位</span></div>
-          <div><b id="of-build-price">—</b><span>最低单价</span></div>
+  <div class="svc-meta">
+    <span class="tag on">官方集群</span>
+    <span>在线节点 <b id="of-build-nodes">—</b></span>
+    <span>空闲槽位 <b id="of-build-free">—</b></span>
+    <span>最低单价 <b id="of-build-price">—</b></span>
+    <button class="ghost tiny" onclick="showView('sky')">去星海看卖家</button>
+  </div>
+  <div id="wb-slot-build"></div>
+</section>
+
+<!-- ---------- 生图 ---------- -->
+<section class="view" id="v-image">
+  <div class="viewhead">
+    <h1>生图</h1>
+    <p>官方 Comfy 工作流，按张结算；参数填好后直接交给官方集群执行。</p>
+  </div>
+  <div class="svc-meta">
+    <span class="tag on">官方集群</span>
+    <span>在线节点 <b id="of-image-nodes">—</b></span>
+    <span>空闲槽位 <b id="of-image-free">—</b></span>
+    <span>最低单价 <b id="of-image-price">—</b></span>
+    <button class="ghost tiny" onclick="showView('sky')">去星海看卖家</button>
+  </div>
+  <div class="split">
+    <div class="card">
+      <h2><span class="kicker">Generate</span>生图设置</h2>
+      <form id="img-form">
+        <label style="margin-top:0">画面描述</label>
+        <textarea id="img-prompt" rows="5" placeholder="例如：赛博朋克城市夜景，霓虹雨夜，电影感光效，16:9"></textarea>
+        <div class="row">
+          <div><label>画幅</label><select id="img-size">
+            <option>1:1 · 1024×1024</option>
+            <option selected>16:9 · 1344×768</option>
+            <option>9:16 · 768×1344</option>
+            <option>4:3 · 1152×864</option>
+          </select></div>
+          <div><label>风格</label><select id="img-style">
+            <option selected>写实摄影</option><option>日系插画</option>
+            <option>电影概念</option><option>3D 渲染</option>
+          </select></div>
         </div>
-      </div>
-      <div class="official-actions">
-        <button class="btn auto" onclick="openSubmit('build')">提交编译任务</button>
-      </div>
+        <label>反向提示词（可选）</label>
+        <input id="img-neg" placeholder="例如：低清晰度、多余手指、水印">
+        <div class="formfoot">
+          <button class="btn auto" type="submit">生成图片</button>
+          <div id="img-msg" class="hint"></div>
+        </div>
+      </form>
     </div>
-  </div>
-  <div class="offers-sec">
-    <div class="offers-head">
-      <h2><span class="kicker">Sellers</span>卖家出价</h2>
-      <button class="ghost" onclick="openOfferPanel('build')">发布出价</button>
+    <div class="card">
+      <h2><span class="kicker">Workbench</span>官方工作台</h2>
+      <div class="hint" style="margin-top:0">
+        Comfy 工作流由平台维护：提交后会把提示词、画幅和风格一起复制到剪贴板，并打开官方工作台执行。
+      </div>
+      <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer" style="margin-top:16px">直接打开工作台</a>
+      <div id="img-queue" class="hint">按张结算，失败不扣费。</div>
     </div>
-    <div id="offers-build" class="offers"><div class="empty" style="grid-column:1/-1">加载中…</div></div>
   </div>
 </section>
 
-<!-- ---------- 模型 API ---------- -->
-<section class="view" id="v-api">
+<!-- ---------- 生视频 ---------- -->
+<section class="view" id="v-video">
   <div class="viewhead">
-    <h1>API</h1>
-    <p>官方 OpenAI 兼容网关默认可用；下面也能看到其他卖家挂出的模型端点与出价。</p>
+    <h1>生视频</h1>
+    <p>官方 Comfy 集群协同生成视频，按视频秒结算；音视频封装由平台完成。</p>
   </div>
-  <div class="official">
-    <div class="official-grid">
-      <div>
-        <span class="badge">官方自营</span>
-        <h2>官方 API 网关</h2>
-        <p>用 OpenAI 兼容接口调用平台聚合的算力，按 token 从余额结算；余额不足直接返回 402，不会偷偷扣费。</p>
-        <div class="official-stats">
-          <div><b>OpenAI</b><span>兼容协议</span></div>
-          <div><b>按 token</b><span>结算方式</span></div>
-          <div><b id="of-api-models">—</b><span>可用模型</span></div>
+  <div class="svc-meta">
+    <span class="tag on">官方集群</span>
+    <span>在线节点 <b id="of-video-nodes">—</b></span>
+    <span>空闲槽位 <b id="of-video-free">—</b></span>
+    <span>最低单价 <b id="of-video-price">—</b></span>
+    <button class="ghost tiny" onclick="showView('sky')">去星海看卖家</button>
+  </div>
+  <div class="split">
+    <div class="card">
+      <h2><span class="kicker">Generate</span>生视频设置</h2>
+      <form id="vid-form">
+        <label style="margin-top:0">镜头描述</label>
+        <textarea id="vid-prompt" rows="5" placeholder="例如：海边日落延时，镜头缓慢推进，暖色调，5 秒"></textarea>
+        <div class="row">
+          <div><label>时长</label><select id="vid-dur">
+            <option>3 秒</option><option selected>5 秒</option><option>10 秒</option>
+          </select></div>
+          <div><label>画幅</label><select id="vid-size">
+            <option selected>16:9</option><option>9:16</option><option>1:1</option>
+          </select></div>
         </div>
+        <label>运镜 / 风格（可选）</label>
+        <input id="vid-motion" placeholder="例如：缓慢推进、手持感、胶片颗粒">
+        <div class="formfoot">
+          <button class="btn auto" type="submit">生成视频</button>
+          <div id="vid-msg" class="hint"></div>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h2><span class="kicker">Workbench</span>官方工作台</h2>
+      <div class="hint" style="margin-top:0">
+        提交后会把镜头描述、时长和画幅复制到剪贴板，并打开官方 Comfy 工作台执行。
       </div>
-      <div class="official-actions">
-        <button class="btn auto" onclick="document.getElementById('keyname').focus()">创建 API Key</button>
-      </div>
+      <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer" style="margin-top:16px">直接打开工作台</a>
+      <div class="hint">按视频秒结算，失败的分片不结算。</div>
     </div>
   </div>
-  <div class="offers-sec">
-    <div class="offers-head">
-      <h2><span class="kicker">Sellers</span>卖家出价</h2>
-      <button class="ghost" onclick="openOfferPanel('api')">发布出价</button>
-    </div>
-    <div id="offers-api" class="offers"><div class="empty" style="grid-column:1/-1">加载中…</div></div>
+</section>
+
+<!-- ---------- API ---------- -->
+<section class="view" id="v-api">
+  <div class="hub-hero">
+    <h1>你好，今天想调用什么？</h1>
+    <p class="hub-sub">官方 OpenAI 兼容网关 · 按 token 结算</p>
+    <form class="hub-box" id="hub-form">
+      <textarea id="api-prompt" rows="2" placeholder="输入需求，例如：用 qwen2.5-7b 写一个 Python 脚本…"></textarea>
+      <div class="hub-row">
+        <div class="hub-quick">
+          <button type="button" onclick="hubFocus('keyname')">创建 API Key</button>
+          <button type="button" onclick="hubFocus('cat')">可用模型</button>
+          <button type="button" onclick="hubFocus('upname')">接入上游</button>
+          <button type="button" onclick="hubFocus('curlsnippet')">调用示例</button>
+        </div>
+        <button class="hub-send" type="submit">发送</button>
+      </div>
+    </form>
+    <div id="api-result"></div>
   </div>
   <div class="grid">
     <div>
@@ -1207,6 +1330,7 @@ a.btn:hover{text-decoration:none}
       <button class="me-link" onclick="showView('vm')"><b>我的云主机</b><span>租用中的实例与我发布的配置</span></button>
       <button class="me-link" onclick="showView('nodes')"><b>我的节点</b><span>接入机器、单价与收益</span></button>
       <button class="me-link" onclick="showView('bill')"><b>账单</b><span>账户流水与节点收益</span></button>
+      <button class="me-link" onclick="openSkyStack()"><b>我的发布</b><span>去星栈管理已发布的服务</span></button>
     </div>
   </div>
   <div class="card">
@@ -1239,35 +1363,6 @@ a.btn:hover{text-decoration:none}
   </div>
 </div>
 
-<div id="offerpanel">
-  <div class="panel">
-    <h2 id="of-head" style="margin:0 0 4px">发布出价</h2>
-    <p class="hint" style="margin-top:0">标题、封面和简介会展示在对应版块的卖家区；买家点开后按你的价格联系或下单。</p>
-    <div class="row">
-      <div><label>版块</label><select id="of-cat">
-        <option value="api">API</option><option value="image">生图</option>
-        <option value="video">生视频</option><option value="render">渲染</option>
-        <option value="build">编译</option></select></div>
-      <div><label>单价（算力点）</label><input id="of-price" type="number" min="0" step="0.01" value="0.8"></div>
-    </div>
-    <div class="row">
-      <div><label>计价单位</label><select id="of-unit">
-        <option>点/次</option><option>点/千 token</option><option>点/视频秒</option>
-        <option>点/小时</option><option>点/帧</option></select></div>
-      <div><label>标题</label><input id="of-title" maxlength="80" placeholder="例如 4090 集群 · 出图 1 点/张"></div>
-    </div>
-    <label>简介（可选）</label>
-    <textarea id="of-body" rows="3" maxlength="2000" placeholder="说明你的机器、模型、交付时间和售后"></textarea>
-    <label>封面配图（可选，JPG / PNG / WebP，≤8MB）</label>
-    <input type="file" id="of-image" accept="image/*">
-    <div class="formfoot">
-      <button class="btn auto" id="of-send">发布出价</button>
-      <button class="ghost" id="of-cancel" style="height:36px">取消</button>
-      <div id="of-msg" class="hint"></div>
-    </div>
-  </div>
-</div>
-
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 // A reverse proxy may mount the broker under a prefix (nginx: /starstack/).
@@ -1285,12 +1380,19 @@ const api=async(u,o)=>{const r=await fetch(u,o);const t=await r.text();
 const post=(u,body)=>api(u,{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify(body)});
 
-let ME=null, POOL=[], LIVE={}, TIMER=null, DUR=0, POL=null, VIEW='api', SUBMIT_FROM='render';
-let OFFER_LAST={}, ME_VM_LAST=0;
+let ME=null, POOL=[], LIVE={}, TIMER=null, DUR=0, POL=null, VIEW='sky';
+let SKY_CAT='all', SKY_OFFERS=[], SKY_LAST=0, ME_VM_LAST=0;
 
 /* ---------------- 视图切换 ---------------- */
 function showView(v){
   VIEW=v;
+  if(v==='render'||v==='build'){
+    const k=$('#jobkind');
+    if(k){
+      const want=v==='build'?'build':(k.value==='pr'?'pr':'blender');
+      if(k.value!==want){k.value=want;syncKind()}
+    }
+  }
   $$('#nav button[data-v]').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
   $$('.view').forEach(s=>s.classList.remove('on'));
   const el=$('#v-'+v);
@@ -1429,19 +1531,128 @@ function paint(){
   if(v==='nodes') paintNodes();
   if(v==='jobs') paintJobs();
   if(v==='bill') paintBill();
-  if(v==='api'){paintApi();paintOffers('api')}
+  if(v==='api') paintApi();
   if(v==='forum') paintForum();
   if(v==='me') paintMe();
-  if(v==='submit') quote();
-  if(v==='image'||v==='video'||v==='render'||v==='build'){
-    paintOfficial();
-    paintOffers(v);
+  if(v==='sky') paintSky();
+  if(v==='image'||v==='video') paintOfficial();
+  if(v==='render'||v==='build'){mountWorkbench(v);paintOfficial();quote()}
+}
+
+/* ---------------- 星空：星海（卖家推荐）+ 星栈（卖家发布） ---------------- */
+const CAT_LABEL={api:'API',image:'生图',video:'生视频',render:'渲染',build:'编译'};
+let SKY_TAB='sea', ST_CAT='api';
+
+function skyTab(tab){
+  SKY_TAB=tab;
+  $('#sky-tab-sea').classList.toggle('on',tab==='sea');
+  $('#sky-tab-stack').classList.toggle('on',tab==='stack');
+  $('#sky-sea').style.display=tab==='sea'?'':'none';
+  $('#sky-stack').style.display=tab==='stack'?'':'none';
+  $('#sky-bar-hint').textContent=tab==='sea'
+    ? '推荐卖家节点 · 按最新发布排序'
+    : '选服务类型、写配置、配封面，发布后进入星海';
+  if(tab==='sea') paintSky(true);
+}
+function openSkyStack(){showView('sky');skyTab('stack')}
+
+function skyCat(cat){
+  SKY_CAT=cat;
+  $$('#sky-cats button').forEach(b=>b.classList.toggle('on',b.dataset.cat===cat));
+  renderSky();
+}
+
+async function paintSky(force){
+  if(!force && SKY_LAST && Date.now()-SKY_LAST<5000) return;
+  SKY_LAST=Date.now();
+  try{
+    const d=await api('/api/offers');
+    SKY_OFFERS=d.offers||[];
+    renderSky();
+  }catch(e){
+    $('#sky-grid').innerHTML=`<div class="empty" style="grid-column:1/-1">读取失败：${esc(e)}</div>`;
   }
 }
 
-/* ---------------- 版块：官方算力与卖家出价 ---------------- */
-const CAT_LABEL={api:'API',image:'生图',video:'生视频',render:'渲染',build:'编译'};
+function skyFiltered(){
+  return SKY_CAT==='all'?SKY_OFFERS:SKY_OFFERS.filter(o=>o.category===SKY_CAT);
+}
 
+function renderSky(){
+  const list=skyFiltered();
+  $('#sky-grid').innerHTML=list.length?list.map(o=>skyCard(o,false)).join('')
+    :'<div class="empty" style="grid-column:1/-1">这个版块还没有卖家发布，去星栈发第一条。</div>';
+  const mine=SKY_OFFERS.filter(o=>o.mine);
+  $('#sky-mine-grid').innerHTML=mine.length?mine.map(o=>skyCard(o,true)).join('')
+    :'<div class="empty" style="grid-column:1/-1">还没有发布过服务。</div>';
+}
+
+function skyCard(o, manage){
+  return `<article class="sky-card">
+    <div class="sky-cover">
+      ${manage?`<div class="sky-del"><button onclick="delOffer('${esc(o.id)}')">删除</button></div>`:''}
+      ${o.has_image
+        ? `<img loading="lazy" src="${BASE}/api/offers/media/${encodeURIComponent(o.id)}" alt="${esc(o.title)}">`
+        : `<div class="sky-ph">${esc(o.title.slice(0,10))}</div>`}
+      <span class="sky-cat">${esc(CAT_LABEL[o.category]||o.category)}</span>
+      <span class="sky-price">${f2(o.price)} ${esc(o.unit)}</span>
+    </div>
+    <h3 class="sky-title">${esc(o.title)}</h3>
+    <div class="sky-meta">
+      <span class="avatar">${esc((o.seller||'?').slice(0,1).toUpperCase())}</span>
+      <span class="oname">${esc(o.seller)}</span><span>·</span><span>${fts(o.created_at)}</span>
+    </div>
+    ${o.spec?`<div class="sky-spec">${esc(o.spec)}</div>`:''}
+  </article>`;
+}
+
+function stackCat(cat){
+  ST_CAT=cat;
+  $$('#stack-cats button').forEach(b=>b.classList.toggle('on',b.dataset.cat===cat));
+}
+
+function stackPreview(input){
+  const f=input.files[0], img=$('#st-cover-img'), ph=$('#st-cover-ph');
+  if(!f){img.style.display='none';img.removeAttribute('src');ph.style.display='grid';return}
+  img.src=URL.createObjectURL(f);
+  img.style.display='block';ph.style.display='none';
+}
+
+$('#st-publish').onclick=async()=>{
+  const btn=$('#st-publish'), msg=$('#st-msg');
+  const title=$('#st-title').value.trim();
+  if(!title){msg.textContent='标题不能为空';return}
+  const fd=new FormData();
+  fd.set('category',ST_CAT);
+  fd.set('title',title);
+  fd.set('body',$('#st-body').value.trim());
+  fd.set('spec',$('#st-spec').value.trim());
+  fd.set('price',$('#st-price').value||'0');
+  fd.set('unit',$('#st-unit').value);
+  const img=$('#st-image').files[0];
+  if(img) fd.append('image',img);
+  btn.disabled=true;msg.textContent='发布中…';
+  try{
+    const r=await fetch('/api/offers',{method:'POST',body:fd});
+    const t=await r.text();let d=null;try{d=JSON.parse(t)}catch(e){}
+    if(!r.ok) throw (d&&d.error)||t;
+    $('#st-title').value='';$('#st-body').value='';$('#st-spec').value='';
+    $('#st-image').value='';stackPreview($('#st-image'));
+    msg.textContent='已发布，星海里已经能看到这条服务。';
+    paintSky(true);
+  }catch(e){msg.textContent='发布失败：'+e}
+  finally{btn.disabled=false}
+};
+
+async function delOffer(id){
+  if(!confirm('删除后这条出价会立即从星海消失，确定？'))return;
+  try{
+    await api('/api/offers/'+encodeURIComponent(id),{method:'DELETE'});
+    paintSky(true);
+  }catch(e){alert('删除失败：'+e)}
+}
+
+/* ---------------- 官方算力信息条 ---------------- */
 function paintOfficial(){
   const on=POOL.filter(w=>w.online);
   const free=on.reduce((a,w)=>a+Math.max(0,(w.slots||0)-(w.active||0)),0);
@@ -1455,99 +1666,89 @@ function paintOfficial(){
   });
 }
 
-// The seller grid only needs a light refresh: a new listing is pushed by the
-// publisher's own action, and the periodic poll must not disturb a half-open
-// publishing dialog.
-async function paintOffers(cat, force){
-  const box=$('#offers-'+cat); if(!box) return;
-  const now=Date.now();
-  if(!force && OFFER_LAST[cat] && now-OFFER_LAST[cat]<5000) return;
-  OFFER_LAST[cat]=now;
-  try{
-    const d=await api('/api/offers?category='+cat);
-    box.innerHTML=renderOffers(d.offers||[]);
-  }catch(e){
-    box.innerHTML=`<div class="empty" style="grid-column:1/-1">读取出价失败：${esc(e)}</div>`;
+/* ---------------- 渲染 / 编译：内嵌工作台 ---------------- */
+// 同一份任务表单在渲染与编译页之间移动，避免复制出两套互相打架的字段。
+function mountWorkbench(svc){
+  const wb=$('#wb'); if(!wb) return;
+  const slot=$(svc==='build'?'#wb-slot-build':'#wb-slot-render');
+  if(slot && wb.parentElement!==slot) slot.appendChild(wb);
+}
+
+/* ---------------- API 轻量调用助手 ---------------- */
+function hubFocus(id){
+  const el=document.getElementById(id); if(!el) return;
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+  if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') el.focus();
+}
+
+$('#hub-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const text=$('#api-prompt').value.trim();
+  const box=$('#api-result');
+  if(!text){box.innerHTML='<div class="hub-result">先写下你想做的事。</div>';return}
+  if(/key|密钥|令牌/i.test(text)){
+    box.innerHTML=`<div class="hub-result"><b>创建 API Key</b>
+      <p>在下方「我的 API Key」填写名称后点创建；密钥只显示一次，服务端只存哈希。</p>
+      <div class="hub-links"><button onclick="hubFocus('keyname')">去创建</button></div></div>`;
+    return;
   }
-}
-
-function renderOffers(list){
-  if(!list.length)
-    return '<div class="empty" style="grid-column:1/-1">还没有卖家出价，点右上角发布第一条。</div>';
-  return list.map(o=>`<article class="offer">
-    ${o.mine?`<div class="odel"><button onclick="delOffer('${esc(o.id)}','${esc(o.category)}')">删除</button></div>`:''}
-    <div class="cover">
-      ${o.has_image
-        ? `<img loading="lazy" src="${BASE}/api/offers/media/${encodeURIComponent(o.id)}" alt="${esc(o.title)}">`
-        : `<div class="ph">${esc(o.title.slice(0,12))}</div>`}
-      <span class="catbadge">${esc(CAT_LABEL[o.category]||o.category)}</span>
-      <span class="pricebadge">${f2(o.price)} ${esc(o.unit)}</span>
-    </div>
-    <div class="obody">
-      <h3>${esc(o.title)}</h3>
-      ${o.body?`<p class="odesc">${esc(o.body)}</p>`:''}
-      <div class="ometa">
-        <span class="avatar">${esc((o.seller||'?').slice(0,1).toUpperCase())}</span>
-        <span class="oname">${esc(o.seller)}</span><span>·</span><span>${fts(o.created_at)}</span>
-      </div>
-    </div>
-  </article>`).join('');
-}
-
-function openOfferPanel(cat){
-  $('#of-cat').value=cat;
-  $('#of-head').textContent='在「'+(CAT_LABEL[cat]||cat)+'」发布出价';
-  $('#of-msg').textContent='';
-  $('#offerpanel').style.display='block';
-  $('#of-title').focus();
-}
-function closeOfferPanel(){
-  $('#offerpanel').style.display='none';
-  $('#of-msg').textContent='';
-}
-$('#of-cancel').onclick=closeOfferPanel;
-$('#offerpanel').onclick=e=>{if(e.target.id==='offerpanel') closeOfferPanel()};
-
-$('#of-send').onclick=async()=>{
-  const btn=$('#of-send'), msg=$('#of-msg');
-  const title=$('#of-title').value.trim();
-  if(!title){msg.textContent='标题不能为空';return}
-  const fd=new FormData();
-  fd.set('category',$('#of-cat').value);
-  fd.set('title',title);
-  fd.set('body',$('#of-body').value.trim());
-  fd.set('price',$('#of-price').value||'0');
-  fd.set('unit',$('#of-unit').value);
-  const img=$('#of-image').files[0];
-  if(img) fd.append('image',img);
-  btn.disabled=true;msg.textContent='发布中…';
+  box.innerHTML='<div class="hub-result">正在读取模型目录…</div>';
   try{
-    const r=await fetch('/api/offers',{method:'POST',body:fd});
-    const t=await r.text();let d=null;try{d=JSON.parse(t)}catch(e){}
-    if(!r.ok) throw (d&&d.error)||t;
-    const cat=$('#of-cat').value;
-    $('#of-title').value='';$('#of-body').value='';$('#of-image').value='';
-    closeOfferPanel();
-    paintOffers(cat,true);
-  }catch(e){msg.textContent='发布失败：'+e}
-  finally{btn.disabled=false}
-};
+    const d=await api('/api/models/catalog');
+    const models=(d.models||[]).slice(0,8);
+    if(!models.length){
+      box.innerHTML=`<div class="hub-result"><b>还没有可用模型</b>
+        <p>先登记一个 OpenAI 兼容上游，或者去星海看卖家提供的模型端点。</p>
+        <div class="hub-links"><button onclick="hubFocus('upname')">接入上游</button>
+          <button onclick="showView('sky')">去星海</button></div></div>`;
+      return;
+    }
+    const model=models[0].id;
+    const snip=`curl ${location.origin+BASE}/v1/chat/completions \\\n  -H "Authorization: Bearer sk-ss-..." \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${model}","messages":[{"role":"user","content":"${text.replace(/'/g,'')}"}]}'`;
+    box.innerHTML=`<div class="hub-result">
+      <b>推荐模型</b>
+      <div class="hub-models">${models.map(m=>`<span class="tag">${esc(m.id)} · ${f2(m.price_per_1k)} 点/千 token</span>`).join('')}</div>
+      <pre>${esc(snip)}</pre>
+      <div class="hub-links"><button onclick="copySnippet(this)">复制调用示例</button>
+        <button onclick="hubFocus('keyname')">创建 Key</button></div>
+    </div>`;
+  }catch(err){
+    box.innerHTML=`<div class="hub-result"><b>读取失败</b><p>${esc(err)}</p></div>`;
+  }
+});
 
-async function delOffer(id,cat){
-  if(!confirm('删除后这条出价会立即从版块消失，确定？'))return;
-  try{
-    await api('/api/offers/'+encodeURIComponent(id),{method:'DELETE'});
-    paintOffers(cat,true);
-  }catch(e){alert('删除失败：'+e)}
+function copySnippet(btn){
+  const pre=$('#api-result pre'); if(!pre) return;
+  navigator.clipboard&&navigator.clipboard.writeText(pre.textContent)
+    .then(()=>{btn.textContent='已复制'}).catch(()=>{});
 }
 
-// 渲染 / 编译的官方入口复用现有任务表单，返回时回到进入前的版块。
-function openSubmit(kind){
-  SUBMIT_FROM=kind==='build'?'build':'render';
-  const k=$('#jobkind');
-  if(k){k.value=kind;syncKind()}
-  showView('submit');
-}
+/* ---------------- 生图 / 生视频：内嵌工作台表单 ---------------- */
+function copyText(t){if(navigator.clipboard)navigator.clipboard.writeText(t).catch(()=>{})}
+function openComfy(){window.open('/comfy/','_blank','noopener')}
+
+$('#img-form').addEventListener('submit',e=>{
+  e.preventDefault();
+  const p=$('#img-prompt').value.trim();
+  if(!p){$('#img-msg').textContent='先写画面描述';return}
+  let text=`画面：${p}\n画幅：${$('#img-size').value}\n风格：${$('#img-style').value}`;
+  if($('#img-neg').value.trim()) text+=`\n反向提示词：${$('#img-neg').value.trim()}`;
+  copyText(text);
+  $('#img-msg').textContent='提示词已复制，正在打开官方工作台…';
+  openComfy();
+});
+
+$('#vid-form').addEventListener('submit',e=>{
+  e.preventDefault();
+  const p=$('#vid-prompt').value.trim();
+  if(!p){$('#vid-msg').textContent='先写镜头描述';return}
+  let text=`镜头：${p}\n时长：${$('#vid-dur').value}\n画幅：${$('#vid-size').value}`;
+  if($('#vid-motion').value.trim()) text+=`\n运镜/风格：${$('#vid-motion').value.trim()}`;
+  copyText(text);
+  $('#vid-msg').textContent='提示词已复制，正在打开官方工作台…';
+  openComfy();
+});
+
 
 
 /* ---------------- 模型 API ---------------- */
@@ -1631,7 +1832,6 @@ async function delUp(id){
 }
 function renderCatalog(){
   const sel=$('#apimodel'), cur=sel.value;
-  $('#of-api-models').textContent=CATALOG.length||'—';
   sel.innerHTML=CATALOG.length?CATALOG.map(m=>
     `<option value="${esc(m.id)}">${esc(m.id)} · ${f2(m.price_per_1k)} 点/千 token</option>`).join('')
     :'<option value="">（先登记一个模型）</option>';
@@ -2363,7 +2563,7 @@ function openNode(id){
   logsBtn.onclick=()=>{$('#nodepanel').style.display='none';openNodeLogs(w.id)};
 }
 $('#np-close').onclick=()=>{$('#nodepanel').style.display='none'};
-$('#np-assign').onclick=()=>{$('#nodepanel').style.display='none';showView('submit');updateTargetChip()};
+$('#np-assign').onclick=()=>{$('#nodepanel').style.display='none';showView('render');updateTargetChip()};
 function updateTargetChip(){
   const el=$('#targetchip'); if(!el) return;
   if(!TARGET){el.style.display='none';el.innerHTML='';return}
