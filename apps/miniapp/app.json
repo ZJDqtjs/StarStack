@@ -10,14 +10,14 @@
   ],
   "window": {
     "navigationBarTitleText": "星栈算力",
-    "navigationBarBackgroundColor": "#fbfbfa",
+    "navigationBarBackgroundColor": "#f6f8fd",
     "navigationBarTextStyle": "black",
-    "backgroundColor": "#fbfbfa",
+    "backgroundColor": "#f6f8fd",
     "backgroundTextStyle": "dark"
   },
   "tabBar": {
-    "color": "#8b8b88",
-    "selectedColor": "#161616",
+    "color": "#8b96b1",
+    "selectedColor": "#5a6bff",
     "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [

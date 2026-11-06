@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 与控制台新版视觉体系一致：靛蓝主色、深墨蓝侧栏、浅色内容区 -->
+    <color name="colorPrimary">#5A6BFF</color>
+    <color name="colorPrimaryDark">#0C1124</color>
+    <color name="colorAccent">#FB7299</color>
+    <color name="ss_bg">#F6F8FD</color>
+    <color name="ss_side">#0C1124</color>
+</resources>

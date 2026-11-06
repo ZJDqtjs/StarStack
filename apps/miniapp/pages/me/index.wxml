@@ -1,6 +1,11 @@
 <view class="wrap tabpage">
-  <h1>我的</h1>
-  <view class="lead">账户、节点与连接设置。</view>
+  <view class="hero account">
+    <view class="hero-main">
+      <text class="hero-eyebrow">ACCOUNT CENTER</text>
+      <view class="hero-title">个人中心</view>
+      <view class="hero-desc">账户、节点与连接设置。</view>
+    </view>
+  </view>
 
   <view class="card" wx:if="{{msg}}"><view class="err">{{msg}}</view></view>
 
