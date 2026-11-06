@@ -488,25 +488,449 @@ a.btn:hover{text-decoration:none}
   nav{gap:0}
   nav button,nav .navlink{padding:0 7px;font-size:12px}
 }
+
+/* ==================================================================
+   新版控制台 (nx)
+   只作用于带 .nx 的视图：星空 / API 两段保持原有设计与样式不变。
+   侧边栏与顶部状态栏属于全局 shell，由 .side / .nx-topbar 独立定义。
+   ================================================================== */
+:root{
+  --nx-bg:#f6f8fd; --nx-card:#ffffff; --nx-soft:#f7f9ff;
+  --nx-line:#e7ebf5; --nx-line-2:#d7deef;
+  --nx-ink:#141b33; --nx-body:#4d5876; --nx-mute:#8b96b1;
+  --nx-brand:#5a6bff; --nx-brand-2:#8b5cf6; --nx-cyan:#0fb5c9;
+  --nx-pink:#fb7299; --nx-ok:#0a9f6e; --nx-warn:#d9820b; --nx-bad:#e0444f;
+  --nx-side-1:#0c1124; --nx-side-2:#151d3b;
+  --nx-shadow:0 1px 2px rgba(20,27,51,.04),0 10px 30px rgba(20,27,51,.07);
+  --nx-shadow-sm:0 1px 2px rgba(20,27,51,.05);
+  --nx-r:14px;
+}
+[data-theme=dark]{
+  --nx-bg:#070a14; --nx-card:#0f1526; --nx-soft:#141c30;
+  --nx-line:#222c45; --nx-line-2:#303c5b;
+  --nx-ink:#eef2ff; --nx-body:#aab6d3; --nx-mute:#7785a5;
+  --nx-shadow:0 1px 2px rgba(0,0,0,.3),0 12px 32px rgba(0,0,0,.4);
+  --nx-shadow-sm:0 1px 2px rgba(0,0,0,.3);
+}
+
+/* ---------- 侧边栏 ---------- */
+.app{grid-template-columns:252px minmax(0,1fr);transition:grid-template-columns .2s ease}
+#app.side-collapsed{grid-template-columns:76px minmax(0,1fr)}
+.side{background:linear-gradient(170deg,var(--nx-side-1),var(--nx-side-2) 58%,var(--nx-side-1));
+  border-right:0;padding:18px 14px 16px;color:#aab5d4;
+  box-shadow:8px 0 28px rgba(6,10,24,.14)}
+.side-top{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.side .brand{padding:2px 2px 0;gap:11px}
+.side .mark{width:36px;height:36px;border-radius:11px;font-size:17px;color:#fff;
+  background:linear-gradient(135deg,var(--nx-brand),var(--nx-brand-2));
+  box-shadow:0 6px 18px rgba(90,107,255,.45)}
+.side .brand-txt b{font-size:15px;color:#f2f5ff;letter-spacing:.1px}
+.side .brand-txt span{color:#7381a8;font-size:9px}
+.side-toggle{margin-left:auto;width:28px;height:28px;flex:0 0 auto;display:grid;place-items:center;
+  border:1px solid rgba(255,255,255,.1);border-radius:8px;background:rgba(255,255,255,.04);
+  color:#8f9dc2;cursor:pointer;transition:.16s}
+.side-toggle:hover{background:rgba(255,255,255,.12);color:#fff}
+.side-toggle svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.side .side-top .side-toggle{transform:rotate(180deg)}
+#app.side-collapsed .side-toggle{transform:rotate(0)}
+.side nav{display:flex;flex-direction:column;gap:0;margin:0;padding:0;overflow-y:auto;overflow-x:hidden}
+.nav-group{margin-bottom:14px}
+.nav-group-label{display:block;padding:0 12px 7px;white-space:nowrap;
+  font:500 9.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:#5f6d95}
+.side nav button{position:relative;height:38px;padding:0 12px;margin:1px 0;gap:11px;
+  border-radius:9px;color:#9ca9cc;font-size:13px}
+.side nav button svg{width:16px;height:16px;flex:0 0 16px;opacity:.85;
+  stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.side nav button:hover{background:rgba(255,255,255,.07);color:#fff}
+.side nav button.on{color:#fff;background:linear-gradient(100deg,rgba(90,107,255,.34),rgba(139,92,246,.12));
+  box-shadow:inset 0 0 0 1px rgba(130,145,255,.18)}
+.side nav button.on::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;
+  border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--nx-brand),var(--nx-pink))}
+.side nav button.on svg{opacity:1;color:#b3bfff}
+.side .sidefoot{border-top:1px solid rgba(255,255,255,.08);padding:14px 2px 0;gap:12px}
+.side .wallet{width:100%;height:auto;min-height:0;padding:10px 12px;flex-direction:column;
+  align-items:flex-start;gap:2px;border:1px solid rgba(255,255,255,.1);border-radius:10px;
+  background:linear-gradient(135deg,rgba(90,107,255,.22),rgba(139,92,246,.07));
+  color:#93a0c6;font-size:10.5px;letter-spacing:.04em;white-space:nowrap}
+.side .wallet b{font:600 18px/1.25 var(--mono);color:#fff;letter-spacing:-.4px}
+.side .wallet-unit{font-size:10px}
+.side .side-row{gap:7px;flex-wrap:wrap}
+.side .who{color:#c8d0e9;font-size:12.5px}
+.side .who .avatar{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.14);color:#fff}
+.side .iconbtn{border-color:rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#aab5d4}
+.side .iconbtn:hover{background:rgba(255,255,255,.13);color:#fff;border-color:rgba(255,255,255,.16)}
+.side #logout{height:30px;padding:0 10px;font-size:11.5px;color:#c8d0e9;
+  background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+.side #logout:hover{background:rgba(255,255,255,.13);color:#fff}
+#app.side-collapsed .brand-txt,#app.side-collapsed .nav-group-label,
+#app.side-collapsed .nav-label,#app.side-collapsed .wallet-label,
+#app.side-collapsed .wallet-unit,#app.side-collapsed .who .uname{display:none}
+#app.side-collapsed .side{padding:18px 12px}
+#app.side-collapsed .side-top{flex-wrap:wrap;justify-content:center}
+#app.side-collapsed .side-toggle{margin:8px 0 0}
+#app.side-collapsed nav button{justify-content:center;padding:0}
+#app.side-collapsed .nav-group{margin-bottom:8px}
+#app.side-collapsed .sidefoot{align-items:center}
+#app.side-collapsed .wallet{width:44px;height:34px;min-height:0;padding:0;
+  align-items:center;justify-content:center}
+#app.side-collapsed .side-row{flex-direction:column}
+#app.side-collapsed #logout{width:32px;padding:0;font-size:0}
+#app.side-collapsed #logout::after{content:"\23fb";font-size:14px}
+
+/* ---------- 顶部状态栏 ---------- */
+.nx-topbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  position:sticky;top:0;z-index:25;margin:-28px -32px 26px;padding:13px 32px;
+  border-bottom:1px solid var(--nx-line);
+  background:color-mix(in srgb,var(--nx-bg) 84%,transparent);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+#app[data-view=sky] .nx-topbar,#app[data-view=api] .nx-topbar,
+#app:not(.signed) .nx-topbar{display:none}
+.nx-crumb{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--nx-mute)}
+.nx-crumb b{color:var(--nx-ink);font-weight:650}
+.nx-crumb .nx-sep{opacity:.45}
+.nx-topbar-right{margin-left:auto;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.nx-live,.nx-balance{display:inline-flex;align-items:center;gap:6px;height:29px;padding:0 11px;
+  border:1px solid var(--nx-line);border-radius:999px;background:var(--nx-card);
+  font-size:11.5px;color:var(--nx-mute);white-space:nowrap}
+.nx-live b,.nx-balance b{font:600 12px var(--mono);color:var(--nx-ink)}
+.nx-live i{width:6px;height:6px;border-radius:99px;background:var(--nx-ok);
+  box-shadow:0 0 0 3px rgba(10,159,110,.16);animation:nxPulse 2.2s infinite}
+@keyframes nxPulse{50%{box-shadow:0 0 0 7px rgba(10,159,110,0)}}
+.nx-quick{height:31px;padding:0 14px;border:0;border-radius:8px;color:#fff;
+  background:linear-gradient(120deg,var(--nx-brand),var(--nx-brand-2));
+  font:600 12px var(--sans);box-shadow:0 6px 16px rgba(90,107,255,.28)}
+.nx-quick:hover{filter:brightness(1.1)}
+
+/* ---------- 页面头部 ---------- */
+.nx .nx-hero{position:relative;overflow:hidden;display:flex;align-items:center;
+  justify-content:space-between;gap:24px;flex-wrap:wrap;
+  margin:0 0 16px;padding:26px 28px;border-radius:18px;color:#fff;
+  background:linear-gradient(115deg,#3d4bd8,#695cf0 50%,#a855c7);
+  box-shadow:0 16px 40px rgba(74,84,214,.2)}
+.nx .nx-hero::before{content:"";position:absolute;width:420px;height:420px;right:-80px;top:-230px;
+  border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.3),transparent 68%)}
+.nx .nx-hero::after{content:"";position:absolute;inset:0;opacity:.3;
+  background-image:radial-gradient(rgba(255,255,255,.35) 1px,transparent 1px);
+  background-size:19px 19px;-webkit-mask-image:linear-gradient(90deg,transparent,#000);
+  mask-image:linear-gradient(90deg,transparent,#000)}
+.nx .nx-hero>*{position:relative;z-index:1}
+.nx .nx-hero-image{background:linear-gradient(115deg,#e7548e,#a45ad8 52%,#5b6cff)}
+.nx .nx-hero-video{background:linear-gradient(115deg,#0d8fa8,#3f65d9 52%,#8b5cf6)}
+.nx .nx-hero-render{background:linear-gradient(115deg,#2f5bd8,#5b6cff 48%,#9b5de5)}
+.nx .nx-hero-build{background:linear-gradient(115deg,#34406f,#5a6bff 55%,#17a2a2)}
+.nx .nx-hero-forum{background:linear-gradient(115deg,#d8547f,#f0728b 48%,#f6a06a)}
+.nx .nx-hero-me{background:linear-gradient(115deg,#3b3f8f,#6a5cf0 52%,#c05aa8)}
+.nx .nx-hero-jobs{background:linear-gradient(115deg,#1f6f8b,#3f65d9 55%,#7a5cf0)}
+.nx .nx-hero-market{background:linear-gradient(115deg,#166f6a,#12a0a0 50%,#4a7de0)}
+.nx .nx-hero-vm{background:linear-gradient(115deg,#324b8f,#5a6bff 52%,#22a6b3)}
+.nx .nx-hero-nodes{background:linear-gradient(115deg,#2d6f5e,#14a37f 50%,#4a90d9)}
+.nx .nx-hero-bill{background:linear-gradient(115deg,#8a5a2b,#c98a3c 48%,#e0648a)}
+.nx-eyebrow{display:inline-flex;align-items:center;gap:7px;text-transform:uppercase;
+  font:600 10px/1 var(--mono);letter-spacing:.18em;color:rgba(255,255,255,.8)}
+.nx-eyebrow::before{content:"";width:14px;height:2px;border-radius:2px;background:rgba(255,255,255,.75)}
+.nx .nx-hero h1{margin:10px 0 8px;font-size:27px;font-weight:650;letter-spacing:-.9px;line-height:1.25}
+.nx .nx-hero p{margin:0;max-width:640px;font-size:12.5px;line-height:1.75;color:rgba(255,255,255,.84)}
+.nx-hero-side{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.nx-hero-badge{min-width:104px;padding:12px 16px;text-align:center;border-radius:12px;
+  border:1px solid rgba(255,255,255,.26);background:rgba(255,255,255,.13);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.nx-hero-badge b{display:block;font:600 23px/1.2 var(--mono);letter-spacing:-.6px}
+.nx-hero-badge span{display:block;margin-top:3px;font-size:10.5px;color:rgba(255,255,255,.82)}
+.nx-hero-link{height:36px;padding:0 15px;border:1px solid rgba(255,255,255,.4);border-radius:9px;
+  background:rgba(255,255,255,.14);color:#fff;font:600 12px var(--sans)}
+.nx-hero-link:hover{background:rgba(255,255,255,.26)}
+.nx .viewhead{margin:0 0 18px}
+.nx .viewhead h1{font-size:23px;letter-spacing:-.7px}
+.nx .viewhead p{color:var(--nx-mute)}
+
+/* ---------- 指标条 ---------- */
+.nx .nx-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;margin:0 0 16px}
+.nx .nx-kpi{position:relative;padding:13px 15px;border:1px solid var(--nx-line);border-radius:12px;
+  background:var(--nx-card);box-shadow:var(--nx-shadow-sm)}
+.nx .nx-kpi>span{display:block;font-size:11px;color:var(--nx-mute)}
+.nx .nx-kpi>b{display:block;margin-top:5px;font:600 18px/1.25 var(--mono);
+  color:var(--nx-ink);letter-spacing:-.4px}
+.nx .nx-kpi>i{position:absolute;right:12px;top:12px;width:26px;height:26px;border-radius:8px;
+  display:grid;place-items:center;background:var(--nx-soft);color:var(--nx-brand);
+  font-style:normal;font-size:13px}
+.nx .nx-kpi-action{display:flex;align-items:center;justify-content:center;
+  border-style:dashed;background:transparent;box-shadow:none}
+.nx .nx-kpi-action button{width:100%}
+
+/* ---------- 版块与卡片 ---------- */
+.nx .grid{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px}
+.nx .split{grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:16px}
+.nx .card{background:var(--nx-card);border:1px solid var(--nx-line);border-radius:var(--nx-r);
+  padding:22px;margin-bottom:16px;box-shadow:var(--nx-shadow)}
+.nx .card h2{margin:0 0 18px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  font-size:14.5px;font-weight:650;letter-spacing:-.2px;color:var(--nx-ink)}
+.nx .card h2 .kicker{display:inline-block;margin:0;padding:3px 8px;border-radius:5px;
+  background:var(--nx-soft);color:var(--nx-brand);border:0;
+  font:600 9.5px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.nx .card h2.plain{margin-bottom:12px}
+.nx .nx-sec{display:flex;align-items:center;gap:9px;margin:2px 0 15px;
+  font-size:12.5px;font-weight:650;color:var(--nx-ink)}
+.nx .nx-sec::before{content:"";width:3px;height:14px;border-radius:3px;
+  background:linear-gradient(180deg,var(--nx-brand),var(--nx-pink))}
+.nx .nx-sec small{margin-left:auto;font:400 10px var(--mono);letter-spacing:.08em;
+  text-transform:uppercase;color:var(--nx-mute)}
+.nx .nx-steps{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 18px}
+.nx .nx-step{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;
+  border:1px solid var(--nx-line);border-radius:999px;background:var(--nx-soft);
+  font-size:11.5px;color:var(--nx-body)}
+.nx .nx-step b{width:18px;height:18px;border-radius:99px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--nx-brand),var(--nx-brand-2));color:#fff;
+  font:600 10px var(--mono)}
+.nx .nx-tip{display:block;padding:12px 14px;margin:0 0 16px;
+  border:1px solid var(--nx-line);border-left:3px solid var(--nx-brand);border-radius:9px;
+  background:var(--nx-soft);font-size:12px;line-height:1.75;color:var(--nx-body)}
+.nx .nx-chips{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0 0}
+.nx .nx-chip{height:27px;padding:0 11px;border:1px solid var(--nx-line);border-radius:999px;
+  background:var(--nx-card);color:var(--nx-body);font:500 11.5px var(--sans)}
+.nx .nx-chip:hover{border-color:var(--nx-brand);color:var(--nx-brand);background:var(--nx-soft)}
+.nx .nx-preview{display:grid;place-items:center;aspect-ratio:16/9;text-align:center;
+  border:1px dashed var(--nx-line-2);border-radius:12px;color:var(--nx-mute);font-size:12px;
+  background:radial-gradient(circle at 28% 18%,rgba(90,107,255,.14),transparent 62%),
+             linear-gradient(135deg,var(--nx-soft),var(--nx-card))}
+.nx .nx-divider{height:1px;margin:18px 0;background:var(--nx-line)}
+
+/* ---------- 表单与按钮 ---------- */
+.nx label{margin:15px 0 7px;font-size:12px;font-weight:600;color:var(--nx-body);letter-spacing:0}
+.nx input,.nx select,.nx textarea{height:40px;border:1px solid var(--nx-line-2);border-radius:9px;
+  background:var(--nx-card);color:var(--nx-ink);font-size:13px;transition:border-color .15s,box-shadow .15s}
+.nx textarea{height:auto;min-height:88px;padding:10px 11px;line-height:1.7;font:13px/1.7 var(--sans)}
+.nx input[type=file]{height:auto;min-height:40px;padding:6px 8px;font-size:12px;color:var(--nx-mute)}
+.nx input[type=checkbox]{width:auto;height:auto;accent-color:var(--nx-brand)}
+.nx input::placeholder,.nx textarea::placeholder{color:#a7b1c8}
+.nx input:hover,.nx select:hover,.nx textarea:hover{border-color:var(--nx-mute)}
+.nx input:focus,.nx select:focus,.nx textarea:focus{border-color:var(--nx-brand);
+  box-shadow:0 0 0 3px rgba(90,107,255,.16)}
+.nx .row,.nx .row3{gap:12px}
+.nx .fieldset{margin:24px 0 0}
+.nx .fieldset legend{padding-top:16px;border-top:1px solid var(--nx-line);
+  color:var(--nx-mute);font:600 10px/1.5 var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.nx .check{border:1px solid var(--nx-line);border-radius:10px;background:var(--nx-soft);
+  color:var(--nx-body);font-size:12px}
+.nx .check:hover{border-color:var(--nx-brand)}
+.nx .tabs{border-radius:10px;background:var(--nx-soft);border-color:var(--nx-line);padding:4px}
+.nx .tabs button{height:34px;border-radius:7px;color:var(--nx-mute);font-weight:600}
+.nx .tabs button.on{color:var(--nx-brand);box-shadow:var(--nx-shadow-sm)}
+.nx .btn{height:40px;border-radius:9px;font-weight:600;color:#fff;
+  background:linear-gradient(120deg,var(--nx-brand),var(--nx-brand-2));
+  box-shadow:0 8px 20px rgba(90,107,255,.24)}
+.nx .btn:hover:not(:disabled){background:linear-gradient(120deg,#6a79ff,#9a6df8);filter:brightness(1.04)}
+.nx .btn.auto{width:auto;min-width:124px}
+.nx button.ghost{height:33px;border:1px solid var(--nx-line);border-radius:8px;
+  background:var(--nx-card);color:var(--nx-body);font-weight:600}
+.nx button.ghost:hover:not(:disabled){background:var(--nx-soft);border-color:var(--nx-line-2);color:var(--nx-brand)}
+.nx button.tiny{height:27px;font-size:11.5px}
+.nx .formfoot{gap:14px;margin-top:20px}
+.nx .backlink{border:1px solid var(--nx-line);border-radius:8px;background:var(--nx-card);
+  color:var(--nx-body);font-weight:600}
+.nx .backlink:hover{color:var(--nx-brand);border-color:var(--nx-brand)}
+
+/* ---------- 通用内容组件 ---------- */
+.nx .hint{font-size:12px;color:color-mix(in srgb,var(--nx-body) 82%,var(--nx-mute));line-height:1.75}
+.nx .hint,.nx .err,.nx .note,.nx td{overflow-wrap:anywhere}
+.nx td.empty{border:0;border-radius:0;background:transparent;padding:26px 0}
+.nx button.ghost:disabled{opacity:.45;cursor:not-allowed}
+.nx .hint.warn,.nx .warn{color:var(--nx-warn)}
+.nx .err{color:var(--nx-bad)}
+.nx .note{font-size:11.5px;color:var(--nx-mute)}
+.nx .sub-line{color:var(--nx-mute)}
+.nx .empty{padding:32px 18px;border:1px dashed var(--nx-line-2);border-radius:12px;
+  background:var(--nx-soft);color:var(--nx-mute);font-size:12.5px}
+.nx code{border:1px solid var(--nx-line);border-radius:5px;background:var(--nx-soft);color:var(--nx-brand)}
+.nx pre{border:1px solid var(--nx-line);border-radius:10px;background:var(--nx-soft);color:var(--nx-body)}
+.nx .tag{padding:2px 8px;border-radius:6px;background:var(--nx-soft);border-color:var(--nx-line);
+  color:var(--nx-body);font-size:11px}
+.nx .tag.on{background:rgba(10,159,110,.12);color:var(--nx-ok)}
+.nx .tag.off{background:rgba(224,68,79,.12);color:var(--nx-bad)}
+.nx .tag.mine{background:rgba(90,107,255,.12);color:var(--nx-brand)}
+.nx .tag.gpu{background:rgba(139,92,246,.13);color:var(--nx-brand-2)}
+.nx .st{border-radius:999px;background:var(--nx-soft);border-color:var(--nx-line)}
+.nx .st.done{background:rgba(10,159,110,.13);color:var(--nx-ok)}
+.nx .st.running,.nx .st.leased,.nx .st.fetching,.nx .st.uploading{background:rgba(90,107,255,.12);color:var(--nx-brand)}
+.nx .st.failed{background:rgba(224,68,79,.12);color:var(--nx-bad)}
+.nx .st.queued,.nx .st.pending,.nx .st.merging{background:rgba(139,92,246,.13);color:var(--nx-brand-2)}
+.nx .kind{border-radius:5px;background:var(--nx-soft);border-color:var(--nx-line)}
+.nx .kind.hold{background:rgba(139,92,246,.13);color:var(--nx-brand-2)}
+.nx .kind.settle,.nx .kind.earn{background:rgba(10,159,110,.13);color:var(--nx-ok)}
+.nx .kind.refund,.nx .kind.recharge{background:rgba(90,107,255,.13);color:var(--nx-brand)}
+.nx .pos{color:var(--nx-ok)}.nx .neg{color:var(--nx-warn)}
+.nx .stats{grid-template-columns:repeat(auto-fit,minmax(126px,1fr));gap:9px;margin-top:16px}
+.nx .stat{padding:12px 13px;border:1px solid var(--nx-line);border-radius:10px;background:var(--nx-soft)}
+.nx .stat b{font:600 19px/1.25 var(--sans);letter-spacing:-.4px;color:var(--nx-ink)}
+.nx .stat span{font-size:10px;color:var(--nx-mute)}
+.nx .stat.hl{background:linear-gradient(135deg,rgba(90,107,255,.14),rgba(139,92,246,.08));border-color:transparent}
+.nx .stat.hl b,.nx .stat.hl span{color:var(--nx-brand)}
+.nx .tablewrap{margin:0 -22px;padding:0 22px}
+.nx th{padding:0 12px 10px;border-color:var(--nx-line);color:var(--nx-mute);font-size:10px}
+.nx td{padding:13px 12px;border-color:var(--nx-line);color:var(--nx-body)}
+.nx tbody tr:hover{background:var(--nx-soft)}
+.nx .job{padding:20px;border:1px solid var(--nx-line);border-radius:var(--nx-r);
+  background:var(--nx-card);box-shadow:var(--nx-shadow)}
+.nx .job h3{font-size:15px;letter-spacing:-.3px}
+.nx .bar{height:6px;background:var(--nx-soft)}
+.nx .bar>i{background:linear-gradient(90deg,var(--nx-brand),var(--nx-cyan))}
+.nx .pc{border-radius:7px;border-color:var(--nx-line);background:var(--nx-card)}
+.nx .pc.done{border-color:var(--nx-ok)}
+.nx .pc.running{border-color:var(--nx-brand)}
+.nx .pc.failed{border-color:var(--nx-bad)}
+.nx .quote{border:1px solid var(--nx-line);border-radius:12px;background:var(--nx-soft);
+  color:var(--nx-body);line-height:1.85}
+.nx .quote .big{color:var(--nx-brand)}
+.nx .quote .hint{border-top-color:var(--nx-line)}
+.nx .val{color:var(--nx-ink)}
+
+/* ---------- 论坛 / 个人中心 ---------- */
+.nx .postitem{padding:14px 10px;border-bottom:1px solid var(--nx-line);border-radius:9px}
+.nx .postitem:hover{background:var(--nx-soft)}
+.nx .postitem h3{font-size:14.5px;color:var(--nx-ink)}
+.nx .postmeta{color:var(--nx-mute)}
+.nx .postbody{color:var(--nx-body)}
+.nx .media img,.nx .media video{border-color:var(--nx-line);border-radius:9px}
+.nx .comment{border-color:var(--nx-line)}
+.nx .comment .who2{color:var(--nx-ink)}
+.nx .me-link{padding:16px;border:1px solid var(--nx-line);border-radius:11px;background:var(--nx-soft)}
+.nx .me-link:hover{border-color:var(--nx-brand);background:var(--nx-card);box-shadow:var(--nx-shadow)}
+.nx .me-link b{font-size:14px;color:var(--nx-ink)}
+.nx .me-link span{color:var(--nx-mute)}
+.nx .nx-post-avatar{width:34px;height:34px;flex:0 0 34px;border-radius:10px;display:grid;
+  place-items:center;color:#fff;font-weight:600;font-size:13px;
+  background:linear-gradient(135deg,var(--nx-brand),var(--nx-pink))}
+.nx .nx-postrow{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.nx .nx-postrow>div:nth-child(2){min-width:0;flex:1}
+.nx .postitem .tag{margin-top:2px}
+
+/* ---------- 登录页 ---------- */
+.nx .nx-auth{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,400px);
+  max-width:880px;margin:clamp(16px,6vh,72px) auto;overflow:hidden;
+  border:1px solid var(--nx-line);border-radius:20px;background:var(--nx-card);
+  box-shadow:0 24px 60px rgba(20,27,51,.16)}
+.nx-auth-art{position:relative;overflow:hidden;padding:36px;color:#fff;
+  background:linear-gradient(150deg,#3d4bd8,#695cf0 52%,#c05aa8)}
+.nx-auth-art::before{content:"";position:absolute;width:340px;height:340px;right:-120px;bottom:-140px;
+  border-radius:50%;border:1px solid rgba(255,255,255,.22);
+  box-shadow:0 0 0 42px rgba(255,255,255,.05),0 0 0 84px rgba(255,255,255,.04)}
+.nx-auth-art>*{position:relative;z-index:1}
+.nx-auth-brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:650}
+.nx-auth-brand .mark{width:32px;height:32px;border-radius:9px;font-size:15px;color:#fff;
+  background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3)}
+.nx-auth-art h2{margin:52px 0 12px;font-size:27px;font-weight:650;letter-spacing:-.8px;line-height:1.4}
+.nx-auth-art p{margin:0;max-width:300px;font-size:12.5px;line-height:1.8;color:rgba(255,255,255,.82)}
+.nx-auth-tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:32px}
+.nx-auth-tags span{padding:5px 10px;border:1px solid rgba(255,255,255,.28);border-radius:999px;
+  font-size:11px;color:rgba(255,255,255,.9);background:rgba(255,255,255,.1)}
+.nx-auth-form{margin:0!important;padding:30px 30px 26px!important;border:0!important;
+  border-radius:0!important;box-shadow:none!important}
+.nx-auth-head{margin-bottom:20px}
+.nx-auth-head .nx-eyebrow{color:var(--nx-brand)}
+.nx-auth-head .nx-eyebrow::before{background:var(--nx-brand)}
+.nx-auth-head h1{margin:9px 0 5px;font-size:22px;font-weight:650;letter-spacing:-.6px;color:var(--nx-ink)}
+.nx-auth-head p{margin:0;font-size:12px;color:var(--nx-mute);line-height:1.7}
+.nx .nx-auth-form label:first-of-type{margin-top:0}
+.nx .security{border-top:1px solid var(--nx-line);color:var(--nx-mute);font-size:11px;line-height:1.75}
+.nx #authmsg:not(:empty){color:var(--nx-bad)}
+
+/* ---------- 响应式 ---------- */
+@media(max-width:1080px){.nx .grid,.nx .split{grid-template-columns:1fr}}
+@media(max-width:900px){
+  .app,#app.side-collapsed{grid-template-columns:1fr}
+  .side{position:sticky;top:0;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;
+    gap:8px;padding:10px 16px;border-right:0;border-bottom:1px solid rgba(255,255,255,.08)}
+  .side .side-top{padding:0}
+  .side-toggle{display:none}
+  .side nav{order:3;width:100%;flex-direction:row;gap:0;margin:0 -16px;padding:2px 16px;overflow:auto hidden}
+  .side .nav-group{display:flex;gap:4px;margin:0;flex:0 0 auto}
+  .side .nav-group-label{display:none}
+  .side nav button{height:34px;width:auto;padding:0 10px;margin:0;gap:6px}
+  .side nav button.on::before{display:none}
+  .side .sidefoot{margin:0 0 0 auto;flex-direction:row;align-items:center;gap:8px;padding:0;border:0}
+  .side .wallet{width:auto;min-height:0;height:32px;padding:0 10px;flex-direction:row;
+    align-items:center;gap:5px}
+  .side .side-row{flex-direction:row}
+  #app.side-collapsed .brand-txt,#app.side-collapsed .nav-label,
+  #app.side-collapsed .wallet-label{display:inline}
+  #app.side-collapsed nav button{justify-content:flex-start;padding:0 10px}
+  #app.side-collapsed .sidefoot{align-items:center}
+  #app.side-collapsed .wallet{width:auto;height:32px;padding:0 10px}
+  #app.side-collapsed .side-row{flex-direction:row}
+  #app.side-collapsed #logout{width:auto;padding:0 10px;font-size:11.5px}
+  #app.side-collapsed #logout::after{content:none}
+  .nx-topbar{margin:-20px -16px 20px;padding:12px 16px}
+  .nx .nx-hero{padding:22px;flex-direction:column;align-items:flex-start}
+  .nx .nx-hero h1{font-size:23px}
+  .nx .row,.nx .row3{grid-template-columns:1fr}
+  .nx .nx-auth{grid-template-columns:1fr}
+  .nx-auth-art{display:none}
+  .nx .tablewrap{margin:0 -22px}
+}
+@media(max-width:560px){
+  .side .brand-txt span,.side .who .uname{display:none}
+  .side nav button{padding:0 7px;font-size:12px}
+  .side nav button svg{display:none}
+  .nx .nx-hero-side{width:100%}
+  .nx .card{padding:18px}
+  .nx .tablewrap{margin:0 -18px;padding:0 18px}
+}
 </style>
 </head>
 <body>
 <div class="app" id="app">
 
 <aside class="side">
-  <div class="brand">
-    <div class="mark">星</div>
-    <div class="brand-txt"><b>星栈算力</b><span>Compute Share</span></div>
+  <div class="side-top">
+    <div class="brand">
+      <div class="mark">星</div>
+      <div class="brand-txt"><b>星栈算力</b><span>Compute Share</span></div>
+    </div>
+    <button class="side-toggle" id="sideToggle" aria-label="展开 / 收起侧边栏" title="展开 / 收起侧边栏">
+      <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6M9 4v16"/></svg>
+    </button>
   </div>
 
   <nav id="nav" style="display:none">
-    <button data-v="sky" class="on">星空</button>
-    <button data-v="api">API</button>
-    <button data-v="image">生图</button>
-    <button data-v="video">生视频</button>
-    <button data-v="render">渲染</button>
-    <button data-v="build">编译</button>
-    <button data-v="forum">论坛</button>
+    <div class="nav-group">
+      <span class="nav-group-label">Discover · 探索</span>
+      <button data-v="sky" class="on">
+        <svg viewBox="0 0 24 24"><path d="M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4L12 3Z"/></svg>
+        <span class="nav-label">星空</span></button>
+      <button data-v="api">
+        <svg viewBox="0 0 24 24"><path d="M4 7l4 5-4 5M12 19h8"/></svg>
+        <span class="nav-label">API</span></button>
+    </div>
+    <div class="nav-group">
+      <span class="nav-group-label">Create · 创作</span>
+      <button data-v="image">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-6 7"/></svg>
+        <span class="nav-label">生图</span></button>
+      <button data-v="video">
+        <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3V9Z"/></svg>
+        <span class="nav-label">生视频</span></button>
+    </div>
+    <div class="nav-group">
+      <span class="nav-group-label">Compute · 算力</span>
+      <button data-v="render">
+        <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5Z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/></svg>
+        <span class="nav-label">渲染</span></button>
+      <button data-v="build">
+        <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v6a4 4 0 0 0 4 4h6"/></svg>
+        <span class="nav-label">编排</span></button>
+    </div>
+    <div class="nav-group">
+      <span class="nav-group-label">Community · 社区</span>
+      <button data-v="forum">
+        <svg viewBox="0 0 24 24"><path d="M20 15a3 3 0 0 1-3 3H8l-4 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v9Z"/></svg>
+        <span class="nav-label">论坛</span></button>
+    </div>
+    <div class="nav-group">
+      <span class="nav-group-label">Account · 账户</span>
+      <button data-v="me">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+        <span class="nav-label">个人中心</span></button>
+    </div>
   </nav>
 
   <div class="sidefoot">
@@ -523,28 +947,47 @@ a.btn:hover{text-decoration:none}
 </aside>
 
 <main>
+<div class="nx-topbar" id="nxTopbar">
+  <div class="nx-crumb"><span>星栈控制台</span><span class="nx-sep">/</span><b id="nxCrumb">个人中心</b></div>
+  <div class="nx-topbar-right">
+    <span class="nx-live"><i></i> 在线节点 <b id="nxOnline">—</b></span>
+    <span class="nx-balance">余额 <b id="nxBalance">—</b> 点</span>
+    <button class="nx-quick" onclick="showView('render')">＋ 新建任务</button>
+  </div>
+</div>
+
 <!-- ---------- 未登录 ---------- -->
-<section class="view on" id="v-auth">
-  <div class="card auth">
-    <div class="mark">星</div>
-    <h1>星栈算力</h1>
-    <p class="lead">把闲置的机器接进来，按视频秒计价；用别人的机器转码，按实测用量结算。</p>
-    <div class="tabs">
-      <button id="t-login" class="on">登录</button>
-      <button id="t-reg">注册</button>
+<section class="view on nx" id="v-auth">
+  <div class="nx-auth">
+    <div class="nx-auth-art">
+      <div class="nx-auth-brand"><div class="mark">星</div><b>星栈算力</b></div>
+      <h2>让每一份闲置算力<br>都变成生产力</h2>
+      <p>分布式转码、渲染与模型推理，按实测用量结算；接一台机器进来，也能成为算力供给方。</p>
+      <div class="nx-auth-tags"><span>分布式调度</span><span>哈希校验</span><span>按量结算</span><span>OpenAI 兼容</span></div>
     </div>
-    <label>用户名</label><input id="name" autocomplete="username" placeholder="2-24 个字符">
-    <label>密码</label><input id="pass" type="password" autocomplete="current-password" placeholder="至少 8 位">
-    <div id="reg2" style="display:none">
-      <label>确认密码</label><input id="pass2" type="password" autocomplete="new-password">
-      <div id="invitebox" style="display:none">
-        <label>邀请码</label><input id="invite" autocomplete="off" placeholder="向部署者索取">
+    <div class="card nx-auth-form">
+      <div class="nx-auth-head">
+        <span class="nx-eyebrow">Welcome back</span>
+        <h1>登录你的账户</h1>
+        <p>一个账户，既能提交任务，也能把闲置机器接入算力池。</p>
       </div>
+      <div class="tabs">
+        <button id="t-login" class="on">登录</button>
+        <button id="t-reg">注册</button>
+      </div>
+      <label>用户名</label><input id="name" autocomplete="username" placeholder="2-24 个字符">
+      <label>密码</label><input id="pass" type="password" autocomplete="current-password" placeholder="至少 8 位">
+      <div id="reg2" style="display:none">
+        <label>确认密码</label><input id="pass2" type="password" autocomplete="new-password">
+        <div id="invitebox" style="display:none">
+          <label>邀请码</label><input id="invite" autocomplete="off" placeholder="向部署者索取">
+        </div>
+      </div>
+      <button class="btn" id="go" style="margin-top:20px">登录</button>
+      <div id="authmsg" class="hint"></div>
+      <div class="security">口令以 PBKDF2-HMAC-SHA256（20 万次迭代 + 随机盐）存储，服务端不保存明文；
+        会话为 HttpOnly Cookie，有效期 30 天。<span id="signupnote"></span></div>
     </div>
-    <button class="btn" id="go">登录</button>
-    <div id="authmsg" class="hint"></div>
-    <div class="security">口令以 PBKDF2-HMAC-SHA256（20 万次迭代 + 随机盐）存储，服务端不保存明文；
-      会话为 HttpOnly Cookie，有效期 30 天。<span id="signupnote"></span></div>
   </div>
 </section>
 
@@ -624,22 +1067,37 @@ a.btn:hover{text-decoration:none}
 </section>
 
 <!-- ---------- 渲染 ---------- -->
-<section class="view" id="v-render">
-  <div class="viewhead">
-    <h1>渲染</h1>
-    <p>Blender 帧渲染与剪辑时间线；参数直接在本页填写，提交后按实测用量结算。</p>
+<section class="view nx" id="v-render">
+  <div class="nx-hero nx-hero-render">
+    <div>
+      <span class="nx-eyebrow">Render Studio</span>
+      <h1>渲染工作台</h1>
+      <p>Blender 帧渲染、剪辑时间线与视频转码共用一套提交流程；参数在本页填写，提交后按实测用量结算。</p>
+    </div>
+    <div class="nx-hero-side">
+      <div class="nx-hero-badge"><b>3</b><span>种任务类型</span></div>
+      <button class="nx-hero-link" onclick="showView('jobs')">查看我的任务 →</button>
+    </div>
   </div>
-  <div class="svc-meta">
-    <span class="tag on">官方集群</span>
-    <span>在线节点 <b id="of-render-nodes">—</b></span>
-    <span>空闲槽位 <b id="of-render-free">—</b></span>
-    <span>最低单价 <b id="of-render-price">—</b></span>
-    <button class="ghost tiny" onclick="showView('sky')">去星海看卖家</button>
+
+  <div class="nx-kpis">
+    <div class="nx-kpi"><span>在线节点</span><b id="of-render-nodes">—</b><i>◉</i></div>
+    <div class="nx-kpi"><span>空闲槽位</span><b id="of-render-free">—</b><i>▦</i></div>
+    <div class="nx-kpi"><span>最低单价</span><b id="of-render-price">—</b><i>◈</i></div>
+    <div class="nx-kpi nx-kpi-action"><button class="ghost tiny" onclick="showView('sky')">去星海看卖家 →</button></div>
   </div>
+
   <div id="targetchip" class="hint" style="display:none"></div>
+
   <div id="wb-slot-render">
   <div id="wb" class="grid">
     <div class="card">
+      <h2><span class="kicker">New Task</span><span id="wb-title">提交渲染任务</span></h2>
+      <div class="nx-steps">
+        <span class="nx-step"><b>1</b> 选择素材</span>
+        <span class="nx-step"><b>2</b> 配置参数</span>
+        <span class="nx-step"><b>3</b> 确认报价并提交</span>
+      </div>
       <form id="f">
         <div class="row">
           <div><label>任务类型</label><select name="jobkind" id="jobkind">
@@ -777,54 +1235,77 @@ a.btn:hover{text-decoration:none}
 
     <div class="sticky">
       <div class="card">
-        <h2><span class="kicker">报价</span>预计花费</h2>
+        <h2><span class="kicker">Estimate</span>预计花费</h2>
         <div id="quote" class="quote">选择文件后自动估算</div>
         <div id="deadlinenote" class="hint"></div>
       </div>
       <div class="card" id="tipcard">
-        <h2><span class="kicker">提示</span>想要更多控制？</h2>
-        <p class="hint" style="margin:0">到「个人中心」打开高级选项，可以自选编码器、硬件要求和分片数。</p>
+        <h2><span class="kicker">Tips</span>想要更多控制？</h2>
+        <div class="nx-tip">到「个人中心」打开高级选项，可以自选编码器、硬件要求、分片数与服务端本机路径。</div>
+        <div class="hint" style="margin:0">提交后在「我的任务」里可查看每个分片的派发去向、哈希校验与结算明细。</div>
       </div>
     </div>
   </div>
   </div>
 </section>
 
-<!-- ---------- 编译 ---------- -->
-<section class="view" id="v-build">
-  <div class="viewhead">
-    <h1>编译</h1>
-    <p>源码 zip 上传后由官方节点执行编译命令并回传产物；按墙钟分钟结算，失败不结算。</p>
+<!-- ---------- 编排 / 编译 ---------- -->
+<section class="view nx" id="v-build">
+  <div class="nx-hero nx-hero-build">
+    <div>
+      <span class="nx-eyebrow">Pipeline · Orchestration</span>
+      <h1>任务编排</h1>
+      <p>源码 zip 上传后由算力节点执行编译 / 打包命令，产物按输出目录回传；按墙钟分钟结算，失败不结算。</p>
+    </div>
+    <div class="nx-hero-side">
+      <div class="nx-hero-badge"><b>ZIP</b><span>源码 → 产物</span></div>
+    </div>
   </div>
-  <div class="svc-meta">
-    <span class="tag on">官方集群</span>
-    <span>在线节点 <b id="of-build-nodes">—</b></span>
-    <span>空闲槽位 <b id="of-build-free">—</b></span>
-    <span>最低单价 <b id="of-build-price">—</b></span>
-    <button class="ghost tiny" onclick="showView('sky')">去星海看卖家</button>
+
+  <div class="nx-kpis">
+    <div class="nx-kpi"><span>在线节点</span><b id="of-build-nodes">—</b><i>◉</i></div>
+    <div class="nx-kpi"><span>空闲槽位</span><b id="of-build-free">—</b><i>▦</i></div>
+    <div class="nx-kpi"><span>最低单价</span><b id="of-build-price">—</b><i>◈</i></div>
+    <div class="nx-kpi nx-kpi-action"><button class="ghost tiny" onclick="showView('sky')">去星海看卖家 →</button></div>
   </div>
+
+  <div class="nx-tip">提交流程：上传源码包 → 填写编译命令与输出目录 → 平台预扣 10 分钟 → 节点执行并回传
+    <code>result.zip</code>。接收该类任务需要节点以 <code>--allow-build</code> 启动，且账号在编译白名单内。</div>
   <div id="wb-slot-build"></div>
 </section>
 
 <!-- ---------- 生图 ---------- -->
-<section class="view" id="v-image">
-  <div class="viewhead">
-    <h1>生图</h1>
-    <p>官方 Comfy 工作流，按张结算；参数填好后直接交给官方集群执行。</p>
+<section class="view nx" id="v-image">
+  <div class="nx-hero nx-hero-image">
+    <div>
+      <span class="nx-eyebrow">Image Generation</span>
+      <h1>生图工作台</h1>
+      <p>官方 Comfy 工作流，按张结算；写好画面描述后，一键把完整参数带到官方工作台执行。</p>
+    </div>
+    <div class="nx-hero-side">
+      <div class="nx-hero-badge"><b>4 种</b><span>画幅与风格</span></div>
+    </div>
   </div>
-  <div class="svc-meta">
-    <span class="tag on">官方集群</span>
-    <span>在线节点 <b id="of-image-nodes">—</b></span>
-    <span>空闲槽位 <b id="of-image-free">—</b></span>
-    <span>最低单价 <b id="of-image-price">—</b></span>
-    <button class="ghost tiny" onclick="showView('sky')">去星海看卖家</button>
+
+  <div class="nx-kpis">
+    <div class="nx-kpi"><span>在线节点</span><b id="of-image-nodes">—</b><i>◉</i></div>
+    <div class="nx-kpi"><span>空闲槽位</span><b id="of-image-free">—</b><i>▦</i></div>
+    <div class="nx-kpi"><span>最低单价</span><b id="of-image-price">—</b><i>◈</i></div>
+    <div class="nx-kpi nx-kpi-action"><button class="ghost tiny" onclick="showView('sky')">去星海看卖家 →</button></div>
   </div>
+
   <div class="split">
     <div class="card">
-      <h2><span class="kicker">Generate</span>生图设置</h2>
+      <h2><span class="kicker">Prompt</span>画面描述</h2>
       <form id="img-form">
         <label style="margin-top:0">画面描述</label>
         <textarea id="img-prompt" rows="5" placeholder="例如：赛博朋克城市夜景，霓虹雨夜，电影感光效，16:9"></textarea>
+        <div class="nx-chips">
+          <button type="button" class="nx-chip" onclick="nxPrompt('img-prompt','赛博朋克城市夜景，霓虹雨夜，电影感光效，16:9')">赛博夜景</button>
+          <button type="button" class="nx-chip" onclick="nxPrompt('img-prompt','清晨的山间薄雾，柔和逆光，写实摄影，层次丰富')">山间晨雾</button>
+          <button type="button" class="nx-chip" onclick="nxPrompt('img-prompt','日系插画风格的校园午后，樱花与单车，暖色调')">日系插画</button>
+          <button type="button" class="nx-chip" onclick="nxPrompt('img-prompt','未来空间站内部，冷色调电影概念设计，广角镜头')">电影概念</button>
+        </div>
         <div class="row">
           <div><label>画幅</label><select id="img-size">
             <option>1:1 · 1024×1024</option>
@@ -845,36 +1326,55 @@ a.btn:hover{text-decoration:none}
         </div>
       </form>
     </div>
-    <div class="card">
-      <h2><span class="kicker">Workbench</span>官方工作台</h2>
-      <div class="hint" style="margin-top:0">
-        Comfy 工作流由平台维护：提交后会把提示词、画幅和风格一起复制到剪贴板，并打开官方工作台执行。
+    <div class="sticky">
+      <div class="card">
+        <h2><span class="kicker">Workbench</span>官方工作台</h2>
+        <div class="nx-preview">生成结果在官方 Comfy 工作台查看</div>
+        <div class="nx-steps" style="margin:14px 0">
+          <span class="nx-step"><b>1</b> 填写参数</span>
+          <span class="nx-step"><b>2</b> 复制提示词</span>
+          <span class="nx-step"><b>3</b> 工作台生成</span>
+        </div>
+        <div class="hint" style="margin-top:0">Comfy 工作流由平台维护：提交后会把提示词、画幅和风格一起复制到剪贴板，并打开官方工作台执行。</div>
+        <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer" style="margin-top:16px">直接打开工作台</a>
+        <div id="img-queue" class="hint">按张结算，失败不扣费。</div>
       </div>
-      <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer" style="margin-top:16px">直接打开工作台</a>
-      <div id="img-queue" class="hint">按张结算，失败不扣费。</div>
     </div>
   </div>
 </section>
 
 <!-- ---------- 生视频 ---------- -->
-<section class="view" id="v-video">
-  <div class="viewhead">
-    <h1>生视频</h1>
-    <p>官方 Comfy 集群协同生成视频，按视频秒结算；音视频封装由平台完成。</p>
+<section class="view nx" id="v-video">
+  <div class="nx-hero nx-hero-video">
+    <div>
+      <span class="nx-eyebrow">Video Generation</span>
+      <h1>生视频工作台</h1>
+      <p>官方 Comfy 集群协同生成视频，按视频秒结算；分片生成与音视频封装由平台自动完成。</p>
+    </div>
+    <div class="nx-hero-side">
+      <div class="nx-hero-badge"><b>10s</b><span>最长镜头时长</span></div>
+    </div>
   </div>
-  <div class="svc-meta">
-    <span class="tag on">官方集群</span>
-    <span>在线节点 <b id="of-video-nodes">—</b></span>
-    <span>空闲槽位 <b id="of-video-free">—</b></span>
-    <span>最低单价 <b id="of-video-price">—</b></span>
-    <button class="ghost tiny" onclick="showView('sky')">去星海看卖家</button>
+
+  <div class="nx-kpis">
+    <div class="nx-kpi"><span>在线节点</span><b id="of-video-nodes">—</b><i>◉</i></div>
+    <div class="nx-kpi"><span>空闲槽位</span><b id="of-video-free">—</b><i>▦</i></div>
+    <div class="nx-kpi"><span>最低单价</span><b id="of-video-price">—</b><i>◈</i></div>
+    <div class="nx-kpi nx-kpi-action"><button class="ghost tiny" onclick="showView('sky')">去星海看卖家 →</button></div>
   </div>
+
   <div class="split">
     <div class="card">
-      <h2><span class="kicker">Generate</span>生视频设置</h2>
+      <h2><span class="kicker">Shot</span>镜头描述</h2>
       <form id="vid-form">
         <label style="margin-top:0">镜头描述</label>
         <textarea id="vid-prompt" rows="5" placeholder="例如：海边日落延时，镜头缓慢推进，暖色调，5 秒"></textarea>
+        <div class="nx-chips">
+          <button type="button" class="nx-chip" onclick="nxPrompt('vid-prompt','海边日落延时，镜头缓慢推进，暖色调，电影感')">海边日落</button>
+          <button type="button" class="nx-chip" onclick="nxPrompt('vid-prompt','雨夜城市街道，霓虹倒影，手持跟拍，浅景深')">雨夜街景</button>
+          <button type="button" class="nx-chip" onclick="nxPrompt('vid-prompt','云海之上的日出，无人机缓慢拉升，胶片颗粒')">云海日出</button>
+          <button type="button" class="nx-chip" onclick="nxPrompt('vid-prompt','产品特写环绕运镜，柔和棚拍光，简洁背景')">产品环绕</button>
+        </div>
         <div class="row">
           <div><label>时长</label><select id="vid-dur">
             <option>3 秒</option><option selected>5 秒</option><option>10 秒</option>
@@ -891,13 +1391,19 @@ a.btn:hover{text-decoration:none}
         </div>
       </form>
     </div>
-    <div class="card">
-      <h2><span class="kicker">Workbench</span>官方工作台</h2>
-      <div class="hint" style="margin-top:0">
-        提交后会把镜头描述、时长和画幅复制到剪贴板，并打开官方 Comfy 工作台执行。
+    <div class="sticky">
+      <div class="card">
+        <h2><span class="kicker">Workbench</span>官方工作台</h2>
+        <div class="nx-preview">生成结果在官方 Comfy 工作台查看</div>
+        <div class="nx-steps" style="margin:14px 0">
+          <span class="nx-step"><b>1</b> 描述镜头</span>
+          <span class="nx-step"><b>2</b> 复制参数</span>
+          <span class="nx-step"><b>3</b> 分片生成</span>
+        </div>
+        <div class="hint" style="margin-top:0">提交后会把镜头描述、时长和画幅复制到剪贴板，并打开官方 Comfy 工作台执行。</div>
+        <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer" style="margin-top:16px">直接打开工作台</a>
+        <div class="hint">按视频秒结算，失败的分片不结算。</div>
       </div>
-      <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer" style="margin-top:16px">直接打开工作台</a>
-      <div class="hint">按视频秒结算，失败的分片不结算。</div>
     </div>
   </div>
 </section>
@@ -1025,27 +1531,39 @@ a.btn:hover{text-decoration:none}
 </section>
 
 <!-- ---------- 我的任务 ---------- -->
-<section class="view" id="v-jobs">
-  <button class="backlink" onclick="showView('me')">← 个人中心</button>
-  <div class="viewhead">
-    <h1>我的任务</h1>
-    <p>每个分片的派发去向、进度、哈希校验与结算都在这里；跨 Broker 重启恢复的任务不计量加速比。</p>
+<section class="view nx" id="v-jobs">
+  <div class="nx-hero nx-hero-jobs">
+    <div>
+      <span class="nx-eyebrow">My Jobs</span>
+      <h1>我的任务</h1>
+      <p>每个分片的派发去向、进度、哈希校验与结算都在这里；跨 Broker 重启恢复的任务不计量加速比。</p>
+    </div>
+    <div class="nx-hero-side">
+      <button class="nx-hero-link" onclick="showView('render')">＋ 新建任务</button>
+    </div>
   </div>
+  <div class="nx-tip">任务状态每秒自动刷新。完成的任务可直接下载产物；失败分片不结算，未使用的预扣会自动退还。</div>
   <div id="jobs"><div class="empty">加载中…</div></div>
 </section>
 
 <!-- ---------- 算力市场 ---------- -->
-<section class="view" id="v-market">
-  <div class="viewhead">
-    <h1>算力市场</h1>
-    <p>按编码能力聚合的可调度切片与全部在线节点。他人机器只展示规格与价格，不展示主机名与地址。</p>
+<section class="view nx" id="v-market">
+  <div class="nx-hero nx-hero-market">
+    <div>
+      <span class="nx-eyebrow">Capacity Market</span>
+      <h1>算力市场</h1>
+      <p>按编码能力聚合的可调度切片与全部在线节点。他人机器只展示规格与价格，不展示主机名与地址。</p>
+    </div>
+    <div class="nx-hero-side">
+      <button class="nx-hero-link" onclick="showView('nodes')">接入我的机器 →</button>
+    </div>
   </div>
   <div class="card">
     <h2><span class="kicker">Capacity</span>按能力聚合的可调度切片</h2>
     <div class="tablewrap"><table id="market"><thead><tr>
       <th>编码能力</th><th>在线节点</th><th>空闲槽位</th><th>单价区间</th><th>实测吞吐</th><th>最强独显</th>
     </tr></thead><tbody><tr><td colspan="6" class="empty">尚无在线算力</td></tr></tbody></table></div>
-    <div class="hint">一台机器可出现在多行；真实并发看「空闲槽位」。</div>
+    <div class="hint">一台机器可出现在多行；真实并发看「空闲槽位」。点击下面的节点卡片可以把它指定给下一个任务。</div>
   </div>
   <div class="card">
     <h2><span class="kicker">Nodes</span>全部在线节点</h2>
@@ -1056,13 +1574,19 @@ a.btn:hover{text-decoration:none}
 </section>
 
 <!-- ---------- 云主机 ---------- -->
-<section class="view" id="v-vm">
-  <button class="backlink" onclick="showView('me')">← 个人中心</button>
-  <div class="viewhead">
-    <h1>云主机</h1>
-    <p>卖方发布虚拟机配置，买方下单后卖方机器自动用 QEMU 拉起系统镜像。访问走卖方的公网 IPv6：
-      slirp 模式由 Agent 在 <code>[::]</code> 上监听端口并转发进虚拟机，routed 模式则直接给虚拟机分配公网 IPv6。</p>
+<section class="view nx" id="v-vm">
+  <div class="nx-hero nx-hero-vm">
+    <div>
+      <span class="nx-eyebrow">Cloud Instances</span>
+      <h1>云主机</h1>
+      <p>卖方发布虚拟机配置，买方下单后卖方机器自动用 QEMU 拉起系统镜像，按小时计费、随时停机结算。</p>
+    </div>
+    <div class="nx-hero-side">
+      <div class="nx-hero-badge"><b>QEMU</b><span>IPv6 直连</span></div>
+    </div>
   </div>
+  <div class="nx-tip">访问走卖方的公网 IPv6：slirp 模式由 Agent 在 <code>[::]</code> 上监听端口并转发进虚拟机，
+    routed 模式则直接给虚拟机分配公网 IPv6。</div>
 
   <div class="split">
     <div class="card">
@@ -1185,11 +1709,22 @@ a.btn:hover{text-decoration:none}
 </section>
 
 <!-- ---------- 我的节点 ---------- -->
-<section class="view" id="v-nodes">
-  <button class="backlink" onclick="showView('me')">← 个人中心</button>
-  <div class="viewhead">
-    <h1>我的节点</h1>
-    <p>把闲置机器接进来赚算力点：下载节点包，解压后直接双击 exe 即可；启动脚本作为需要自定义参数时的备选。</p>
+<section class="view nx" id="v-nodes">
+  <div class="nx-hero nx-hero-nodes">
+    <div>
+      <span class="nx-eyebrow">Provider Nodes</span>
+      <h1>我的节点</h1>
+      <p>把闲置机器接进来赚算力点：下载节点包，解压后直接双击 exe 即可；启动脚本作为需要自定义参数时的备选。</p>
+    </div>
+    <div class="nx-hero-side">
+      <button class="nx-hero-link" onclick="showView('bill')">查看收益 →</button>
+    </div>
+  </div>
+  <div class="nx-steps">
+    <span class="nx-step"><b>1</b> 填写机器参数</span>
+    <span class="nx-step"><b>2</b> 下载节点包</span>
+    <span class="nx-step"><b>3</b> 在那台机器上运行</span>
+    <span class="nx-step"><b>4</b> 自动开始接单</span>
   </div>
   <div class="split">
     <div class="card">
@@ -1241,18 +1776,24 @@ a.btn:hover{text-decoration:none}
 </section>
 
 <!-- ---------- 账单 ---------- -->
-<section class="view" id="v-bill">
-  <button class="backlink" onclick="showView('me')">← 个人中心</button>
-  <div class="viewhead">
-    <h1>账单</h1>
-    <p>账户流水与按节点结算的收益明细；校验不通过的分片不结算。</p>
+<section class="view nx" id="v-bill">
+  <div class="nx-hero nx-hero-bill">
+    <div>
+      <span class="nx-eyebrow">Billing & Ledger</span>
+      <h1>账单与收益</h1>
+      <p>账户流水与按节点结算的收益明细；校验不通过的分片不结算，未使用的预扣会自动退还。</p>
+    </div>
+    <div class="nx-hero-side">
+      <div class="nx-hero-badge"><b>点</b><span>算力点结算</span></div>
+    </div>
   </div>
   <div class="grid">
     <div class="card">
       <h2><span class="kicker">Ledger</span>账户流水</h2>
+      <div class="nx-sec">快速充值 <small>Top up</small></div>
       <div id="recharge" style="display:flex;gap:8px;margin-bottom:16px">
         <input id="ramount" type="number" min="1" value="100" placeholder="充值算力点">
-        <button class="ghost" id="dochARGE" style="height:38px;flex:0 0 auto">充值</button>
+        <button class="ghost" id="dochARGE" style="height:40px;flex:0 0 auto">充值</button>
       </div>
       <div class="tablewrap"><table id="spend"><thead><tr><th>时间</th><th>类型</th><th>变动</th><th>余额</th><th>说明</th></tr></thead>
       <tbody><tr><td colspan="5" class="empty">暂无记录</td></tr></tbody></table></div>
@@ -1261,31 +1802,45 @@ a.btn:hover{text-decoration:none}
       <h2><span class="kicker">Earnings</span>我的节点收益</h2>
       <div class="tablewrap"><table id="earn"><thead><tr><th>时间</th><th>节点</th><th>算力点</th><th>说明</th></tr></thead>
       <tbody><tr><td colspan="4" class="empty">暂无收益</td></tr></tbody></table></div>
-      <div class="hint">收益只在「节点自报哈希 == broker 重算哈希」的分片上发放。</div>
+      <div class="nx-tip" style="margin:16px 0 0">收益只在「节点自报哈希 == broker 重算哈希」的分片上发放，避免虚假上报。</div>
     </div>
   </div>
 </section>
 
 <!-- ---------- 论坛 ---------- -->
-<section class="view" id="v-forum">
-  <div class="viewhead">
-    <h1>论坛</h1>
-  </div>
-  <div id="forum-main">
-    <div class="card">
-      <h2><span class="kicker">发帖</span>说点什么</h2>
-      <input id="fp-title" placeholder="标题" maxlength="120">
-      <textarea id="fp-body" rows="4" placeholder="分享经验、提问或吐槽"></textarea>
-      <label>图片或视频（最多 6 张图 + 1 个视频）</label>
-      <input type="file" id="fp-files" accept="image/*,video/*" multiple>
-      <div class="formfoot">
-        <button class="btn auto" id="fp-send">发布</button>
-        <div id="fp-msg" class="hint"></div>
-      </div>
+<section class="view nx" id="v-forum">
+  <div class="nx-hero nx-hero-forum">
+    <div>
+      <span class="nx-eyebrow">Community</span>
+      <h1>星栈论坛</h1>
+      <p>分享工作流、讨论调度策略、展示作品。发帖支持图片与视频，帖子按最新发布时间排列。</p>
     </div>
-    <div class="card">
-      <h2><span class="kicker">帖子</span>最新讨论</h2>
-      <div id="forum-list" class="empty">加载中…</div>
+    <div class="nx-hero-side">
+      <div class="nx-hero-badge"><b>社区</b><span>聊聊算力</span></div>
+    </div>
+  </div>
+
+  <div id="forum-main">
+    <div class="grid">
+      <div class="card">
+        <h2><span class="kicker">Threads</span>最新讨论</h2>
+        <div id="forum-list" class="empty">加载中…</div>
+      </div>
+      <div class="sticky">
+        <div class="card">
+          <h2><span class="kicker">Compose</span>说点什么</h2>
+          <label style="margin-top:0">标题</label>
+          <input id="fp-title" placeholder="给帖子起个标题" maxlength="120">
+          <label>正文</label>
+          <textarea id="fp-body" rows="4" placeholder="分享经验、提问或吐槽"></textarea>
+          <label>图片或视频（最多 6 张图 + 1 个视频）</label>
+          <input type="file" id="fp-files" accept="image/*,video/*" multiple>
+          <div class="formfoot">
+            <button class="btn auto" id="fp-send">发布</button>
+            <div id="fp-msg" class="hint"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1293,7 +1848,7 @@ a.btn:hover{text-decoration:none}
     <button class="ghost" id="forum-back" style="margin-bottom:14px">← 返回列表</button>
     <div class="card" id="fd-post"></div>
     <div class="card">
-      <h2><span class="kicker">评论</span>回复</h2>
+      <h2><span class="kicker">Replies</span>回复</h2>
       <div id="fd-comments"></div>
       <textarea id="fd-body" rows="3" placeholder="写下你的看法"></textarea>
       <label>附图（可选）</label>
@@ -1307,22 +1862,27 @@ a.btn:hover{text-decoration:none}
 </section>
 
 <!-- ---------- 个人中心 ---------- -->
-<section class="view" id="v-me">
-  <div class="viewhead">
-    <h1>个人中心</h1>
-    <p>这里只放与你账户相关的任务、机器、云主机和账单；服务版块的官方入口在左侧。</p>
-  </div>
-  <div class="card">
-    <div class="row">
-      <div><label>用户名</label><div id="me-name" class="val">—</div></div>
-      <div><label>余额</label><div id="me-credits" class="val">—</div></div>
+<section class="view nx" id="v-me">
+  <div class="nx-hero nx-hero-me">
+    <div>
+      <span class="nx-eyebrow">Account Center</span>
+      <h1>个人中心</h1>
+      <p>任务、机器、云主机与账单都汇总在这里；服务版块的官方入口在左侧导航。</p>
     </div>
-    <div class="stats" style="margin-top:14px">
+    <div class="nx-hero-side">
+      <div class="nx-hero-badge"><b id="me-credits">—</b><span>算力点余额</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="nx-sec">账户概览 <small id="me-name">—</small></div>
+    <div class="stats" style="margin-top:6px">
       <div class="stat"><b id="me-jobs">0</b><span>我的任务</span></div>
       <div class="stat"><b id="me-nodes">0</b><span>我的在线节点</span></div>
       <div class="stat"><b id="me-vms">0</b><span>我的云主机</span></div>
     </div>
   </div>
+
   <div class="card">
     <h2><span class="kicker">Personal</span>我的记录</h2>
     <div class="me-links">
@@ -1330,14 +1890,17 @@ a.btn:hover{text-decoration:none}
       <button class="me-link" onclick="showView('vm')"><b>我的云主机</b><span>租用中的实例与我发布的配置</span></button>
       <button class="me-link" onclick="showView('nodes')"><b>我的节点</b><span>接入机器、单价与收益</span></button>
       <button class="me-link" onclick="showView('bill')"><b>账单</b><span>账户流水与节点收益</span></button>
+      <button class="me-link" onclick="showView('market')"><b>算力市场</b><span>在线节点与可调度切片</span></button>
       <button class="me-link" onclick="openSkyStack()"><b>我的发布</b><span>去星栈管理已发布的服务</span></button>
     </div>
   </div>
+
   <div class="card">
-    <h2><span class="kicker">设置</span>界面</h2>
+    <h2><span class="kicker">Preferences</span>界面设置</h2>
     <label class="check"><input type="checkbox" id="advtoggle" style="width:auto">
       显示高级选项（编码器、硬件要求、分片数、服务端路径）</label>
     <div id="advhint" class="hint"></div>
+    <div class="hint" style="margin-top:8px">深色 / 浅色主题、侧边栏展开状态都可以通过左下角按钮随时切换。</div>
   </div>
 </section>
 </main>
@@ -1383,6 +1946,41 @@ const post=(u,body)=>api(u,{method:'POST',headers:{'Content-Type':'application/j
 let ME=null, POOL=[], LIVE={}, TIMER=null, DUR=0, POL=null, VIEW='sky';
 let SKY_CAT='all', SKY_OFFERS=[], SKY_LAST=0, ME_VM_LAST=0;
 
+/* ---------------- 新版 shell：导航分组、面包屑与状态栏 ---------------- */
+const NX_TITLE={sky:'星空',api:'API',image:'生图',video:'生视频',render:'渲染',
+  build:'任务编排',forum:'论坛',me:'个人中心',jobs:'我的任务',market:'算力市场',
+  vm:'云主机',nodes:'我的节点',bill:'账单'};
+const NX_PARENT={jobs:'me',vm:'me',nodes:'me',bill:'me',market:'me'};
+function nxChrome(v){
+  $('#app').dataset.view=v;
+  const crumb=$('#nxCrumb'); if(crumb) crumb.textContent=NX_TITLE[v]||v;
+  const parent=NX_PARENT[v];
+  $$('#nav button[data-v]').forEach(x=>
+    x.classList.toggle('on',x.dataset.v===v||(!!parent&&x.dataset.v===parent)));
+}
+function nxStatus(){
+  const on=$('#nxOnline'), bal=$('#nxBalance');
+  if(on) on.textContent=POOL.filter(w=>w.online).length;
+  if(bal) bal.textContent=f2(ME?ME.credits:0);
+}
+function nxWallet(){
+  $('#wallet').innerHTML='<span class="wallet-label">账户余额</span>'+
+    `<b>${f2(ME?ME.credits:0)}</b><span class="wallet-unit">算力点</span>`;
+}
+function nxPrompt(id,text){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.value=text; el.focus();
+}
+(function initSide(){
+  try{if(localStorage.getItem('ss-side')==='1') $('#app').classList.add('side-collapsed')}catch(e){}
+  const btn=$('#sideToggle');
+  if(btn) btn.onclick=()=>{
+    const collapsed=$('#app').classList.toggle('side-collapsed');
+    try{localStorage.setItem('ss-side',collapsed?'1':'0')}catch(e){}
+  };
+})();
+
 /* ---------------- 视图切换 ---------------- */
 function showView(v){
   VIEW=v;
@@ -1393,14 +1991,15 @@ function showView(v){
       if(k.value!==want){k.value=want;syncKind()}
     }
   }
-  $$('#nav button[data-v]').forEach(x=>x.classList.toggle('on',x.dataset.v===v));
+  nxChrome(v);
   $$('.view').forEach(s=>s.classList.remove('on'));
   const el=$('#v-'+v);
   if(el) el.classList.add('on');
   paint();
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 $$('#nav button[data-v]').forEach(b=>b.onclick=()=>showView(b.dataset.v));
-// 个人资料挂在头像上，不再占侧栏一项
+// 个人资料同时挂在头像与侧栏的「个人中心」上
 $('#who').onclick=()=>showView('me');
 
 /* ---------------- 登录 / 注册 ---------------- */
@@ -1451,7 +2050,9 @@ function enter(){
   $('#v-'+activeView()).classList.add('on');
   $('#nav').style.display='flex';
   $('#wallet').style.display='flex';
-  $('#wallet').innerHTML=`余额 <b>${f2(ME.credits)}</b> 算力点`;
+  nxWallet();
+  nxChrome(activeView());
+  nxStatus();
   $('#who').innerHTML=`<span class="avatar">${esc(ME.name.slice(0,1).toUpperCase())}</span>`+
     `<span class="uname">${esc(ME.name)}</span>`;
   loadSettings();
@@ -1516,7 +2117,7 @@ async function refresh(){
     if(st.policy) POL=st.policy;
     applyPolicy();
     LIVE={};(st.jobs||[]).forEach(j=>LIVE[j.id]=j);
-    $('#wallet').innerHTML=`余额 <b>${f2(ME.credits)}</b> 算力点`;
+    nxWallet(); nxStatus();
     paint();
   }catch(e){/* broker 正在重启 */}
   TIMER=setTimeout(refresh,1000);
@@ -1672,6 +2273,8 @@ function mountWorkbench(svc){
   const wb=$('#wb'); if(!wb) return;
   const slot=$(svc==='build'?'#wb-slot-build':'#wb-slot-render');
   if(slot && wb.parentElement!==slot) slot.appendChild(wb);
+  const title=$('#wb-title');
+  if(title) title.textContent=svc==='build'?'提交编排任务':'提交渲染任务';
 }
 
 /* ---------------- API 轻量调用助手 ---------------- */
@@ -2750,7 +3353,7 @@ async function loadSettings(){
 function paintMe(){
   if(!ME) return;
   $('#me-name').textContent=ME.name;
-  $('#me-credits').textContent=f2(ME.credits)+' 算力点';
+  $('#me-credits').textContent=f2(ME.credits);
   $('#me-jobs').textContent=Object.keys(LIVE).length;
   $('#me-nodes').textContent=POOL.filter(w=>w.mine&&w.online).length;
   $('#advtoggle').checked=ADV;
@@ -2780,9 +3383,17 @@ function mediaHTML(list){
     : `<img src="${mediaURL(f.id)}" alt="${esc(f.name)}" onclick="window.open(this.src,'_blank')">`).join('')+'</div>';
 }
 function postItem(p){
+  const initial=esc(String(p.author||'?').slice(0,1).toUpperCase());
   return `<div class="postitem" onclick="openPost('${esc(p.id)}')">
-    <h3>${esc(p.title)}</h3>
-    <div class="postmeta">${esc(p.author)} · ${fts(p.created_at)} · ${p.comments} 评论 · ${p.media_count} 附件</div>
+    <div class="nx-postrow">
+      <div class="nx-post-avatar">${initial}</div>
+      <div>
+        <h3>${esc(p.title)}</h3>
+        <div class="postmeta">${esc(p.author)} · ${fts(p.created_at)}</div>
+      </div>
+      <span class="tag">${p.comments} 评论</span>
+      ${p.media_count?`<span class="tag gpu">${p.media_count} 附件</span>`:''}
+    </div>
   </div>`;
 }
 let FORUM_POSTS=[], FORUM_CURRENT=null;
@@ -2791,7 +3402,7 @@ async function paintForum(){
     const d=await api('/api/forum/posts');
     FORUM_POSTS=d.posts||[];
     $('#forum-list').className=FORUM_POSTS.length?'':'empty';
-    $('#forum-list').innerHTML=FORUM_POSTS.length?FORUM_POSTS.map(postItem).join(''):'还没有帖子，来发第一个吧';
+    $('#forum-list').innerHTML=FORUM_POSTS.length?FORUM_POSTS.map(postItem).join(''):'还没有帖子，来发第一条吧';
   }catch(e){$('#forum-list').textContent='读取失败：'+e}
 }
 $('#fp-send').onclick=async()=>{
@@ -2820,8 +3431,11 @@ async function openPost(id){
   try{
     const d=await api('/api/forum/posts/'+id);
     FORUM_CURRENT=d;
-    $('#fd-post').innerHTML=`<h2 style="margin-bottom:2px">${esc(d.post.title)}</h2>
-      <div class="postmeta">${esc(d.post.author)} · ${fts(d.post.created_at)}</div>
+    $('#fd-post').innerHTML=`<div class="nx-postrow" style="align-items:center;margin-bottom:14px">
+        <div class="nx-post-avatar">${esc(String(d.post.author||'?').slice(0,1).toUpperCase())}</div>
+        <div><h2 style="margin-bottom:2px">${esc(d.post.title)}</h2>
+          <div class="postmeta">${esc(d.post.author)} · ${fts(d.post.created_at)}</div></div>
+      </div>
       ${d.post.body?`<div class="postbody">${esc(d.post.body)}</div>`:''}
       ${mediaHTML(d.media)}`;
     $('#fd-comments').innerHTML=(d.comments||[]).length?d.comments.map(c=>`
