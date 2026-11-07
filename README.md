@@ -23,7 +23,7 @@
 | 存储 | 本地磁盘 + HTTP 分发源片 | demo 够用，预留 MinIO/NFS |
 | 渲染 | **ffmpeg + Blender 子进程，不自研渲染器** | PR/FCPXML 时间线还原、Blender 帧渲染都复用成熟引擎；平台负责按秒/按帧切片、分发、校验和合成 |
 | 模型推理 | **OpenAI 兼容网关，不自研推理内核** | llama.cpp / vLLM / Ollama 作为上游接入；平台只做按模型的低价路由、token 计量与 90/10 分成。MoE 用 `--n-cpu-moe` 或多机 `rpc-server` 部署 |
-| 前端 | `go:embed` 单页 HTML | 零构建链，二进制里自带仪表盘 |
+| 前端 | `go:embed` 单页 HTML + `web/assets/` 静态资源 | 零构建链，二进制里自带仪表盘与 ComfyUI 工作台的 JS/CSS |
 | 状态 | **SQLite（`modernc.org/sqlite`，纯 Go 免 CGO）+ 内存态热数据** | 账户/会话/节点/任务/分片/流水要能跨重启存活，否则"租约回收"和"按量结算"都没法验证；纯 Go 驱动才能继续维持"交叉编译一个二进制"这条前提。写路径是 write-through：内存调度照常，落库只做快照 |
 
 ## 跑起来
@@ -88,7 +88,48 @@ Broker 本地路径输入、待认领列表和基线对比，Agent 命令行也�
 
 ```bash
 go test ./internal/hub/    # 价格权重确实改变选择、Excluded/停派、预扣口径、冻结价结算、
-                           # 公平份额、任务墙钟、硬约束字段
+                           # 公平份额、任务墙钟、硬约束字段、工作流 CRUD 与代理鉴权
+```
+
+## 生图 / 生视频 · ComfyUI 工作台
+
+侧栏「生图 / 生视频」右侧的**预设工作台**是一个内嵌的、与 ComfyUI 官方操作一致的节点画布，
+不再只是复制提示词。启动本机 ComfyUI 后把 Broker 指过去即可：
+
+```bash
+python main.py --listen 127.0.0.1 --port 8188   # ComfyUI 本体
+
+./bin/starstack-server.exe --data ./data --addr :8787 \
+  --comfyui http://127.0.0.1:8188               # 或环境变量 STARSTACK_COMFYUI
+```
+
+Broker 把官方 `server.py` 的路由原样代理到 `/comfyui/api/`（复用平台登录会话，未登录一律 401）：
+`/object_info`、`/prompt`、`/upload/image`、`/view`、`/history`、`/queue`、`/interrupt`、
+`/system_stats`、`/extensions`、`/workflow_templates` 以及 WebSocket `/ws`（进度、节点高亮、错误信息）。
+Nginx 配置已为 `/comfyui/api/ws` 单独放行 `Upgrade` 头。
+
+页面能力：
+
+- **导入**：官方 `workflow.json`（UI 格式）、「导出 (API 格式)」的 `prompt.json`、含
+  `workflow`/`prompt` 元数据的 ComfyUI 输出 PNG；支持文件选择、拖放到画布/卡片、JSON 粘贴格式校验。
+- **编辑**：滚轮缩放、空白/中键平移、双击或右键搜索添加节点、拖拽连线与类型校验、
+  控件转输入、折叠/静音/绕过/复制粘贴/多选删除、种子 `control_after_generate`，
+  与官方 `loadGraphData` / `graphToPrompt` 的图结构语义一致。
+- **部署 / 预设 / 草稿**：`部署` 把当前图设为该版块默认工作流，表单的提示词、画幅、
+  风格、时长会写进对应节点；`存预设`、`存草稿` 落到 `comfy_workflows` 表
+  （未登录时退回浏览器本地存储），卡片上的三个 Tab 分别对应模板配置 / 我的预设 / 保存草稿。
+- **执行**：`运行 (Queue Prompt)` 或 Ctrl+Enter 转成官方 API 格式 POST `/prompt`，
+  `/ws` 实时回报 `executing` / `progress` / `executed` / `execution_error`，
+  结果通过 `/view` 显示在「结果」面板；可导出 UI / API 两种 JSON 到官方 ComfyUI 复现。
+- **离线**：没连上 ComfyUI 时自动使用内置节点库，仍可编辑、导入、导出与部署；
+  连上后 `/object_info` 会覆盖为服务器真实的节点定义（含自定义节点与模型列表）。
+
+验收（不需要浏览器服务与 ComfyUI）：
+
+```bash
+node scripts/verify-comfy-workbench.cjs     # 模板 / UI↔API 往返 / 真实工作流导入
+go test ./internal/hub/ -run TestComfy      # 工作流 CRUD、静态资源、代理鉴权
+# scripts/comfy-workbench-smoke.html 可用无头 Chrome --dump-dom 跑真实 DOM 冒烟
 ```
 
 ## 部署到公网服务器

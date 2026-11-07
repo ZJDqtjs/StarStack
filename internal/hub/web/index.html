@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>星栈算力 · 闲置算力共享平台</title>
+<link rel="stylesheet" href="assets/comfy.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171717'/%3E%3Ctext x='16' y='22' font-family='sans-serif' font-size='16' font-weight='600' fill='%23fff' text-anchor='middle'%3E%E6%98%9F%3C/text%3E%3C/svg%3E">
 <script>
 /* 主题必须在首帧前定下来，否则深色用户会先看到一帧白底 */
@@ -1507,7 +1508,7 @@ a.btn:hover{text-decoration:none}
     <div>
       <span class="nx-eyebrow">Image Generation</span>
       <h1>生图工作台</h1>
-      <p>官方 Comfy 工作流，按张结算；写好画面描述后，一键把完整参数带到官方工作台执行。</p>
+      <p>部署或导入 ComfyUI 工作流后，画面描述会写进节点参数，一键提交到官方执行队列。</p>
     </div>
     <div class="nx-hero-side">
       <div class="nx-hero-badge"><b>4 种</b><span>画幅与风格</span></div>
@@ -1554,17 +1555,32 @@ a.btn:hover{text-decoration:none}
       </form>
     </div>
     <div class="sticky">
-      <div class="card">
-        <h2><span class="kicker">Workbench</span>官方工作台</h2>
-        <div class="nx-preview">生成结果在官方 Comfy 工作台查看</div>
-        <div class="nx-steps" style="margin:14px 0">
-          <span class="nx-step"><b>1</b> 填写参数</span>
-          <span class="nx-step"><b>2</b> 复制提示词</span>
-          <span class="nx-step"><b>3</b> 工作台生成</span>
+      <div class="card" data-cw-kind="image">
+        <div class="cw-card-head">
+          <h2 style="margin:0"><span class="kicker">PRESET WORKBENCH</span>预设工作台</h2>
+          <span class="cw-chip" data-cw-conn>检测中…</span>
         </div>
-        <div class="hint" style="margin-top:0">Comfy 工作流由平台维护：提交后会把提示词、画幅和风格一起复制到剪贴板，并打开官方工作台执行。</div>
-        <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer" style="margin-top:16px">直接打开工作台</a>
-        <div id="img-queue" class="hint">按张结算，失败不扣费。</div>
+        <div class="cw-card-tabs">
+          <button type="button" class="cw-card-tab on" data-cw-tab="template">模板配置</button>
+          <button type="button" class="cw-card-tab" data-cw-tab="preset">我的预设</button>
+          <button type="button" class="cw-card-tab" data-cw-tab="draft">保存草稿</button>
+        </div>
+        <div class="cw-card-pane" data-cw-pane></div>
+        <div class="cw-mini" data-cw-mini title="点击打开工作台，或拖入工作流文件">
+          <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet"></svg>
+          <span class="cw-mini-badge">WORKFLOW GRAPH</span>
+          <span class="cw-mini-empty">选择并配置一个 ComfyUI 工作流</span>
+        </div>
+        <div class="cw-mini-info"><span data-cw-info>载入中…</span><span>双击 / 拖入导入</span></div>
+        <div class="cw-chips" data-cw-chips></div>
+        <div class="cw-card-foot">
+          <button type="button" class="btn auto" data-cw-open>选择并打开工作台</button>
+          <button type="button" class="ghost tiny" data-cw-import>选择并上传</button>
+          <button type="button" class="ghost tiny" data-cw-save>保存草稿</button>
+          <button type="button" class="cw-link-btn" data-cw-help>使用教程</button>
+        </div>
+        <p class="cw-card-note" id="cw-note-image">支持官方 workflow.json、API 格式 prompt.json 与含工作流元数据的 PNG；部署后本页表单会把参数写入该工作流并提交 ComfyUI 队列。</p>
+        <input type="file" class="cw-hidden" data-cw-file accept=".json,.png,application/json,image/png">
       </div>
     </div>
   </div>
@@ -1576,7 +1592,7 @@ a.btn:hover{text-decoration:none}
     <div>
       <span class="nx-eyebrow">Video Generation</span>
       <h1>生视频工作台</h1>
-      <p>官方 Comfy 集群协同生成视频，按视频秒结算；分片生成与音视频封装由平台自动完成。</p>
+      <p>部署视频工作流，镜头描述、时长与画幅直接写入节点，提交后由 ComfyUI 队列生成并回传进度。</p>
     </div>
     <div class="nx-hero-side">
       <div class="nx-hero-badge"><b>10s</b><span>最长镜头时长</span></div>
@@ -1619,17 +1635,32 @@ a.btn:hover{text-decoration:none}
       </form>
     </div>
     <div class="sticky">
-      <div class="card">
-        <h2><span class="kicker">Workbench</span>官方工作台</h2>
-        <div class="nx-preview">生成结果在官方 Comfy 工作台查看</div>
-        <div class="nx-steps" style="margin:14px 0">
-          <span class="nx-step"><b>1</b> 描述镜头</span>
-          <span class="nx-step"><b>2</b> 复制参数</span>
-          <span class="nx-step"><b>3</b> 分片生成</span>
+      <div class="card" data-cw-kind="video">
+        <div class="cw-card-head">
+          <h2 style="margin:0"><span class="kicker">PRESET WORKBENCH</span>预设工作台</h2>
+          <span class="cw-chip" data-cw-conn>检测中…</span>
         </div>
-        <div class="hint" style="margin-top:0">提交后会把镜头描述、时长和画幅复制到剪贴板，并打开官方 Comfy 工作台执行。</div>
-        <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer" style="margin-top:16px">直接打开工作台</a>
-        <div class="hint">按视频秒结算，失败的分片不结算。</div>
+        <div class="cw-card-tabs">
+          <button type="button" class="cw-card-tab on" data-cw-tab="template">模板配置</button>
+          <button type="button" class="cw-card-tab" data-cw-tab="preset">我的预设</button>
+          <button type="button" class="cw-card-tab" data-cw-tab="draft">保存草稿</button>
+        </div>
+        <div class="cw-card-pane" data-cw-pane></div>
+        <div class="cw-mini" data-cw-mini title="点击打开工作台，或拖入工作流文件">
+          <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet"></svg>
+          <span class="cw-mini-badge">WORKFLOW GRAPH</span>
+          <span class="cw-mini-empty">选择并配置一个 ComfyUI 工作流</span>
+        </div>
+        <div class="cw-mini-info"><span data-cw-info>载入中…</span><span>双击 / 拖入导入</span></div>
+        <div class="cw-chips" data-cw-chips></div>
+        <div class="cw-card-foot">
+          <button type="button" class="btn auto" data-cw-open>选择并打开工作台</button>
+          <button type="button" class="ghost tiny" data-cw-import>选择并上传</button>
+          <button type="button" class="ghost tiny" data-cw-save>保存草稿</button>
+          <button type="button" class="cw-link-btn" data-cw-help>使用教程</button>
+        </div>
+        <p class="cw-card-note" id="cw-note-video">导入视频工作流后，镜头描述、时长与画幅会写入对应节点；生成由 ComfyUI 队列执行，WebSocket 实时回传进度。</p>
+        <input type="file" class="cw-hidden" data-cw-file accept=".json,.png,application/json,image/png">
       </div>
     </div>
   </div>
@@ -2153,6 +2184,7 @@ a.btn:hover{text-decoration:none}
   </div>
 </div>
 
+<script src="assets/comfy.js"></script>
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 // A reverse proxy may mount the broker under a prefix (nginx: /starstack/).
@@ -2637,30 +2669,27 @@ function copySnippet(btn){
     .then(()=>{btn.textContent='已复制'}).catch(()=>{});
 }
 
-/* ---------------- 生图 / 生视频：内嵌工作台表单 ---------------- */
-function copyText(t){if(navigator.clipboard)navigator.clipboard.writeText(t).catch(()=>{})}
-function openComfy(){window.open('/comfy/','_blank','noopener')}
-
+/* ---------------- 生图 / 生视频：ComfyUI 工作台 ----------------
+   提交时不再复制提示词到剪贴板：把参数写进已部署的工作流节点，打开节点
+   画布并在连接可用时直接 POST /comfyui/api/prompt 进入官方执行队列。 */
+function cwGenerate(kind){
+  const p = kind==='image'
+    ? {prompt:$('#img-prompt').value.trim(), size:$('#img-size').value,
+       style:$('#img-style').value, negative:$('#img-neg').value.trim()}
+    : {prompt:$('#vid-prompt').value.trim(), duration:$('#vid-dur').value,
+       size:$('#vid-size').value, motion:$('#vid-motion').value.trim()};
+  if(!p.prompt){return kind==='image'?'先写画面描述':'先写镜头描述'}
+  if(!window.ComfyWorkbench) return '工作台组件尚未加载，请刷新页面重试';
+  ComfyWorkbench.generate(kind,p);
+  return '已写入工作流并打开 ComfyUI 工作台';
+}
 $('#img-form').addEventListener('submit',e=>{
   e.preventDefault();
-  const p=$('#img-prompt').value.trim();
-  if(!p){$('#img-msg').textContent='先写画面描述';return}
-  let text=`画面：${p}\n画幅：${$('#img-size').value}\n风格：${$('#img-style').value}`;
-  if($('#img-neg').value.trim()) text+=`\n反向提示词：${$('#img-neg').value.trim()}`;
-  copyText(text);
-  $('#img-msg').textContent='提示词已复制，正在打开官方工作台…';
-  openComfy();
+  $('#img-msg').textContent=cwGenerate('image');
 });
-
 $('#vid-form').addEventListener('submit',e=>{
   e.preventDefault();
-  const p=$('#vid-prompt').value.trim();
-  if(!p){$('#vid-msg').textContent='先写镜头描述';return}
-  let text=`镜头：${p}\n时长：${$('#vid-dur').value}\n画幅：${$('#vid-size').value}`;
-  if($('#vid-motion').value.trim()) text+=`\n运镜/风格：${$('#vid-motion').value.trim()}`;
-  copyText(text);
-  $('#vid-msg').textContent='提示词已复制，正在打开官方工作台…';
-  openComfy();
+  $('#vid-msg').textContent=cwGenerate('video');
 });
 
 

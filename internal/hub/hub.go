@@ -332,6 +332,7 @@ type Server struct {
 	secrets    *secretBox
 	gateway    *gatewayState
 	comfyHub   string // optional reverse-proxy target for the AI video share page
+	comfyUI    string // optional upstream ComfyUI server for the workflow workbench
 	// Cloud hosts are a second market on the same nodes: offers are snapshots
 	// published by sellers, instances are prepaid rentals that keep their own
 	// lifecycle and billing clock.
@@ -616,6 +617,10 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/vm/instances/", s.handleVMInstanceOp)
 	mux.HandleFunc("/api/vm/claim", s.handleVMClaim)
 	mux.HandleFunc("/api/vm/report", s.handleVMReport)
+
+	// ComfyUI workbench: workflow persistence plus a session-guarded proxy to
+	// the official HTTP/WebSocket API of an upstream ComfyUI instance.
+	s.registerComfyRoutes(mux)
 
 	// Model gateway: console management on /api, buyer API on /v1.
 	mux.HandleFunc("/api/keys", s.handleAPIKeys)

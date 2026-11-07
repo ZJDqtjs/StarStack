@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ComfyUI 工作台 · 浏览器冒烟测试</title>
+<link rel="stylesheet" href="../internal/hub/web/assets/comfy.css">
+</head>
+<body>
+<!-- 只保留工作台卡片依赖的 DOM，验证脚本能在真实浏览器里完成渲染与交互 -->
+<div class="card" data-cw-kind="image">
+  <div class="cw-card-tabs"><button data-cw-tab="template" class="on">模板配置</button><button data-cw-tab="preset">我的预设</button></div>
+  <div class="cw-card-pane" data-cw-pane></div>
+  <div class="cw-mini" data-cw-mini><svg></svg><span class="cw-mini-empty">空</span></div>
+  <div class="cw-mini-info"><span data-cw-info></span></div>
+  <div class="cw-chips" data-cw-chips></div>
+  <span data-cw-conn></span>
+  <button data-cw-open>打开</button><button data-cw-import>导入</button>
+  <input type="file" class="cw-hidden" data-cw-file>
+  <p id="cw-note-image"></p>
+</div>
+<div class="card" data-cw-kind="video">
+  <div class="cw-card-tabs"><button data-cw-tab="template" class="on">模板配置</button></div>
+  <div class="cw-card-pane" data-cw-pane></div>
+  <div class="cw-mini" data-cw-mini><svg></svg><span class="cw-mini-empty">空</span></div>
+  <div class="cw-mini-info"><span data-cw-info></span></div>
+  <div class="cw-chips" data-cw-chips></div>
+  <span data-cw-conn></span>
+  <input type="file" class="cw-hidden" data-cw-file>
+  <p id="cw-note-video"></p>
+</div>
+<pre id="out">RUNNING</pre>
+<script src="../internal/hub/web/assets/comfy.js"></script>
+<script>
+(function () {
+  const out = [], ok = (name, cond) => out.push((cond ? 'PASS ' : 'FAIL ') + name);
+  function run() {
+    try {
+      ok('ComfyWorkbench 已导出', !!window.ComfyWorkbench);
+      const CW = window.ComfyWorkbench;
+      const g = CW.graphFor('image');
+      ok('默认生图模板有节点与连线', g.nodes.length >= 6 && g.links.length >= 8);
+      ok('卡片缩略图已绘制', document.querySelector('[data-cw-mini] svg').childNodes.length > 0);
+      ok('卡片模板列表已渲染', document.querySelector('[data-cw-pane]').textContent.includes('文生图'));
+
+      CW.open('image');
+      const root = document.getElementById('cw-root');
+      ok('工作台全屏打开', root.classList.contains('cw-open'));
+      ok('节点渲染到画布', document.querySelectorAll('#cw-nodes .cw-node').length === g.nodes.length);
+      ok('连线渲染到 SVG', document.querySelectorAll('#cw-links .cw-link').length === g.links.length);
+      ok('节点控件可编辑', document.querySelectorAll('#cw-nodes [data-widget]').length > 0);
+      ok('节点库列出节点', document.querySelectorAll('#cw-side-body .cw-lib-item').length > 10);
+      ok('Queue Prompt 按钮存在', !!document.querySelector('[data-act="queue"]'));
+
+      const api = CW.toAPI(g);
+      ok('API 提示词可生成', Object.keys(api).length === g.nodes.length);
+      CW.generate('image', { prompt: '冒烟测试提示词', size: '1:1 · 1024×1024', style: '写实摄影' });
+      const gg = CW.graphFor('image');
+      const pos = gg.nodes.filter(n => n.type === 'CLIPTextEncode')[0];
+      ok('表单参数写入节点', pos.widgets.some(w => String(w.value).includes('冒烟测试提示词')));
+      const lat = gg.nodes.filter(n => n.type === 'EmptyLatentImage')[0];
+      ok('画幅写入宽高控件', lat.widgets.find(w => w.name === 'width').value === 1024);
+
+      const ui = CW.toUI(gg);
+      CW.loadGraph('video', ui, '跨版块导入');
+      ok('UI 工作流可跨版块导入', CW.graphFor('video').nodes.length === gg.nodes.length);
+      CW.loadGraph('video', api, 'API 导入');
+      ok('API 工作流可导入', CW.graphFor('video').nodes.length === Object.keys(api).length);
+      CW.tutorial();
+      ok('使用教程弹层', !!document.querySelector('.cw-modal-card'));
+      CW.close();
+      ok('工作台可关闭', !root.classList.contains('cw-open'));
+    } catch (e) {
+      out.push('FAIL 异常：' + (e && e.stack || e));
+    }
+    document.getElementById('out').textContent = out.join('\n') +
+      '\n' + (out.every(x => x.startsWith('PASS')) ? 'ALL PASS' : 'HAS FAILURES');
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(run, 100));
+  else setTimeout(run, 100);
+})();
+</script>
+</body>
+</html>

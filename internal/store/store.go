@@ -278,6 +278,19 @@ CREATE TABLE IF NOT EXISTS service_offers(
   image_mime TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_offer_cat ON service_offers(category, created_at);
+
+-- ComfyUI 工作流：部署的图、我的预设和草稿。graph 存 UI 格式 JSON 原文。
+CREATE TABLE IF NOT EXISTS comfy_workflows(
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  kind       TEXT NOT NULL,
+  scope      TEXT NOT NULL DEFAULT 'preset',
+  name       TEXT NOT NULL,
+  graph      TEXT NOT NULL DEFAULT '{}',
+  active     INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_comfy_wf ON comfy_workflows(user_id, kind, updated_at);
 `
 
 // Column additions for databases written by an earlier build. SQLite has no
