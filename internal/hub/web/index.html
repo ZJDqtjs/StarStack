@@ -617,8 +617,6 @@ a.btn:hover{text-decoration:none}
 .nx .nx-hero>*{position:relative;z-index:1}
 .nx .nx-hero-image{background:linear-gradient(115deg,#e7548e,#a45ad8 52%,#5b6cff)}
 .nx .nx-hero-video{background:linear-gradient(115deg,#0d8fa8,#3f65d9 52%,#8b5cf6)}
-.nx .nx-hero-render{background:linear-gradient(115deg,#2f5bd8,#5b6cff 48%,#9b5de5)}
-.nx .nx-hero-build{background:linear-gradient(115deg,#34406f,#5a6bff 55%,#17a2a2)}
 .nx .nx-hero-forum{background:linear-gradient(115deg,#d8547f,#f0728b 48%,#f6a06a)}
 .nx .nx-hero-me{background:linear-gradient(115deg,#3b3f8f,#6a5cf0 52%,#c05aa8)}
 .nx .nx-hero-jobs{background:linear-gradient(115deg,#1f6f8b,#3f65d9 55%,#7a5cf0)}
@@ -783,6 +781,171 @@ a.btn:hover{text-decoration:none}
 .nx .quote .big{color:var(--nx-brand)}
 .nx .quote .hint{border-top-color:var(--nx-line)}
 .nx .val{color:var(--nx-ink)}
+
+/* ---------- 渲染 / 编排工作台 ----------
+   参考 fal.ai / Replicate 的 playground（类型卡片 + 右侧费用面板）、
+   云渲染农场的拖拽上传与实时估价、Vercel / GitHub Actions 的流水线视觉。 */
+.wb-sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.wb-pagehead{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 18px}
+.wb-pagehead-ic{width:52px;height:52px;flex:0 0 52px;border-radius:14px;display:grid;place-items:center;
+  background:linear-gradient(135deg,#2f5bd8,#5b6cff 55%,#9b5de5);box-shadow:0 10px 24px rgba(90,107,255,.3)}
+.wb-pagehead-ic svg{width:24px;height:24px;stroke:#fff;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.wb-pagehead-build .wb-pagehead-ic{background:linear-gradient(135deg,#34406f,#5a6bff 55%,#17a2a2);
+  box-shadow:0 10px 24px rgba(23,162,162,.25)}
+.wb-pagehead-txt{min-width:0;flex:1}
+.wb-pagehead h1{margin:5px 0 4px;font-size:22px;font-weight:650;letter-spacing:-.7px;color:var(--nx-ink)}
+.wb-pagehead p{margin:0;font-size:12.5px;color:var(--nx-mute);line-height:1.7;max-width:660px}
+.wb-pagehead>.ghost{margin-left:auto}
+.wb-eyebrow{color:var(--nx-brand)}
+.wb-eyebrow::before{background:var(--nx-brand)}
+
+/* 任务类型卡片 */
+.wb-kinds{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 18px}
+#wb[data-svc=build] .wb-kinds{display:none}
+.wb-kind{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:5px;
+  padding:14px;border:1px solid var(--nx-line);border-radius:12px;background:var(--nx-card);
+  cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s,background .15s}
+.wb-kind:hover{border-color:var(--nx-line-2);box-shadow:var(--nx-shadow-sm)}
+.wb-kind.on{border-color:var(--nx-brand);
+  background:linear-gradient(135deg,rgba(90,107,255,.08),rgba(139,92,246,.05));
+  box-shadow:0 0 0 3px rgba(90,107,255,.13)}
+.wb-kind-ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+  background:var(--nx-soft);color:var(--nx-brand);margin-bottom:3px;transition:background .15s,color .15s}
+.wb-kind-ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.wb-kind.on .wb-kind-ic{background:linear-gradient(135deg,var(--nx-brand),var(--nx-brand-2));color:#fff}
+.wb-kind b{font-size:13px;font-weight:650;color:var(--nx-ink)}
+.wb-kind>span:not(.wb-kind-ic):not(.wb-kind-tag){font-size:11px;color:var(--nx-mute);line-height:1.55}
+.wb-kind-tag{margin-top:2px;padding:1px 7px;border-radius:5px;background:var(--nx-soft);
+  border:1px solid var(--nx-line);font:500 10px/1.6 var(--mono);color:var(--nx-brand)}
+.wb-kind.on .wb-kind-tag{background:rgba(90,107,255,.12);border-color:transparent}
+.wb-kind::after{content:"";position:absolute;top:11px;right:11px;width:16px;height:16px;border-radius:99px;
+  border:1.5px solid var(--nx-line-2);transition:background .15s,border-color .15s}
+.wb-kind.on::after{border-color:var(--nx-brand);background:var(--nx-brand);
+  box-shadow:inset 0 0 0 3px var(--nx-card)}
+
+/* 步骤指示 */
+.wb-steps{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.wb-step{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--nx-mute)}
+.wb-step b{width:20px;height:20px;border-radius:99px;display:grid;place-items:center;
+  border:1px solid var(--nx-line-2);background:var(--nx-card);font:600 10px var(--mono);color:var(--nx-mute)}
+.wb-step.cur{color:var(--nx-ink)}
+.wb-step.cur b{border-color:var(--nx-brand);color:var(--nx-brand);box-shadow:0 0 0 3px rgba(90,107,255,.13)}
+.wb-step.done{color:var(--nx-ok)}
+.wb-step.done b{background:var(--nx-ok);border-color:transparent;color:#fff}
+.wb-step-line{width:22px;height:1px;background:var(--nx-line-2)}
+
+/* 分节标题 */
+.wb-sec{display:flex;align-items:center;gap:9px;margin:22px 0 12px;
+  font-size:12.5px;font-weight:650;color:var(--nx-ink)}
+.wb-sec i{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;flex:0 0 20px;
+  background:var(--nx-soft);color:var(--nx-brand);font:600 10px var(--mono);font-style:normal}
+.wb-sec small{margin-left:auto;font:400 10px var(--mono);letter-spacing:.08em;
+  text-transform:uppercase;color:var(--nx-mute)}
+
+/* 拖拽上传区 */
+.wb-drop{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:7px;padding:28px 16px;border:1.5px dashed var(--nx-line-2);border-radius:12px;
+  background:var(--nx-soft);cursor:pointer;text-align:center;
+  transition:border-color .15s,background .15s,box-shadow .15s}
+.wb-drop:hover,.wb-drop.drag{border-color:var(--nx-brand);background:rgba(90,107,255,.06)}
+.wb-drop:focus-visible{outline:none;border-color:var(--nx-brand);box-shadow:0 0 0 3px rgba(90,107,255,.16)}
+.wb-drop-ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:var(--nx-card);border:1px solid var(--nx-line);color:var(--nx-brand)}
+.wb-drop-ic svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.wb-drop-ph{display:flex;flex-direction:column;align-items:center;gap:7px}
+.wb-drop-ph b{font-size:13px;font-weight:650;color:var(--nx-ink)}
+.wb-drop-ph span{font-size:11.5px;color:var(--nx-mute)}
+.wb-drop.has-file{flex-direction:row;padding:13px 15px;border-style:solid;border-color:var(--nx-line);
+  background:var(--nx-card);text-align:left}
+.wb-drop.has-file:hover{border-color:var(--nx-brand)}
+.wb-file{display:flex;align-items:center;gap:10px;width:100%;min-width:0}
+.wb-file-ic{width:32px;height:32px;flex:0 0 32px;border-radius:8px;display:grid;place-items:center;
+  background:var(--nx-soft);color:var(--nx-brand)}
+.wb-file-ic svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.wb-file-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font:500 12.5px var(--mono);color:var(--nx-ink)}
+.wb-file-size{flex:0 0 auto;font:400 11px var(--mono);color:var(--nx-mute)}
+.wb-file-x{flex:0 0 auto;width:26px;height:26px;border-radius:7px;border:1px solid var(--nx-line);
+  background:var(--nx-card);color:var(--nx-mute);font-size:11px;display:grid;place-items:center;
+  transition:color .14s,border-color .14s}
+.wb-file-x:hover{color:var(--nx-bad);border-color:var(--nx-bad)}
+
+/* 高级设置折叠 */
+.wb-adv{margin:22px 0 0;border:1px solid var(--nx-line);border-radius:10px;background:var(--nx-soft)}
+.wb-adv summary{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;
+  font-size:12px;font-weight:650;color:var(--nx-body);list-style:none;user-select:none}
+.wb-adv summary::-webkit-details-marker{display:none}
+.wb-adv summary::before{content:"";width:3px;height:13px;border-radius:3px;
+  background:linear-gradient(180deg,var(--nx-brand),var(--nx-pink))}
+.wb-adv summary::after{content:"";margin-left:auto;border:solid var(--nx-mute);
+  border-width:0 1.5px 1.5px 0;padding:3px;transform:rotate(45deg);transition:transform .15s}
+.wb-adv[open] summary::after{transform:rotate(-135deg)}
+.wb-adv summary:hover{color:var(--nx-brand)}
+.wb-adv-body{padding:0 14px 14px}
+.wb-adv-body .fieldset{margin-top:6px}
+.wb-adv-body .fieldset legend{border-top:0;padding-top:4px}
+
+/* 编排：流水线与终端命令 */
+.wb-pipe{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:stretch;margin:0 0 16px}
+.wb-pipe-step{display:flex;flex-direction:column;gap:4px;padding:16px;border:1px solid var(--nx-line);
+  border-radius:12px;background:var(--nx-card);box-shadow:var(--nx-shadow-sm)}
+.wb-pipe-ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+  background:var(--nx-soft);color:var(--nx-brand);margin-bottom:6px}
+.wb-pipe-ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.wb-pipe-step b{font-size:13px;font-weight:650;color:var(--nx-ink)}
+.wb-pipe-step span{font-size:11.5px;color:var(--nx-mute);line-height:1.65}
+.wb-pipe-line{align-self:center;width:26px;height:2px;border-radius:2px;position:relative;
+  background:linear-gradient(90deg,var(--nx-brand),var(--nx-cyan))}
+.wb-pipe-line::after{content:"";position:absolute;right:-1px;top:-3px;border:solid var(--nx-cyan);
+  border-width:0 2px 2px 0;padding:3px;transform:rotate(-45deg)}
+.wb-cmd{display:flex;align-items:center;gap:9px;padding:0 12px;border:1px solid var(--nx-line-2);
+  border-radius:9px;background:var(--nx-soft);transition:border-color .15s,box-shadow .15s}
+.wb-cmd:focus-within{border-color:var(--nx-brand);box-shadow:0 0 0 3px rgba(90,107,255,.16)}
+.wb-cmd-ps{font:600 13px var(--mono);color:var(--nx-brand)}
+.wb-cmd input{border:0;background:transparent;height:40px;padding:0;font:12.5px var(--mono);color:var(--nx-ink)}
+.wb-cmd input:hover,.wb-cmd input:focus{border:0;box-shadow:none}
+.wb-cmd-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.wb-cmd-chip{height:27px;padding:0 11px;border:1px solid var(--nx-line);border-radius:999px;
+  background:var(--nx-card);color:var(--nx-body);font:500 11.5px var(--mono);transition:.14s}
+.wb-cmd-chip:hover{border-color:var(--nx-brand);color:var(--nx-brand);background:var(--nx-soft)}
+
+/* 费用摘要面板 */
+.wb-sumrows{margin:0 0 14px;border:1px solid var(--nx-line);border-radius:10px;overflow:hidden}
+.wb-sumrow{display:flex;justify-content:space-between;gap:12px;padding:9px 12px;
+  font-size:12px;background:var(--nx-soft)}
+.wb-sumrow+.wb-sumrow{border-top:1px solid var(--nx-line)}
+.wb-sumrow span{color:var(--nx-mute);flex:0 0 auto}
+.wb-sumrow b{color:var(--nx-ink);font-weight:600;font-size:12px;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-submit{width:100%;margin-top:16px}
+#deadlinenote:empty,#msg:empty{display:none}
+.q-line{font-size:12px;color:var(--nx-body);line-height:1.8}
+.q-faint{color:var(--nx-mute);font-size:11px}
+.q-total{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:10px 0 6px}
+.q-total>span:first-child{font-size:12px;color:var(--nx-mute)}
+.q-unit{font-size:12px;color:var(--nx-body)}
+.q-basis{width:100%;font-size:11px;color:var(--nx-mute)}
+.q-nodes{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--nx-line)}
+.q-warn{margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(217,130,11,.1);
+  color:var(--nx-warn);font-size:11.5px;line-height:1.7}
+.q-note{font-size:12px;line-height:1.8;color:var(--nx-body)}
+
+@media(max-width:900px){
+  .wb-kinds{grid-template-columns:1fr}
+  .wb-kind{flex-direction:row;align-items:center;flex-wrap:wrap}
+  .wb-kind-ic{margin-bottom:0}
+  .wb-pipe{grid-template-columns:1fr}
+  .wb-pipe-line{width:2px;height:18px;justify-self:center;
+    background:linear-gradient(180deg,var(--nx-brand),var(--nx-cyan))}
+  .wb-pipe-line::after{right:-3px;top:auto;bottom:-1px;transform:rotate(45deg)}
+  .wb-pagehead>.ghost{margin-left:0}
+}
 
 /* ---------- 论坛 / 个人中心 ---------- */
 .nx .postitem{padding:14px 10px;border-bottom:1px solid var(--nx-line);border-radius:9px}
@@ -1068,16 +1231,16 @@ a.btn:hover{text-decoration:none}
 
 <!-- ---------- 渲染 ---------- -->
 <section class="view nx" id="v-render">
-  <div class="nx-hero nx-hero-render">
-    <div>
-      <span class="nx-eyebrow">Render Studio</span>
+  <div class="wb-pagehead">
+    <div class="wb-pagehead-ic">
+      <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5Z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/></svg>
+    </div>
+    <div class="wb-pagehead-txt">
+      <span class="nx-eyebrow wb-eyebrow">Render Studio</span>
       <h1>渲染工作台</h1>
       <p>Blender 帧渲染、剪辑时间线与视频转码共用一套提交流程；参数在本页填写，提交后按实测用量结算。</p>
     </div>
-    <div class="nx-hero-side">
-      <div class="nx-hero-badge"><b>3</b><span>种任务类型</span></div>
-      <button class="nx-hero-link" onclick="showView('jobs')">查看我的任务 →</button>
-    </div>
+    <button class="ghost" onclick="showView('jobs')">我的任务 →</button>
   </div>
 
   <div class="nx-kpis">
@@ -1093,35 +1256,67 @@ a.btn:hover{text-decoration:none}
   <div id="wb" class="grid">
     <div class="card">
       <h2><span class="kicker">New Task</span><span id="wb-title">提交渲染任务</span></h2>
-      <div class="nx-steps">
-        <span class="nx-step"><b>1</b> 选择素材</span>
-        <span class="nx-step"><b>2</b> 配置参数</span>
-        <span class="nx-step"><b>3</b> 确认报价并提交</span>
+      <div class="wb-steps" id="wb-steps">
+        <span class="wb-step cur" data-step="1"><b>1</b>上传素材</span><i class="wb-step-line"></i>
+        <span class="wb-step" data-step="2"><b>2</b>配置参数</span><i class="wb-step-line"></i>
+        <span class="wb-step" data-step="3"><b>3</b>提交结算</span>
       </div>
       <form id="f">
-        <div class="row">
-          <div><label>任务类型</label><select name="jobkind" id="jobkind">
-            <option value="transcode" selected>视频转码</option>
-            <option value="blender">Blender 动画渲染</option>
-            <option value="pr">剪辑时间线渲染</option>
-            <option value="build">编译打包</option>
-          </select></div>
-          <div id="qualitybox"><label>画质</label><select id="quality">
-            <option value="fast">快速</option>
-            <option value="balanced" selected>均衡（推荐）</option>
-            <option value="high">高质量</option>
-          </select></div>
+        <div class="wb-kinds" id="wb-kinds">
+          <button type="button" class="wb-kind" data-kind="transcode">
+            <span class="wb-kind-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3V9Z"/></svg></span>
+            <b>视频转码</b>
+            <span>切片并行加速，哈希校验一致性</span>
+            <span class="wb-kind-tag">按视频秒结算</span>
+          </button>
+          <button type="button" class="wb-kind" data-kind="blender">
+            <span class="wb-kind-ic"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5Z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/></svg></span>
+            <b>Blender 渲染</b>
+            <span>帧级拆分到多节点，Cycles / Eevee</span>
+            <span class="wb-kind-tag">按帧结算</span>
+          </button>
+          <button type="button" class="wb-kind" data-kind="pr">
+            <span class="wb-kind-ic"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14"/><circle cx="18" cy="12" r="2"/></svg></span>
+            <b>时间线渲染</b>
+            <span>Premiere FCPXML 工程整线输出</span>
+            <span class="wb-kind-tag">按时间线秒结算</span>
+          </button>
         </div>
+        <select name="jobkind" id="jobkind" class="wb-sr" aria-label="任务类型">
+          <option value="transcode" selected>视频转码</option>
+          <option value="blender">Blender 动画渲染</option>
+          <option value="pr">剪辑时间线渲染</option>
+          <option value="build">编译打包</option>
+        </select>
 
-        <label>选择文件</label>
-        <input type="file" name="file" id="fileinput" accept="video/*,audio/*">
+        <div id="qualitybox"><label>画质</label><select id="quality">
+          <option value="fast">快速</option>
+          <option value="balanced" selected>均衡（推荐）</option>
+          <option value="high">高质量</option>
+        </select></div>
+
+        <div class="wb-sec"><i>1</i>上传素材<small>支持拖拽上传</small></div>
+        <div class="wb-drop" id="wb-drop" role="button" tabindex="0" aria-label="选择或拖拽文件">
+          <input type="file" name="file" id="fileinput" class="wb-sr" accept="video/*,audio/*">
+          <div class="wb-drop-ph" id="wb-drop-ph">
+            <span class="wb-drop-ic"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
+            <b>拖拽文件到此处，或点击选择</b>
+            <span id="wb-drop-hint">视频 / 音频文件，自动读取时长</span>
+          </div>
+          <div class="wb-file" id="wb-file" style="display:none">
+            <span class="wb-file-ic"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Z"/><path d="M14 3v6h6"/></svg></span>
+            <span class="wb-file-name" id="wb-file-name"></span>
+            <span class="wb-file-size" id="wb-file-size"></span>
+            <button type="button" class="wb-file-x" id="wb-file-x" aria-label="移除文件">✕</button>
+          </div>
+        </div>
 
         <div id="adv-only" style="display:none">
         <div id="pathbox">
         <label>…或使用服务端本机路径</label>
         <input name="path" placeholder="D:/videos/input.mp4">
         </div>
-        <div class="row">
+        <div class="row" id="segsbox">
           <div><label>切分片数</label><input name="segs" value="4" inputmode="numeric"></div>
           <div></div>
         </div>
@@ -1157,21 +1352,27 @@ a.btn:hover{text-decoration:none}
         </div>
 
         <div id="build-fields" style="display:none">
-          <fieldset class="fieldset">
-            <legend>编译打包</legend>
-            <div class="hint" style="margin-top:0">
-              上传源码 zip；解压后的目录就是工作目录，命令在其中执行，产物按「输出目录」打包成
-              <code>result.zip</code> 回传。需要接收任务的节点以 <code>--allow-build</code> 启动，
-              且本部署把账号加入了编译白名单。
-            </div>
-            <label>编译命令</label>
-            <input name="command" placeholder='powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1'>
-            <div class="row">
-              <div><label>输出目录（相对路径）</label><input name="output" value="out"></div>
-              <div><label>超时（秒）</label><input name="timeout" value="1800" inputmode="numeric"></div>
-            </div>
-            <div class="hint">按实际墙钟分钟结算，预扣 10 分钟；编译失败不结算。</div>
-          </fieldset>
+          <div class="wb-sec"><i>2</i>编译配置<small>zip → result.zip</small></div>
+          <div class="hint" style="margin-top:0">
+            上传源码 zip；解压后的目录就是工作目录，命令在其中执行，产物按「输出目录」打包成
+            <code>result.zip</code> 回传。
+          </div>
+          <label>编译命令</label>
+          <div class="wb-cmd">
+            <span class="wb-cmd-ps">$</span>
+            <input name="command" id="wb-command" placeholder="powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1">
+          </div>
+          <div class="wb-cmd-chips">
+            <button type="button" class="wb-cmd-chip" data-cmd="powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1">PowerShell 脚本</button>
+            <button type="button" class="wb-cmd-chip" data-cmd="npm install &amp;&amp; npm run build">npm build</button>
+            <button type="button" class="wb-cmd-chip" data-cmd="go build -o out/app ./...">go build</button>
+            <button type="button" class="wb-cmd-chip" data-cmd="cmake -B build &amp;&amp; cmake --build build --config Release">cmake</button>
+          </div>
+          <div class="row">
+            <div><label>输出目录（相对路径）</label><input name="output" value="out"></div>
+            <div><label>超时（秒）</label><input name="timeout" value="1800" inputmode="numeric"></div>
+          </div>
+          <div class="hint">按实际墙钟分钟结算，预扣 10 分钟；编译失败不结算。</div>
         </div>
 
         <fieldset class="fieldset" id="transcode-fields">
@@ -1195,49 +1396,55 @@ a.btn:hover{text-decoration:none}
           </div>
         </fieldset>
 
-        <fieldset class="fieldset">
-          <legend>硬件要求（可选）</legend>
-          <div class="row">
-            <div><label>需要独显</label><select name="need_gpu"><option value="0">不限</option><option value="1">必须有 GPU</option></select></div>
-            <div><label>最小显存 MB</label><input name="min_gpu_mem" value="0" inputmode="numeric" placeholder="0=不限"></div>
+        <details class="wb-adv" id="wb-adv">
+          <summary>高级设置 · 硬件约束与调度偏好</summary>
+          <div class="wb-adv-body">
+            <fieldset class="fieldset">
+              <legend>硬件要求（可选）</legend>
+              <div class="row">
+                <div><label>需要独显</label><select name="need_gpu"><option value="0">不限</option><option value="1">必须有 GPU</option></select></div>
+                <div><label>最小显存 MB</label><input name="min_gpu_mem" value="0" inputmode="numeric" placeholder="0=不限"></div>
+              </div>
+              <div class="row">
+                <div><label>最少 CPU 核</label><input name="min_cpus" value="0" inputmode="numeric"></div>
+                <div><label>最小内存 MB</label><input name="min_mem" value="0" inputmode="numeric"></div>
+              </div>
+              <div class="row">
+                <div><label>要求运行时</label><select name="runtime">
+                  <option value="">不限</option><option value="ffmpeg">ffmpeg</option>
+                  <option value="blender">blender</option><option value="cuda">cuda (nvcc)</option>
+                  <option value="docker">docker</option><option value="python">python</option>
+                </select></div>
+                <div><label>限定系统架构</label><select name="arch">
+                  <option value="">不限</option><option value="amd64">amd64</option><option value="arm64">arm64</option>
+                </select></div>
+              </div>
+              <div class="row">
+                <div><label>单价上限 点/单位</label><input name="max_price" value="0" inputmode="decimal" placeholder="0=不限"></div>
+                <div id="durbox"><label>视频时长（估费用用，秒）</label><input name="duration" value="0" inputmode="decimal"></div>
+              </div>
+            </fieldset>
+            <label class="check" id="baselinebox">
+              <input type="checkbox" name="baseline" value="1" checked style="width:auto">
+              同时跑单机基线（用于真实加速比对比）
+            </label>
           </div>
-          <div class="row">
-            <div><label>最少 CPU 核</label><input name="min_cpus" value="0" inputmode="numeric"></div>
-            <div><label>最小内存 MB</label><input name="min_mem" value="0" inputmode="numeric"></div>
-          </div>
-          <div class="row">
-            <div><label>要求运行时</label><select name="runtime">
-              <option value="">不限</option><option value="ffmpeg">ffmpeg</option>
-              <option value="blender">blender</option><option value="cuda">cuda (nvcc)</option>
-              <option value="docker">docker</option><option value="python">python</option>
-            </select></div>
-            <div><label>限定系统架构</label><select name="arch">
-              <option value="">不限</option><option value="amd64">amd64</option><option value="arm64">arm64</option>
-            </select></div>
-          </div>
-          <div class="row">
-            <div><label>单价上限 点/单位</label><input name="max_price" value="0" inputmode="decimal" placeholder="0=不限"></div>
-            <div id="durbox"><label>视频时长（估费用用，秒）</label><input name="duration" value="0" inputmode="decimal"></div>
-          </div>
-        </fieldset>
-
-        <label class="check" id="baselinebox">
-          <input type="checkbox" name="baseline" value="1" checked style="width:auto">
-          同时跑单机基线（用于真实加速比对比）
-        </label>
-        </div>
-        <div class="formfoot">
-          <button type="submit" class="btn auto" id="submitbtn">开始处理</button>
-          <div id="msg" class="hint"></div>
+        </details>
         </div>
       </form>
     </div>
 
     <div class="sticky">
-      <div class="card">
-        <h2><span class="kicker">Estimate</span>预计花费</h2>
+      <div class="card wb-summary">
+        <h2><span class="kicker">Summary</span>费用摘要</h2>
+        <div class="wb-sumrows">
+          <div class="wb-sumrow"><span>任务类型</span><b id="sum-kind">—</b></div>
+          <div class="wb-sumrow"><span>素材</span><b id="sum-file">未选择</b></div>
+        </div>
         <div id="quote" class="quote">选择文件后自动估算</div>
         <div id="deadlinenote" class="hint"></div>
+        <button type="submit" form="f" class="btn wb-submit" id="submitbtn">提交渲染任务</button>
+        <div id="msg" class="hint"></div>
       </div>
       <div class="card" id="tipcard">
         <h2><span class="kicker">Tips</span>想要更多控制？</h2>
@@ -1251,14 +1458,35 @@ a.btn:hover{text-decoration:none}
 
 <!-- ---------- 编排 / 编译 ---------- -->
 <section class="view nx" id="v-build">
-  <div class="nx-hero nx-hero-build">
-    <div>
-      <span class="nx-eyebrow">Pipeline · Orchestration</span>
+  <div class="wb-pagehead wb-pagehead-build">
+    <div class="wb-pagehead-ic">
+      <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v6a4 4 0 0 0 4 4h6"/></svg>
+    </div>
+    <div class="wb-pagehead-txt">
+      <span class="nx-eyebrow wb-eyebrow">Pipeline · Orchestration</span>
       <h1>任务编排</h1>
       <p>源码 zip 上传后由算力节点执行编译 / 打包命令，产物按输出目录回传；按墙钟分钟结算，失败不结算。</p>
     </div>
-    <div class="nx-hero-side">
-      <div class="nx-hero-badge"><b>ZIP</b><span>源码 → 产物</span></div>
+    <button class="ghost" onclick="showView('jobs')">我的任务 →</button>
+  </div>
+
+  <div class="wb-pipe">
+    <div class="wb-pipe-step">
+      <span class="wb-pipe-ic"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
+      <b>① 上传源码</b>
+      <span>zip 打包上传，解压后的目录就是工作目录</span>
+    </div>
+    <i class="wb-pipe-line"></i>
+    <div class="wb-pipe-step">
+      <span class="wb-pipe-ic"><svg viewBox="0 0 24 24"><path d="M4 7l4 5-4 5M12 19h8"/></svg></span>
+      <b>② 节点编译</b>
+      <span>开启 --allow-build 的节点执行命令，按墙钟分钟计费</span>
+    </div>
+    <i class="wb-pipe-line"></i>
+    <div class="wb-pipe-step">
+      <span class="wb-pipe-ic"><svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-4-4m4 4l4-4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
+      <b>③ 产物回传</b>
+      <span>输出目录打包 result.zip，校验后在我的任务下载</span>
     </div>
   </div>
 
@@ -1269,8 +1497,7 @@ a.btn:hover{text-decoration:none}
     <div class="nx-kpi nx-kpi-action"><button class="ghost tiny" onclick="showView('sky')">去星海看卖家 →</button></div>
   </div>
 
-  <div class="nx-tip">提交流程：上传源码包 → 填写编译命令与输出目录 → 平台预扣 10 分钟 → 节点执行并回传
-    <code>result.zip</code>。接收该类任务需要节点以 <code>--allow-build</code> 启动，且账号在编译白名单内。</div>
+  <div class="nx-tip">接收编排任务需要节点以 <code>--allow-build</code> 启动，且账号在编译白名单内；提交后预扣 10 分钟，编译失败不结算、差额自动退还。</div>
   <div id="wb-slot-build"></div>
 </section>
 
@@ -2273,9 +2500,93 @@ function mountWorkbench(svc){
   const wb=$('#wb'); if(!wb) return;
   const slot=$(svc==='build'?'#wb-slot-build':'#wb-slot-render');
   if(slot && wb.parentElement!==slot) slot.appendChild(wb);
+  if(wb.dataset.svc===svc) return;
+  wb.dataset.svc=svc;
   const title=$('#wb-title');
   if(title) title.textContent=svc==='build'?'提交编排任务':'提交渲染任务';
+  wbKindUI();
 }
+
+/* 工作台 presentation helpers：只改展示，不改字段值与提交契约 */
+const WB_KIND_NAME={transcode:'视频转码',blender:'Blender 渲染',pr:'时间线渲染',build:'编译打包'};
+const WB_DROP_HINT={transcode:'视频 / 音频文件，自动读取时长',
+  blender:'.blend 场景，或含贴图 / 缓存的 zip',
+  pr:'FCPXML 工程 + 全部素材打包的 zip',build:'源码 zip，解压目录即工作目录'};
+const wbExtOk=(name,k)=>{const n=name.toLowerCase();
+  return k==='build'||k==='pr'?/\.zip$/.test(n):k==='blender'?/\.(blend|zip)$/.test(n):
+    /\.(mp4|mov|mkv|avi|webm|flv|wmv|m4v|ts|mp3|wav|aac|flac|m4a|ogg|wma)$/.test(n);};
+function wbKindUI(){
+  const k=$('#jobkind').value;
+  const msg=$('#msg'); if(msg) msg.textContent='';
+  $$('#wb-kinds .wb-kind').forEach(b=>b.classList.toggle('on',b.dataset.kind===k));
+  const hint=$('#wb-drop-hint'); if(hint) hint.textContent=WB_DROP_HINT[k]||'';
+  const btn=$('#submitbtn');
+  if(btn) btn.textContent=k==='build'?'提交编排任务':k==='transcode'?'开始处理':'提交渲染任务';
+  const sk=$('#sum-kind'); if(sk) sk.textContent=WB_KIND_NAME[k]||k;
+  wbFileUI();
+}
+const wbSize=n=>n>=1073741824?(n/1073741824).toFixed(2)+' GB':
+  n>=1048576?(n/1048576).toFixed(1)+' MB':n>=1024?(n/1024).toFixed(0)+' KB':n+' B';
+function wbSumFile(){
+  const f=$('#fileinput').files[0];
+  const p=($('#f [name=path]').value||'').trim();
+  const el=$('#sum-file'); if(!el) return;
+  el.textContent=f?f.name:(p&&$('#jobkind').value==='transcode'?p:'未选择');
+  el.title=el.textContent;
+}
+function wbFileUI(){
+  const f=$('#fileinput').files[0];
+  const drop=$('#wb-drop'); if(!drop) return;
+  drop.classList.toggle('has-file',!!f);
+  $('#wb-drop-ph').style.display=f?'none':'';
+  $('#wb-file').style.display=f?'flex':'none';
+  if(f){$('#wb-file-name').textContent=f.name;$('#wb-file-size').textContent=wbSize(f.size);}
+  wbSumFile(); wbSteps();
+}
+function wbSteps(){
+  const box=$('#wb-steps'); if(!box) return;
+  const hasFile=!!$('#fileinput').files[0];
+  const k=$('#jobkind').value;
+  const cfg=k==='build'?!!($('#f [name=command]').value||'').trim():true;
+  const ready=$('#quote').dataset.ok==='1';
+  const set=(n,cls)=>{const el=box.querySelector('[data-step="'+n+'"]');
+    if(el) el.className='wb-step'+(cls?' '+cls:'');};
+  set(1,hasFile?'done':'cur');
+  set(2,hasFile?(cfg?'done':'cur'):'');
+  set(3,hasFile&&cfg&&ready?'cur':'');
+}
+$$('#wb-kinds .wb-kind').forEach(b=>b.addEventListener('click',()=>{
+  $('#jobkind').value=b.dataset.kind; syncKind();
+}));
+$$('.wb-cmd-chip').forEach(b=>b.addEventListener('click',()=>{
+  const el=$('#wb-command'); if(!el) return;
+  el.value=b.dataset.cmd; el.focus(); wbSteps();
+}));
+(function initDrop(){
+  const drop=$('#wb-drop'), input=$('#fileinput');
+  if(!drop||!input) return;
+  drop.addEventListener('click',()=>input.click());
+  drop.addEventListener('keydown',e=>{
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});
+  ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{
+    e.preventDefault();drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{
+    e.preventDefault();drop.classList.remove('drag');}));
+  drop.addEventListener('drop',e=>{
+    const files=e.dataTransfer&&e.dataTransfer.files;
+    if(!files||!files.length) return;
+    const k=$('#jobkind').value;
+    if(!wbExtOk(files[0].name,k)){$('#msg').textContent='文件类型不匹配：'+(WB_DROP_HINT[k]||'请检查任务类型');return;}
+    input.files=files;
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  $('#wb-file-x').addEventListener('click',e=>{
+    e.stopPropagation();
+    input.value='';
+    if($('#jobkind').value==='transcode'){DUR=0;const d=$('#f [name=duration]');if(d)d.value='0';}
+    wbFileUI(); quote();
+  });
+})();
 
 /* ---------------- API 轻量调用助手 ---------------- */
 function hubFocus(id){
@@ -2532,9 +2843,18 @@ function syncKind(){
   $('#render-blender').style.display=k==='blender'?'':'none';
   $('#render-pr').style.display=k==='pr'?'':'none';
   $('#build-fields').style.display=k==='build'?'':'none';
+  $('#segsbox').style.display=k==='build'?'none':'';
   $('#baselinebox').style.display=k==='transcode'?'':'none';
   $('#durbox').style.display=k==='transcode'?'':'none';
   $('#fileinput').accept=k==='build'?'.zip':k==='blender'?'.blend,.zip':k==='pr'?'.zip':'video/*,audio/*';
+  // 跨页/跨类型切换时不携带不兼容的素材，避免把视频当源码 zip 提交
+  const cur=$('#fileinput').files[0];
+  if(cur&&!wbExtOk(cur.name,k)){
+    const wasMedia=wbExtOk(cur.name,'transcode');
+    $('#fileinput').value='';
+    if(wasMedia){DUR=0;const d=$('#f [name=duration]');if(d)d.value='0';}
+  }
+  wbKindUI();
   applyMode();
   quote();
 }
@@ -2555,24 +2875,34 @@ function reqFromForm(){
   return r;
 }
 $('#f').addEventListener('change',e=>{
-  if(e.target.name==='file'&&jobkind.value==='transcode'){
-    const f=e.target.files[0];if(!f)return;
-    const v=document.createElement('video');v.preload='metadata';
-    v.onloadedmetadata=()=>{if(isFinite(v.duration)&&v.duration>0){DUR=v.duration;
-      $('#f [name=duration]').value=Math.round(v.duration);quote()}};
-    v.src=URL.createObjectURL(f);
+  if(e.target.name==='file'){
+    wbFileUI();
+    if(jobkind.value==='transcode'){
+      const f=e.target.files[0];if(!f)return;
+      const v=document.createElement('video');v.preload='metadata';
+      v.onloadedmetadata=()=>{if(isFinite(v.duration)&&v.duration>0){DUR=v.duration;
+        $('#f [name=duration]').value=Math.round(v.duration);quote()}};
+      v.src=URL.createObjectURL(f);
+    }
   }
   quote();
+});
+$('#f').addEventListener('input',e=>{
+  if(e.target.name==='command') wbSteps();
+  if(e.target.name==='path') wbSumFile();
 });
 
 let quoteTimer=null;
 function quote(){
   clearTimeout(quoteTimer);quoteTimer=setTimeout(async()=>{
     const kind=jobkind.value;
+    const qEl=$('#quote');
+    const fail=msg=>{qEl.dataset.ok='0';qEl.innerHTML=`<div class="q-note">${msg}</div>`;wbSteps();};
     if(kind==='build'){
-      $('#quote').innerHTML=`<div>编译任务按实际墙钟分钟结算</div>
-        <div class="hint" style="margin-top:8px">预扣 10 分钟；编译失败不结算，差额自动退还。
-        只派给用 <code>--allow-build</code> 启动的节点，且本部署需把账号加入编译白名单。</div>`;
+      qEl.dataset.ok='1';
+      qEl.innerHTML=`<div class="q-note">编译任务按实际墙钟分钟结算，预扣 <b>10</b> 分钟；
+        编译失败不结算，差额自动退还。</div>`;
+      wbSteps();
       return;
     }
     if(kind!=='transcode'){
@@ -2580,46 +2910,51 @@ function quote(){
       if(kind==='blender'){
         const a=+($('#f [name=from]').value||0), b=+($('#f [name=to]').value||0);
         units=b-a+1;
-        if(!(units>0)){$('#quote').innerHTML='填写起止帧后按帧数估算';return}
-        head=`第 ${a}~${b} 帧，共 <b>${units}</b> 帧`;
+        if(!(units>0)){fail('填写起止帧后按帧数估算');return}
+        head=`第 ${a}~${b} 帧 · 共 <b>${units}</b> 帧`;
       }else{
-        head='时间线时长由工程决定，下面按每秒报价';
+        head='时间线时长由工程决定，按每秒报价';
       }
       const q=encodeURIComponent(JSON.stringify(reqFromForm()));
       try{
         const e=await api(`/api/estimate?duration=${units}&kind=${kind}&vcodec=libx264&req=${q}`);
         const ok=e.affordable&&e.eligible>0;
-        $('#quote').innerHTML=`
-          <div>${head} · 满足硬约束的在线节点 <b>${e.eligible}</b> 台</div>
-          <div style="margin:10px 0 6px" class="${ok?'':'no'}">${kind==='blender'?'预扣':'每秒预扣'}
-            <span class="big">${f2(e.hold)}</span> 点（${esc(e.hold_basis)} ${f2(e.hold_price)} 点/${esc(e.unit)}）</div>
-          <div>余额 ${f2(e.balance)} 点 ${e.affordable?'· 足够':'· <span class="no">不足，请到账单页充值</span>'}</div>
-          ${e.eligible>0?`<div class="hint">可派发到：${e.nodes.map(n=>
-            `${esc(n.name)}（${f2(n.price)} 点/${esc(e.unit)}${n.mine?' · 我的机器':''}）`).join('、')}</div>`
-            :`<div class="hint no">没有在线节点满足要求，任务会排队等待。Blender 任务需要节点安装了 blender 并上报该运行时。</div>`}
-          ${kind==='pr'?'<div class="hint">实际预扣 = 时间线时长 × 单价，提交后显示在任务卡上。</div>':''}`;
-      }catch(err){$('#quote').textContent='估算失败：'+err}
+        qEl.dataset.ok=ok?'1':'0';
+        qEl.innerHTML=`
+          <div class="q-line">${head} · 可用节点 <b>${e.eligible}</b> 台</div>
+          <div class="q-total ${ok?'':'no'}"><span>${kind==='blender'?'预扣':'每秒预扣'}</span>
+            <span class="big">${f2(e.hold)}</span><span class="q-unit">点</span>
+            <span class="q-basis">${esc(e.hold_basis)} ${f2(e.hold_price)} 点/${esc(e.unit)}</span></div>
+          <div class="q-line">余额 ${f2(e.balance)} 点 ${e.affordable?'· 足够':'· <span class="no">不足，请到账单页充值</span>'}</div>
+          ${e.eligible>0?`<div class="q-nodes">${e.nodes.map(n=>
+            `<span class="tag${n.mine?' mine':''}">${esc(n.name)} · ${f2(n.price)} 点/${esc(e.unit)}</span>`).join('')}</div>`
+            :`<div class="q-warn">没有在线节点满足要求，任务会排队等待。${kind==='blender'?'Blender 任务需要节点安装 blender 并上报该运行时。':''}</div>`}
+          ${kind==='pr'?'<div class="q-line q-faint">实际预扣 = 时间线时长 × 单价，提交后显示在任务卡上。</div>':''}`;
+        wbSteps();
+      }catch(err){fail('估算失败：'+esc(err))}
       return;
     }
     const dur=+($('#f [name=duration]').value||DUR||0);
-    if(!(dur>0)){$('#quote').innerHTML='填视频时长或选择文件后自动估算';return}
+    if(!(dur>0)){fail('填视频时长或选择文件后自动估算');return}
     const q=encodeURIComponent(JSON.stringify(reqFromForm()));
     const vc=$('#f [name=vcodec]').value;
     try{
       const e=await api(`/api/estimate?duration=${dur}&vcodec=${vc}&req=${q}`);
       const ok=e.affordable&&e.eligible>0;
-      const pick=e.first_pick?` · 首片预计派给 <b>${esc(e.first_pick.name)}</b>（${f2(e.first_pick.price)} 点/秒）`:'';
-      $('#quote').innerHTML=`
-        <div>时长 <b>${f1(dur)}</b> 秒 · 满足硬约束的在线节点 <b>${e.eligible}</b> 台</div>
-        <div style="margin:10px 0 6px" class="${ok?'':'no'}">预扣 <span class="big">${f2(e.hold)}</span> 点
-          （${esc(e.hold_basis)} ${f2(e.hold_price)} 点/秒） · 最省 <b>${f2(e.cheapest)}</b> 点${pick}</div>
-        <div>余额 ${f2(e.balance)} 点 ${e.affordable?'· 足够':'· <span class="no">不足，请到账单页充值</span>'}</div>
-        ${e.eligible>0?`<div class="hint">可派发到：${e.nodes.map(n=>
-          `${esc(n.name)}（${f2(n.price)} 点/秒${n.mine?' · 我的机器':''}）`).join('、')}</div>`
-          :`<div class="hint no">没有任何在线节点满足这些硬约束，任务会一直排队到匹配的算力上线。</div>`}
-        ${POL&&POL.cost_weight>0?`<div class="hint">派发打分 = 实测吞吐 × 信誉 ×（可行池均价 ÷ 该节点单价）^${f2(POL.cost_weight)}，
-          便宜与快一起参与竞争，不是只看速度。</div>`:''}`;
-    }catch(err){$('#quote').textContent='估算失败：'+err}
+      qEl.dataset.ok=ok?'1':'0';
+      qEl.innerHTML=`
+        <div class="q-line">时长 <b>${f1(dur)}</b> 秒 · 可用节点 <b>${e.eligible}</b> 台</div>
+        <div class="q-total ${ok?'':'no'}"><span>预扣</span>
+          <span class="big">${f2(e.hold)}</span><span class="q-unit">点</span>
+          <span class="q-basis">${esc(e.hold_basis)} ${f2(e.hold_price)} 点/秒 · 最省 ${f2(e.cheapest)} 点</span></div>
+        <div class="q-line">余额 ${f2(e.balance)} 点 ${e.affordable?'· 足够':'· <span class="no">不足，请到账单页充值</span>'}</div>
+        ${e.first_pick?`<div class="q-line q-faint">首片预计派给 <b>${esc(e.first_pick.name)}</b>（${f2(e.first_pick.price)} 点/秒）</div>`:''}
+        ${e.eligible>0?`<div class="q-nodes">${e.nodes.map(n=>
+          `<span class="tag${n.mine?' mine':''}">${esc(n.name)} · ${f2(n.price)} 点/秒</span>`).join('')}</div>`
+          :`<div class="q-warn">没有任何在线节点满足这些硬约束，任务会一直排队到匹配的算力上线。</div>`}
+        ${POL&&POL.cost_weight>0?`<div class="q-line q-faint">派发打分 = 实测吞吐 × 信誉 ×（可行池均价 ÷ 该节点单价）^${f2(POL.cost_weight)}，便宜与快一起参与竞争。</div>`:''}`;
+      wbSteps();
+    }catch(err){fail('估算失败：'+esc(err))}
   },250);
 }
 
@@ -3340,6 +3675,7 @@ function applyMode(){
   $('#adv-only').style.display=(ADV||render)?'':'none';
   $('#qualitybox').style.display=(!ADV&&!render)?'':'none';
   $('#tipcard').style.display=ADV?'none':'';
+  const adv=$('#wb-adv'); if(adv) adv.open=ADV;
   if(!ADV) applyQuality();
   $('#advtoggle').checked=ADV;
   $('#advhint').textContent=ADV
