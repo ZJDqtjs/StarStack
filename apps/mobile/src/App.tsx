@@ -14,14 +14,15 @@ import Forum from './views/Forum'
 import Me from './views/Me'
 
 const NAV_GROUPS: { label: string; items: [string, string][] }[] = [
-  { label: 'Work · 工作台', items: [['submit', '提交'], ['jobs', '任务'], ['market', '市场']] },
+  { label: 'Work · 工作台', items: [['render', '渲染'], ['build', '编排'], ['jobs', '任务'], ['market', '市场']] },
   { label: 'Compute · 算力', items: [['vm', '云主机'], ['nodes', '节点'], ['api', '模型 API']] },
   { label: 'Account · 账户', items: [['bill', '账单'], ['forum', '论坛'], ['me', '我的']] },
 ]
 const NAV: [string, string][] = NAV_GROUPS.reduce((all, g) => all.concat(g.items), [] as [string, string][])
 
 const ICONS: Record<string, React.ReactNode> = {
-  submit: <><path d="M12 5v14M5 12h14" /></>,
+  render: <><path d="M12 3l9 5-9 5-9-5 9-5Z" /><path d="M3 12l9 5 9-5M3 16l9 5 9-5" /></>,
+  build: <><circle cx="6" cy="6" r="2" /><circle cx="18" cy="18" r="2" /><path d="M6 8v6a4 4 0 0 0 4 4h6" /></>,
   jobs: <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M8 12h8M8 16h5" /></>,
   market: <><path d="M4 7h16M5 7l1 12h12l1-12M9 11v5M15 11v5" /></>,
   vm: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4M7 9h6" /></>,
@@ -33,7 +34,8 @@ const ICONS: Record<string, React.ReactNode> = {
 }
 
 const PAGE_META: Record<string, { eyebrow: string; title: string; desc: string; tone: string }> = {
-  submit: { eyebrow: 'New Task', title: '提交任务', desc: '上传素材、设定参数并预估花费，提交后按实测用量结算。', tone: 'compute' },
+  render: { eyebrow: 'Render Studio', title: '渲染工作台', desc: 'Blender 帧渲染、剪辑时间线与视频转码共用一套提交流程。', tone: 'compute' },
+  build: { eyebrow: 'Pipeline · Orchestration', title: '任务编排', desc: '源码 zip 上传后由算力节点执行编译 / 打包命令。', tone: 'compute' },
   jobs: { eyebrow: 'My Jobs', title: '我的任务', desc: '分片派发、进度、哈希校验与结算明细都在这里。', tone: 'compute' },
   market: { eyebrow: 'Capacity Market', title: '算力市场', desc: '在线节点、可调度切片与实时单价，点击节点可指定派发。', tone: 'market' },
   vm: { eyebrow: 'Cloud Instances', title: '云主机', desc: '按小时租用虚拟机，或把自己的机器发布成可租用配置。', tone: 'compute' },
@@ -44,7 +46,7 @@ const PAGE_META: Record<string, { eyebrow: string; title: string; desc: string; 
   me: { eyebrow: 'Account Center', title: '个人中心', desc: '账户资料、连接设置与界面偏好。', tone: 'account' },
 }
 
-const VIEWS: Record<string, any> = { submit: Submit, jobs: Jobs, market: Market, vm: Vm, nodes: Nodes, api: ApiView, bill: Bill, forum: Forum, me: Me }
+const VIEWS: Record<string, any> = { render: Submit, build: Submit, jobs: Jobs, market: Market, vm: Vm, nodes: Nodes, api: ApiView, bill: Bill, forum: Forum, me: Me }
 
 export default function App() {
   const [theme, setTheme] = useState(store.get('ss-theme') || 'light')
@@ -52,7 +54,7 @@ export default function App() {
   const [policy, setPolicy] = useState<any>(null)
   const [workers, setWorkers] = useState<any[]>([])
   const [jobs, setJobs] = useState<any[]>([])
-  const [view, setView] = useState('submit')
+  const [view, setView] = useState('render')
   const [booting, setBooting] = useState(true)
   const [toast, setToast] = useState<{ msg: string; tone?: string } | null>(null)
   const [targetNode, setTargetNode] = useState<any>(null)
@@ -75,7 +77,7 @@ export default function App() {
     setMe(null)
     setJobs([])
     setWorkers([])
-    setView('submit')
+    setView('render')
   }, [])
 
   // Bootstrap: read the deployment policy before login so the auth card can
@@ -157,7 +159,7 @@ export default function App() {
               policy={policy}
               onDone={(m: any) => {
                 setMe(m)
-                setView('submit')
+                setView('render')
               }}
             />
           </div>
@@ -170,7 +172,7 @@ export default function App() {
   const View = VIEWS[view] || Submit
   const online = workers.filter((w) => w.online).length
   const freeSlots = workers.filter((w) => w.online).reduce((a, w) => a + Math.max(0, (w.slots || 0) - (w.active || 0)), 0)
-  const meta = PAGE_META[view] || PAGE_META.submit
+  const meta = PAGE_META[view] || PAGE_META.render
 
   const hero = (
     <>
@@ -270,7 +272,7 @@ export default function App() {
             </nav>
           </header>
           <main className="main">
-            {hero}
+            {view !== 'render' && view !== 'build' && hero}
             <View />
           </main>
         </div>

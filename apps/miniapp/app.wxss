@@ -187,3 +187,79 @@ h3 { font-size: 29rpx; font-weight: 600; color: var(--ink); margin: 0; }
 
 /* 自定义 tabBar 占位：内容不被底部导航遮住 */
 .tabpage { padding-bottom: calc(env(safe-area-inset-bottom) + 210rpx); }
+
+/* ---------- 渲染 / 编排工作台（与 Web / React 端同步） ---------- */
+.wb-svc { display: grid; grid-template-columns: 1fr 1fr; gap: 6rpx; padding: 6rpx; margin-bottom: 22rpx; background: var(--soft); border: 1rpx solid var(--hair); border-radius: 18rpx; }
+.wb-svc button { height: 64rpx; line-height: 64rpx; border-radius: 12rpx; font-size: 26rpx; color: var(--mute); background: none; }
+.wb-svc button.on { background: var(--card); color: var(--link); font-weight: 600; box-shadow: 0 2rpx 12rpx rgba(20, 27, 51, 0.08); }
+
+.wb-pagehead { display: flex; align-items: center; gap: 20rpx; margin-bottom: 22rpx; }
+.wb-pagehead-ic {
+  width: 88rpx; height: 88rpx; flex: 0 0 88rpx; border-radius: 24rpx; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #2f5bd8, #5b6cff 55%, #9b5de5); color: #fff; font-size: 40rpx;
+  box-shadow: 0 10rpx 24rpx rgba(90, 107, 255, 0.3);
+}
+.wb-pagehead.build .wb-pagehead-ic { background: linear-gradient(135deg, #34406f, #5a6bff 55%, #17a2a2); box-shadow: 0 10rpx 24rpx rgba(23, 162, 162, 0.25); }
+.wb-pagehead-txt { min-width: 0; flex: 1; }
+.wb-eyebrow { display: block; font-size: 18rpx; letter-spacing: 2rpx; color: var(--link); font-family: 'SF Mono', Menlo, Consolas, monospace; }
+.wb-title { display: block; margin-top: 6rpx; font-size: 38rpx; font-weight: 650; color: var(--ink); letter-spacing: -1rpx; }
+.wb-desc { display: block; margin-top: 6rpx; font-size: 22rpx; line-height: 1.7; color: var(--mute); }
+
+.wb-pipe { margin-bottom: 20rpx; }
+.wb-pipe-step { padding: 24rpx; border: 1rpx solid var(--hair); border-radius: 20rpx; background: var(--card); box-shadow: 0 2rpx 12rpx rgba(20, 27, 51, 0.05); }
+.wb-pipe-ic { display: inline-flex; align-items: center; justify-content: center; width: 60rpx; height: 60rpx; border-radius: 16rpx; background: var(--soft); color: var(--link); font-size: 28rpx; font-family: 'SF Mono', Menlo, Consolas, monospace; margin-bottom: 10rpx; }
+.wb-pipe-t { display: block; font-size: 27rpx; font-weight: 650; color: var(--ink); }
+.wb-pipe-d { display: block; margin-top: 6rpx; font-size: 22rpx; color: var(--mute); line-height: 1.6; }
+.wb-pipe-line { width: 4rpx; height: 28rpx; margin: 6rpx auto; border-radius: 4rpx; background: linear-gradient(180deg, #5a6bff, #0fb5c9); }
+
+.wb-tip { padding: 20rpx 24rpx; margin-bottom: 20rpx; border: 1rpx solid var(--hair); border-left: 6rpx solid var(--brand); border-radius: 16rpx; background: var(--soft); font-size: 23rpx; line-height: 1.75; color: var(--body); }
+
+.wb-steps { display: flex; align-items: center; gap: 12rpx; flex-wrap: wrap; margin-bottom: 24rpx; }
+.wb-step { display: inline-flex; align-items: center; gap: 10rpx; font-size: 22rpx; color: var(--mute); }
+.wb-step-n { width: 36rpx; height: 36rpx; border-radius: 99rpx; display: inline-flex; align-items: center; justify-content: center; border: 1rpx solid var(--hair2); background: var(--card); font-size: 20rpx; font-family: 'SF Mono', Menlo, Consolas, monospace; color: var(--mute); }
+.wb-step.cur { color: var(--ink); }
+.wb-step.cur .wb-step-n { border-color: var(--brand); color: var(--link); box-shadow: 0 0 0 5rpx var(--link-soft); }
+.wb-step.done { color: var(--ok); }
+.wb-step.done .wb-step-n { background: var(--ok); border-color: transparent; color: #fff; }
+.wb-step-line { width: 32rpx; height: 2rpx; background: var(--hair2); }
+
+.wb-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 14rpx; margin-bottom: 20rpx; }
+.wb-kind { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 8rpx; padding: 22rpx; border: 1rpx solid var(--hair); border-radius: 20rpx; background: var(--card); }
+.wb-kind.on { border-color: var(--brand); background: linear-gradient(135deg, rgba(90, 107, 255, 0.08), rgba(139, 92, 246, 0.05)); box-shadow: 0 0 0 5rpx var(--link-soft); }
+.wb-kind-ic { width: 56rpx; height: 56rpx; border-radius: 16rpx; display: flex; align-items: center; justify-content: center; background: var(--soft); color: var(--link); font-size: 26rpx; }
+.wb-kind.on .wb-kind-ic { background: linear-gradient(135deg, #5a6bff, #8b5cf6); color: #fff; }
+.wb-kind-t { font-size: 26rpx; font-weight: 650; color: var(--ink); }
+.wb-kind-d { font-size: 20rpx; color: var(--mute); line-height: 1.5; }
+.wb-kind-tag { padding: 2rpx 12rpx; border-radius: 8rpx; background: var(--soft); border: 1rpx solid var(--hair); font-size: 18rpx; color: var(--link); font-family: 'SF Mono', Menlo, Consolas, monospace; }
+.wb-kind.on .wb-kind-tag { background: var(--link-soft); border-color: transparent; }
+
+.wb-sec { display: flex; align-items: center; gap: 14rpx; margin: 28rpx 0 16rpx; font-size: 25rpx; font-weight: 650; color: var(--ink); }
+.wb-sec-n { width: 36rpx; height: 36rpx; border-radius: 10rpx; display: inline-flex; align-items: center; justify-content: center; background: var(--soft); color: var(--link); font-size: 20rpx; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+
+.wb-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10rpx; padding: 44rpx 24rpx; border: 2rpx dashed var(--hair2); border-radius: 20rpx; background: var(--soft); }
+.wb-drop-ic { width: 72rpx; height: 72rpx; border-radius: 20rpx; display: flex; align-items: center; justify-content: center; background: var(--card); border: 1rpx solid var(--hair); color: var(--link); font-size: 32rpx; }
+.wb-drop-t { font-size: 26rpx; font-weight: 650; color: var(--ink); }
+.wb-drop-d { font-size: 21rpx; color: var(--mute); }
+.wb-drop.has-file { flex-direction: row; justify-content: flex-start; padding: 22rpx 24rpx; border-style: solid; border-color: var(--hair); background: var(--card); }
+.wb-file-ic { width: 56rpx; height: 56rpx; flex: 0 0 56rpx; border-radius: 14rpx; display: flex; align-items: center; justify-content: center; background: var(--soft); color: var(--link); font-size: 26rpx; }
+.wb-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 24rpx; color: var(--ink); font-family: 'SF Mono', Menlo, Consolas, monospace; }
+.wb-file-size { flex: 0 0 auto; font-size: 20rpx; color: var(--mute); font-family: 'SF Mono', Menlo, Consolas, monospace; }
+.wb-file-x { flex: 0 0 auto; width: 48rpx; height: 48rpx; border-radius: 12rpx; border: 1rpx solid var(--hair); background: var(--card); color: var(--mute); font-size: 22rpx; display: flex; align-items: center; justify-content: center; }
+
+.wb-cmd { display: flex; align-items: center; gap: 14rpx; padding: 0 22rpx; border: 1rpx solid var(--hair2); border-radius: 16rpx; background: var(--soft); }
+.wb-cmd-ps { font-size: 26rpx; color: var(--link); font-family: 'SF Mono', Menlo, Consolas, monospace; font-weight: 600; }
+.wb-cmd-in { flex: 1; height: 80rpx; line-height: 80rpx; font-size: 24rpx; color: var(--ink); font-family: 'SF Mono', Menlo, Consolas, monospace; }
+.wb-cmd-chips { display: flex; gap: 12rpx; flex-wrap: wrap; margin-top: 14rpx; }
+.wb-cmd-chip { height: 52rpx; line-height: 52rpx; padding: 0 20rpx; border: 1rpx solid var(--hair); border-radius: 99rpx; background: var(--card); color: var(--body); font-size: 21rpx; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+
+.wb-sumrows { margin-bottom: 20rpx; border: 1rpx solid var(--hair); border-radius: 16rpx; overflow: hidden; }
+.wb-sumrow { display: flex; justify-content: space-between; gap: 18rpx; padding: 16rpx 22rpx; font-size: 23rpx; background: var(--soft); color: var(--mute); }
+.wb-sumrow + .wb-sumrow { border-top: 1rpx solid var(--hair); }
+.wb-sumrow .v { color: var(--ink); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-line { font-size: 23rpx; color: var(--body); line-height: 1.8; }
+.q-total { display: flex; align-items: baseline; gap: 10rpx; flex-wrap: wrap; margin: 14rpx 0 8rpx; }
+.q-label { font-size: 23rpx; color: var(--mute); }
+.q-big { font-size: 56rpx; font-weight: 650; letter-spacing: -2rpx; color: var(--link); font-family: 'SF Mono', Menlo, Consolas, monospace; }
+.q-total.no .q-big { color: var(--warn); }
+.q-unit { font-size: 23rpx; color: var(--body); }
+.q-basis { width: 100%; font-size: 20rpx; color: var(--mute); }

@@ -203,11 +203,16 @@
     }));
     return { inputs, widgets, outputs, def: d };
   }
+  function toXY(pos) {
+    if (Array.isArray(pos)) return [Number(pos[0]) || 0, Number(pos[1]) || 0];
+    if (pos && typeof pos === 'object') return [Number(pos.x) || 0, Number(pos.y) || 0];
+    return [0, 0];
+  }
   function makeNode(type, id, pos, values, defOverride) {
     if (!getDef(type) && !defOverride) W.defs[type] = def('imported', {}, null, []);
     const s = slotsFor(type, defOverride);
     const n = {
-      id: id == null ? ++W._tmpId : id, type, pos: pos || [0, 0], size: [220, 100],
+      id: id == null ? ++W._tmpId : id, type, pos: toXY(pos), size: [220, 100],
       mode: 0, collapsed: false, title: (s.def && s.def.display_name) || type,
       color: '#232', bgcolor: '#353', inputs: s.inputs, outputs: s.outputs, widgets: s.widgets
     };
@@ -891,10 +896,13 @@
   }
   function fitView() {
     const g = currentGraph(); if (!g || !g.nodes.length) { W.view = { x: 60, y: 40, scale: 1 }; applyView(); return; }
-    const xs = g.nodes.map(n => n.pos[0]), ys = g.nodes.map(n => n.pos[1]);
+    // 导入的工作流或极端缩放可能留下非有限坐标，聚簇前先过滤
+    const nodes = g.nodes.filter(n => Array.isArray(n.pos) && isFinite(n.pos[0]) && isFinite(n.pos[1]));
+    if (!nodes.length) { W.view = { x: 60, y: 40, scale: 1 }; applyView(); return; }
+    const xs = nodes.map(n => n.pos[0]), ys = nodes.map(n => n.pos[1]);
     const x0 = Math.min(...xs), y0 = Math.min(...ys);
-    const x1 = Math.max(...g.nodes.map(n => n.pos[0] + n.size[0]));
-    const y1 = Math.max(...g.nodes.map(n => n.pos[1] + Math.max(80, n.size[1])));
+    const x1 = Math.max(...nodes.map(n => n.pos[0] + (Number(n.size && n.size[0]) || 220)));
+    const y1 = Math.max(...nodes.map(n => n.pos[1] + Math.max(80, Number(n.size && n.size[1]) || 100)));
     const c = $('#cw-canvas'), w = c.clientWidth - 80, hh = c.clientHeight - 80;
     const s = clamp(Math.min(w / Math.max(1, x1 - x0), hh / Math.max(1, y1 - y0), 1.25), 0.18, 1.25);
     W.view.scale = s;
@@ -1017,6 +1025,7 @@
 
   /* -------------------------------------------------------------- 交互实现 */
   function screenToWorld(ev) {
+    if (!isFinite(W.view.x) || !isFinite(W.view.y) || !isFinite(W.view.scale) || !W.view.scale) W.view = { x: 60, y: 40, scale: 1 };
     const r = $('#cw-canvas').getBoundingClientRect();
     return { x: (ev.clientX - r.left - W.view.x) / W.view.scale, y: (ev.clientY - r.top - W.view.y) / W.view.scale };
   }
