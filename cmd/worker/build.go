@@ -86,7 +86,7 @@ func (a *agent) runBuild(c *hub.Claim) {
 	}()
 
 	a.post(a.server+"/api/report", map[string]any{
-		"worker": a.id, "seg": c.SegID, "state": "running", "pct": 5}, true)
+		"worker": a.nodeID(), "seg": c.SegID, "state": "running", "pct": 5}, true)
 
 	extraPath, err := a.ensureDotnet(logFile, autoProvisionEnabled)
 	if err != nil {
@@ -105,7 +105,7 @@ func (a *agent) runBuild(c *hub.Claim) {
 	cmd.Env = buildEnv(c.JobID, extraPath)
 
 	a.post(a.server+"/api/report", map[string]any{
-		"worker": a.id, "seg": c.SegID, "state": "running", "pct": 5}, true)
+		"worker": a.nodeID(), "seg": c.SegID, "state": "running", "pct": 5}, true)
 	stopBeat := a.beatBuild(c.SegID)
 	t0 := time.Now()
 	runErr := cmd.Run()
@@ -143,7 +143,7 @@ func (a *agent) runBuild(c *hub.Claim) {
 		return
 	}
 	a.post(a.server+"/api/report", map[string]any{
-		"worker": a.id, "seg": c.SegID, "state": "running", "pct": 90}, true)
+		"worker": a.nodeID(), "seg": c.SegID, "state": "running", "pct": 90}, true)
 	a.finish(c, zipPath, wall, 0)
 }
 
@@ -174,7 +174,7 @@ func (a *agent) ensureDotnet(logFile *os.File, allow bool) (string, error) {
 	fmt.Fprintf(logFile, "\n[auto-provision] 未找到 .NET SDK，正在安装到 %s\n", local)
 	logFile.Sync()
 	a.post(a.server+"/api/report", map[string]any{
-		"worker": a.id, "seg": "", "state": "idle"}, true)
+		"worker": a.nodeID(), "seg": "", "state": "idle"}, true)
 	ps := `$ProgressPreference='SilentlyContinue'; ` +
 		`$u='https://dot.net/v1/dotnet-install.ps1'; ` +
 		`$p=Join-Path $env:TEMP 'dotnet-install.ps1'; ` +
@@ -238,7 +238,7 @@ func (a *agent) beatBuild(segID string) func() {
 				return
 			case <-t.C:
 				a.post(a.server+"/api/report", map[string]any{
-					"worker": a.id, "seg": segID, "state": "running", "pct": 50}, true)
+					"worker": a.nodeID(), "seg": segID, "state": "running", "pct": 50}, true)
 			}
 		}
 	}()

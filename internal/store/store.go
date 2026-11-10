@@ -58,8 +58,28 @@ CREATE TABLE IF NOT EXISTS nodes(
   paused         INTEGER NOT NULL DEFAULT 0,
   ipv6           TEXT NOT NULL DEFAULT '',
   vm             TEXT NOT NULL DEFAULT '',
+  -- device_id is the machine's stable fingerprint: one account + one physical
+  -- machine maps to exactly one node, no matter how many launchers it runs.
+  device_id      TEXT NOT NULL DEFAULT '',
+  -- Earnings split by source. seconds_billed/earned above stay as lifetime
+  -- totals for old clients, but mixing video seconds with VM runtime seconds in
+  -- one number is why the provider page used to be impossible to explain.
+  earned_task    REAL NOT NULL DEFAULT 0,
+  earned_vm      REAL NOT NULL DEFAULT 0,
+  billed_task_sec REAL NOT NULL DEFAULT 0,
+  billed_vm_sec  REAL NOT NULL DEFAULT 0,
   registered_at  INTEGER NOT NULL,
   last_seen      INTEGER NOT NULL);
+
+-- A deleted node must not come back: the agent on that machine keeps its cached
+-- node id and would re-register on the next heartbeat. A tombstone lets the
+-- broker refuse that id while still allowing the device to join again later
+-- under a fresh id (a newly downloaded node package).
+CREATE TABLE IF NOT EXISTS retired_nodes(
+  node_id    TEXT PRIMARY KEY,
+  owner_id   TEXT NOT NULL DEFAULT '',
+  device_id  TEXT NOT NULL DEFAULT '',
+  retired_at INTEGER NOT NULL);
 
 CREATE TABLE IF NOT EXISTS jobs(
   id            TEXT PRIMARY KEY,
@@ -114,7 +134,10 @@ CREATE TABLE IF NOT EXISTS ledger(
   job_id    TEXT,
   amount    REAL NOT NULL,
   balance   REAL NOT NULL,
-  note      TEXT);
+  note      TEXT,
+  -- source says which market produced an Earn row: task | vm | model. It is
+  -- what makes "seller contribution" reconcilable against per-node totals.
+  source    TEXT NOT NULL DEFAULT '');
 
 CREATE TABLE IF NOT EXISTS api_keys(
   id         TEXT PRIMARY KEY,
@@ -209,6 +232,7 @@ CREATE TABLE IF NOT EXISTS vm_instances(
 CREATE INDEX IF NOT EXISTS idx_seg_job ON segments(job_id);
 CREATE INDEX IF NOT EXISTS idx_led_user ON ledger(user_id, ts);
 CREATE INDEX IF NOT EXISTS idx_led_node ON ledger(node_id, ts);
+CREATE INDEX IF NOT EXISTS idx_node_device ON nodes(device_id, owner_id);
 CREATE INDEX IF NOT EXISTS idx_sess_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_key_user ON api_keys(user_id);
 CREATE INDEX IF NOT EXISTS idx_up_owner ON upstreams(owner_id);
@@ -309,6 +333,12 @@ ALTER TABLE upstreams ADD COLUMN caps TEXT NOT NULL DEFAULT '["chat"]';
 ALTER TABLE upstreams ADD COLUMN price_out REAL NOT NULL DEFAULT 0;
 ALTER TABLE upstreams ADD COLUMN price_cached REAL NOT NULL DEFAULT 0;
 ALTER TABLE service_offers ADD COLUMN spec TEXT NOT NULL DEFAULT '';
+ALTER TABLE nodes ADD COLUMN device_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE nodes ADD COLUMN earned_task REAL NOT NULL DEFAULT 0;
+ALTER TABLE nodes ADD COLUMN earned_vm REAL NOT NULL DEFAULT 0;
+ALTER TABLE nodes ADD COLUMN billed_task_sec REAL NOT NULL DEFAULT 0;
+ALTER TABLE nodes ADD COLUMN billed_vm_sec REAL NOT NULL DEFAULT 0;
+ALTER TABLE ledger ADD COLUMN source TEXT NOT NULL DEFAULT '';
 `
 
 func Open(path string) (*Store, error) {
@@ -468,6 +498,13 @@ type NodeRow struct {
 	OK, Bad        int
 	SecondsBilled  float64
 	Earned         float64
+	// Per-source contribution of this device. Task seconds are video seconds
+	// (or wall seconds for builds); VM seconds are rented runtime seconds.
+	// The four columns always add up to the lifetime totals above for rows
+	// written after this split was introduced.
+	EarnedTask, EarnedVM       float64
+	BilledTaskSec, BilledVMSec float64
+	DeviceID                   string
 	// Paused is the owner's own switch: the machine stays online and visible,
 	// it just stops being promised new slices.
 	Paused bool
@@ -481,20 +518,23 @@ type NodeRow struct {
 }
 
 // RegisterNode upserts the hardware/software inventory while preserving
-// ownership and lifetime totals across agent restarts.
+// ownership and lifetime totals across agent restarts. device_id is only ever
+// filled in, never cleared: an old agent that cannot report a fingerprint must
+// not wipe the identity the broker already knows for this machine.
 func (s *Store) RegisterNode(n *NodeRow) error {
 	_, err := s.db.Exec(`INSERT INTO nodes(id,owner_id,name,hostname,os,arch,cpus,mem_mb,disk_free_mb,
-			gpus,encoders,runtimes,price,slots,speed,ok,bad,ipv6,vm,registered_at,last_seen)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+			gpus,encoders,runtimes,price,slots,speed,ok,bad,ipv6,vm,device_id,registered_at,last_seen)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET owner_id=COALESCE(excluded.owner_id, nodes.owner_id),
 			name=excluded.name, hostname=excluded.hostname, os=excluded.os, arch=excluded.arch,
 			cpus=excluded.cpus, mem_mb=excluded.mem_mb, disk_free_mb=excluded.disk_free_mb,
 			gpus=excluded.gpus, encoders=excluded.encoders, runtimes=excluded.runtimes,
 			ipv6=excluded.ipv6, vm=excluded.vm,
+			device_id=CASE WHEN excluded.device_id<>'' THEN excluded.device_id ELSE nodes.device_id END,
 			price=nodes.price, slots=excluded.slots, last_seen=excluded.last_seen`,
 		n.ID, nullStr(n.OwnerID), n.Name, n.Hostname, n.OS, n.Arch, n.CPUs, n.MemMB, n.DiskFreeMB,
 		enc(n.GPUs), enc(n.Encoders), enc(n.Runtimes), n.Price, n.Slots, n.Speed, n.OK, n.Bad,
-		enc(n.IPv6), n.VM, n.RegisteredAt, n.LastSeen)
+		enc(n.IPv6), n.VM, n.DeviceID, n.RegisteredAt, n.LastSeen)
 	return err
 }
 
@@ -533,7 +573,9 @@ func (s *Store) TouchNode(id string, speed float64, ok, bad int) error {
 
 func (s *Store) Nodes() ([]*NodeRow, error) {
 	rows, err := s.db.Query(`SELECT id,owner_id,name,hostname,os,arch,cpus,mem_mb,disk_free_mb,gpus,encoders,
-		runtimes,price,slots,speed,ok,bad,seconds_billed,earned,paused,ipv6,vm,registered_at,last_seen FROM nodes ORDER BY registered_at`)
+		runtimes,price,slots,speed,ok,bad,seconds_billed,earned,paused,ipv6,vm,
+		device_id,earned_task,earned_vm,billed_task_sec,billed_vm_sec,
+		registered_at,last_seen FROM nodes ORDER BY registered_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -545,7 +587,8 @@ func (s *Store) Nodes() ([]*NodeRow, error) {
 		var paused int
 		if err := rows.Scan(&n.ID, &owner, &n.Name, &n.Hostname, &n.OS, &n.Arch, &n.CPUs, &n.MemMB,
 			&n.DiskFreeMB, &g, &e, &r, &n.Price, &n.Slots, &n.Speed, &n.OK, &n.Bad, &n.SecondsBilled,
-			&n.Earned, &paused, &ipv6, &vmCaps, &n.RegisteredAt, &n.LastSeen); err != nil {
+			&n.Earned, &paused, &ipv6, &vmCaps, &n.DeviceID, &n.EarnedTask, &n.EarnedVM,
+			&n.BilledTaskSec, &n.BilledVMSec, &n.RegisteredAt, &n.LastSeen); err != nil {
 			return nil, err
 		}
 		n.OwnerID = owner.String
@@ -572,12 +615,6 @@ func (s *Store) NodesByOwner(ownerID string) ([]*NodeRow, error) {
 		}
 	}
 	return out, nil
-}
-
-func (s *Store) AddNodeEarnings(nodeID string, secs, amount float64) error {
-	_, err := s.db.Exec(`UPDATE nodes SET seconds_billed = seconds_billed + ?, earned = earned + ? WHERE id=?`,
-		secs, amount, nodeID)
-	return err
 }
 
 // ---- jobs & segments ----
@@ -760,17 +797,22 @@ type Entry struct {
 	Amount  float64 `json:"amount"`
 	Balance float64 `json:"balance"`
 	Note    string  `json:"note,omitempty"`
+	// Source is set on Earn rows: task | vm | model. Empty on the other kinds
+	// and on rows written before the split.
+	Source string `json:"source,omitempty"`
 }
 
+const ledgerCols = `id,ts,kind,user_id,node_id,job_id,amount,balance,note,source`
+
 func (s *Store) Ledger(e *Entry) error {
-	_, err := s.db.Exec(`INSERT INTO ledger(ts,kind,user_id,node_id,job_id,amount,balance,note)
-		VALUES(?,?,?,?,?,?,?,?)`, e.TS, e.Kind, nullStr(e.UserID), nullStr(e.NodeID), nullStr(e.JobID),
-		e.Amount, e.Balance, e.Note)
+	_, err := s.db.Exec(`INSERT INTO ledger(ts,kind,user_id,node_id,job_id,amount,balance,note,source)
+		VALUES(?,?,?,?,?,?,?,?,?)`, e.TS, e.Kind, nullStr(e.UserID), nullStr(e.NodeID), nullStr(e.JobID),
+		e.Amount, e.Balance, e.Note, e.Source)
 	return err
 }
 
 func (s *Store) LedgerForUser(userID string, limit int) ([]*Entry, error) {
-	return s.queryLedger(`SELECT id,ts,kind,user_id,node_id,job_id,amount,balance,note FROM ledger
+	return s.queryLedger(`SELECT `+ledgerCols+` FROM ledger
 		WHERE user_id=? ORDER BY ts DESC, id DESC LIMIT ?`, userID, limit)
 }
 
@@ -778,7 +820,7 @@ func (s *Store) LedgerForNodes(nodeIDs []string, limit int) ([]*Entry, error) {
 	if len(nodeIDs) == 0 {
 		return nil, nil
 	}
-	q := `SELECT id,ts,kind,user_id,node_id,job_id,amount,balance,note FROM ledger WHERE node_id IN (`
+	q := `SELECT ` + ledgerCols + ` FROM ledger WHERE node_id IN (`
 	args := make([]any, 0, len(nodeIDs)+1)
 	for i, id := range nodeIDs {
 		if i > 0 {
@@ -802,7 +844,8 @@ func (s *Store) queryLedger(q string, args ...any) ([]*Entry, error) {
 	for rows.Next() {
 		e := &Entry{}
 		var u, n, j sql.NullString
-		if err := rows.Scan(&e.ID, &e.TS, &e.Kind, &u, &n, &j, &e.Amount, &e.Balance, &e.Note); err != nil {
+		if err := rows.Scan(&e.ID, &e.TS, &e.Kind, &u, &n, &j, &e.Amount, &e.Balance, &e.Note,
+			&e.Source); err != nil {
 			return nil, err
 		}
 		e.UserID, e.NodeID, e.JobID = u.String, n.String, j.String

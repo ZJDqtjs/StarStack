@@ -1349,13 +1349,14 @@ func (s *Server) settleGateway(u *store.User, up *store.Upstream, model, reqID s
 				Note: fmt.Sprintf("模型 %s %s，超出预扣补扣 · %s", model, detail, reqID)})
 		}
 	}
+	// Model upstreams are the one kind of seller contribution with no node
+	// behind it, which is exactly why the account-level and device-level totals
+	// must be presented as two different views.
 	pay := round4(cost * gatewayProviderShare)
 	if pay > 0 && up.OwnerID != "" {
-		if bal, err := s.st.AddCredits(up.OwnerID, pay); err == nil {
-			s.st.Ledger(&store.Entry{TS: time.Now().Unix(), Kind: store.Earn, UserID: up.OwnerID,
-				Amount: pay, Balance: bal,
-				Note: fmt.Sprintf("模型 %s · %s · 上游 %s · %s", model, detail, up.Name, reqID)})
-		}
+		s.recordContribution(Contribution{OwnerID: up.OwnerID, JobID: reqID,
+			Source: ContribModel, Amount: pay,
+			Note: fmt.Sprintf("模型 %s · %s · 上游 %s · %s", model, detail, up.Name, reqID)})
 	}
 	log.Printf("gateway %s user=%s model=%s upstream=%s prompt=%d cached=%d completion=%d cost=%.4f",
 		reqID, u.Name, model, up.ID, us.Prompt, us.Cached, us.Completion, cost)

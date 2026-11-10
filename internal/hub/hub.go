@@ -191,7 +191,15 @@ type Worker struct {
 	Bad      int              `json:"bad"`
 	Billed   float64          `json:"seconds_billed"`
 	Earned   float64          `json:"earned"`
-	Address  string           `json:"address"`
+	// Contribution split by market: task seconds and VM runtime seconds are
+	// different units and must never be presented as one figure.
+	EarnedTask    float64 `json:"earned_task"`
+	EarnedVM      float64 `json:"earned_vm"`
+	BilledTaskSec float64 `json:"billed_task_sec"`
+	BilledVMSec   float64 `json:"billed_vm_sec"`
+	// DeviceID is the stable machine fingerprint behind this node.
+	DeviceID string `json:"device_id,omitempty"`
+	Address  string `json:"address"`
 	// Streak counts consecutive slice failures and CoolUntil parks the node:
 	// a machine that keeps dropping work stays in the market view but stops
 	// receiving new slices until it has proven itself again by coming back clean.
@@ -391,6 +399,9 @@ func (s *Server) restore() {
 			IPv6: n.IPv6, VM: caps,
 			Price: n.Price, Slots: n.Slots, Speed: n.Speed, OK: n.OK, Bad: n.Bad,
 			Billed: n.SecondsBilled, Earned: n.Earned, Paused: n.Paused,
+			DeviceID:   n.DeviceID,
+			EarnedTask: n.EarnedTask, EarnedVM: n.EarnedVM,
+			BilledTaskSec: n.BilledTaskSec, BilledVMSec: n.BilledVMSec,
 			seen:  time.Unix(n.LastSeen, 0),
 			inbox: make(chan *Claim, 64), vminbox: make(chan *vm.Command, 16),
 		}
@@ -598,6 +609,7 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/dl/", s.handleNodeBin)
 	mux.HandleFunc("/api/market", s.handleMarket)
 	mux.HandleFunc("/api/ledger", s.handleLedger)
+	mux.HandleFunc("/api/contribution", s.handleContribution)
 
 	// Console preference (simple vs. advanced task form) and the community board.
 	mux.HandleFunc("/api/me/settings", s.handleMySettings)
@@ -712,7 +724,7 @@ func (s *Server) handleHello(w http.ResponseWriter, r *http.Request) {
 	// Joining the pool is the step that must not be anonymous once the broker is
 	// public: without it anyone can register a fake node, win every quote and
 	// poison the reputation counters of the real machines next to it.
-	ticket, why := s.admitAgent(r, info.ID)
+	ticket, why := s.admitAgent(r, info)
 	if ticket == nil && why != "" {
 		http.Error(w, jsonErr(why), http.StatusForbidden)
 		return
@@ -732,6 +744,20 @@ func (s *Server) handleHello(w http.ResponseWriter, r *http.Request) {
 	if info.Name == "" {
 		info.Name = info.Hostname
 	}
+	// One account + one physical machine maps to exactly one node. The broker
+	// picks the id (see identity.go), so re-running a launcher on the same
+	// computer reuses the existing node instead of creating a twin with a fresh
+	// id and an empty contribution history.
+	ticketOwner := ""
+	if ticket != nil {
+		ticketOwner = ticket.OwnerID
+	}
+	canonical, why := s.resolveNodeIdentity(&info, ticketOwner)
+	if why != "" {
+		http.Error(w, jsonErr(why), http.StatusConflict)
+		return
+	}
+	info.ID = canonical
 
 	s.mu.Lock()
 	wd := s.workers[info.ID]
@@ -751,6 +777,7 @@ func (s *Server) handleHello(w http.ResponseWriter, r *http.Request) {
 	// the agent owns this view of its machine; ownership, price and lifetime
 	// reputation belong to the platform's ledger and survive its restarts
 	wd.Name, wd.Hostname, wd.OS, wd.Arch = info.Name, info.Hostname, info.OS, info.Arch
+	wd.DeviceID = info.DeviceID
 	wd.CPUs, wd.MemMB, wd.DiskFree = info.CPUs, info.MemMB, info.DiskFreeMB
 	wd.GPUs, wd.Encoders, wd.Runtimes = info.GPUs, info.Encoders, info.Runtimes
 	wd.IPv6, wd.VM = info.IPv6, info.VM
@@ -790,7 +817,8 @@ func (s *Server) handleHello(w http.ResponseWriter, r *http.Request) {
 	}
 	row := &store.NodeRow{
 		ID: wd.ID, OwnerID: wd.OwnerID, Name: wd.Name, Hostname: wd.Hostname,
-		OS: wd.OS, Arch: wd.Arch, CPUs: wd.CPUs, MemMB: int(wd.MemMB),
+		DeviceID: info.DeviceID,
+		OS:       wd.OS, Arch: wd.Arch, CPUs: wd.CPUs, MemMB: int(wd.MemMB),
 		DiskFreeMB: int64(wd.DiskFree), GPUs: toStoreGPUs(wd.GPUs),
 		Encoders: wd.Encoders, Runtimes: toStoreRuntimes(wd.Runtimes),
 		IPv6: wd.IPv6, VM: vmCapsJSON(wd.VM),
@@ -2074,8 +2102,13 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			view["address"] = wd.Address
 			view["ipv6"] = wd.IPv6
 			view["disk_free_mb"] = wd.DiskFree
+			view["device_id"] = wd.DeviceID
 			view["earned"] = wd.Earned
 			view["seconds_billed"] = wd.Billed
+			view["earned_task"] = wd.EarnedTask
+			view["earned_vm"] = wd.EarnedVM
+			view["billed_task_sec"] = wd.BilledTaskSec
+			view["billed_vm_sec"] = wd.BilledVMSec
 		}
 		ws = append(ws, view)
 	}

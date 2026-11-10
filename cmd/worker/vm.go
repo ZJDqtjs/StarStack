@@ -52,7 +52,7 @@ func (v *vmAgent) loop() {
 }
 
 func (v *vmAgent) claim() *vm.Command {
-	u := fmt.Sprintf("%s/api/vm/claim?worker=%s&wait=20", v.a.server, url.QueryEscape(v.a.id))
+	u := fmt.Sprintf("%s/api/vm/claim?worker=%s&wait=20", v.a.server, url.QueryEscape(v.a.nodeID()))
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		time.Sleep(3 * time.Second)
@@ -212,7 +212,7 @@ func (v *vmAgent) janitor() {
 }
 
 func (v *vmAgent) report(rep vm.Report) {
-	rep.Worker = v.a.id
+	rep.Worker = v.a.nodeID()
 	if _, err := v.a.postJSON(v.a.server+"/api/vm/report", rep, true); err != nil {
 		// A 404 means the broker settled or forgot this instance; retrying from
 		// the heartbeat is enough, the VM stays under our control either way.
