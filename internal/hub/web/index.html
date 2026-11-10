@@ -1982,6 +1982,7 @@ a.btn:hover{text-decoration:none}
       <span class="nx-eyebrow">Provider Nodes</span>
       <h1>我的节点</h1>
       <p>把闲置机器接进来赚算力点：下载节点包，解压后直接双击 exe 即可；启动脚本作为需要自定义参数时的备选。</p>
+      <p class="hint" style="margin-top:8px">一台电脑只对应一个节点：重复下载或重启节点包会复用原来的节点，收益与信誉连续累计，不会再生成第二个。贡献只统计校验通过的任务分片和已结算的云主机租用，在线挂机不计贡献。</p>
     </div>
     <div class="nx-hero-side">
       <button class="nx-hero-link" onclick="showView('bill')">查看收益 →</button>
@@ -1997,8 +1998,8 @@ a.btn:hover{text-decoration:none}
     <div class="card">
       <h2><span class="kicker">Provider</span>一键提供算力</h2>
       <div class="hint" style="margin-top:0">
-        填好参数后下载节点包，解压后双击其中的 exe，这台机器就会以你的账户身份加入算力池并开始计收益。
-        关掉窗口即停止。
+        填好参数后下载节点包，解压后双击其中的 exe，这台机器就会以你的账户身份加入算力池并开始接单。
+        关掉窗口即停止。在同一台电脑上重复启动只会回到原来那个节点，不会新开一个；不用的节点可在右侧删除。
       </div>
       <label>机器名称</label>
       <input id="lname" placeholder="例如 宿舍的台式机">
@@ -2055,6 +2056,12 @@ a.btn:hover{text-decoration:none}
     </div>
   </div>
   <div class="grid">
+    <div class="card" style="grid-column:1/-1">
+      <h2><span class="kicker">Contribution</span>贡献概览</h2>
+      <div class="hint" style="margin-top:0">卖家贡献（账户维度）= 账本中该账户全部收益流水之和；节点贡献（设备维度）= 单台机器已结算的任务与云主机算力。两者是同一本账的两个视角，不是两笔钱。</div>
+      <div class="stats" id="contribstat"><div class="empty">正在读取贡献账目…</div></div>
+      <div class="nx-tip" style="margin:16px 0 0">「其它收益」= 卖家贡献 − Σ 当前名下节点贡献，包含模型上游收益、已删除节点的历史收益和升级前的旧账。任务分片校验通过才发收益，云主机按租用时长结算、平台留 10%；在线挂机不产生贡献。</div>
+    </div>
     <div class="card">
       <h2><span class="kicker">Ledger</span>账户流水</h2>
       <div class="nx-sec">快速充值 <small>Top up</small></div>
@@ -2066,10 +2073,10 @@ a.btn:hover{text-decoration:none}
       <tbody><tr><td colspan="5" class="empty">暂无记录</td></tr></tbody></table></div>
     </div>
     <div class="card">
-      <h2><span class="kicker">Earnings</span>我的节点收益</h2>
+      <h2><span class="kicker">Earnings</span>节点贡献明细（最近记录）</h2>
       <div class="tablewrap"><table id="earn"><thead><tr><th>时间</th><th>节点</th><th>算力点</th><th>说明</th></tr></thead>
       <tbody><tr><td colspan="4" class="empty">暂无收益</td></tr></tbody></table></div>
-      <div class="nx-tip" style="margin:16px 0 0">收益只在「节点自报哈希 == broker 重算哈希」的分片上发放，避免虚假上报。</div>
+      <div class="nx-tip" style="margin:16px 0 0">这里只列最近的收益流水，总额请看上方「贡献概览」。任务收益只在「节点自报哈希 == broker 重算哈希」的分片上发放，避免虚假上报。</div>
     </div>
   </div>
 </section>
@@ -2213,6 +2220,17 @@ const post=(u,body)=>api(u,{method:'POST',headers:{'Content-Type':'application/j
 
 let ME=null, POOL=[], LIVE={}, TIMER=null, DUR=0, POL=null, VIEW='sky';
 let SKY_CAT='all', SKY_OFFERS=[], SKY_LAST=0, ME_VM_LAST=0;
+// 贡献总账：/api/contribution 查的是全量 Earn 流水，不能用账单页最近一页流水冒充总额。
+let CONTRIB=null, CONTRIB_AT=0, CONTRIB_BUSY=false;
+function loadContribution(force){
+  if(CONTRIB_BUSY) return;
+  if(!force && CONTRIB && Date.now()-CONTRIB_AT<3000) return;
+  CONTRIB_BUSY=true; CONTRIB_AT=Date.now();
+  api('/api/contribution').then(c=>{
+    CONTRIB=c;
+    if(activeView()==='nodes'||activeView()==='bill') paint();
+  }).catch(()=>{}).finally(()=>{CONTRIB_BUSY=false});
+}
 
 /* ---------------- 新版 shell：导航分组、面包屑与状态栏 ---------------- */
 const NX_TITLE={sky:'星空',api:'API',image:'生图',video:'生视频',render:'渲染',
@@ -2264,6 +2282,7 @@ function showView(v){
   const el=$('#v-'+v);
   if(el) el.classList.add('on');
   paint();
+  if(v==='nodes'||v==='bill') loadContribution(true);
   window.scrollTo({top:0,behavior:'smooth'});
 }
 $$('#nav button[data-v]').forEach(b=>b.onclick=()=>showView(b.dataset.v));
@@ -2387,6 +2406,7 @@ async function refresh(){
     LIVE={};(st.jobs||[]).forEach(j=>LIVE[j.id]=j);
     nxWallet(); nxStatus();
     paint();
+    loadContribution();
   }catch(e){/* broker 正在重启 */}
   TIMER=setTimeout(refresh,1000);
 }
@@ -3711,6 +3731,21 @@ async function togglePause(id,paused){
     {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused})});
     refresh()}catch(e){alert('操作失败：'+e)}
 }
+
+// 删除只把设备移出自己的节点池：已结算的收益流水、分片与通讯记录都留作对账凭证，
+// 不会退回余额。Broker 会写注销墓碑，旧 Agent 拿着旧凭据再上线会被拒绝。
+async function deleteNode(id){
+  const w=POOL.find(x=>x.id===id), name=w?(w.name||w.id):id;
+  if(!confirm('删除节点「'+name+'」？\n\n'
+    +'这台机器会从「我的机器」里移除；已结算的收益流水会保留用于对账。\n'
+    +'如果节点程序还在运行，请把它关掉；想让这台机器重新加入，请重新下载节点包。'))return;
+  try{
+    await api('/api/nodes/'+encodeURIComponent(id),{method:'DELETE'});
+    CONTRIB=null; CONTRIB_AT=0;
+    loadContribution(true);
+    refresh();
+  }catch(e){alert('删除失败：'+e)}
+}
 $('#pair').onclick=async()=>{
   const code=$('#code').value.trim().toUpperCase();
   if(!code)return;
@@ -3745,31 +3780,58 @@ function paintNodes(){
   const mine=POOL.filter(w=>w.mine);
   if(!POL||POL.pending) paintPending();
   if(!mine.length){$('#mynodes').innerHTML='<div class="empty">还没有属于你的节点</div>';return}
-  $('#mynodes').innerHTML=mine.map(w=>`<div class="card" style="margin-bottom:10px;padding:16px 18px">
+  // 同设备出现多行 = 升级前留下的重复节点，提示用户删掉，别把两份都当贡献。
+  const dup={};
+  ((CONTRIB||{}).nodes||[]).forEach(n=>{if(n.duplicate)dup[n.id]=true});
+  $('#mynodes').innerHTML=mine.map(w=>{
+    const legacy=Math.max(0,Number(w.earned||0)-Number(w.earned_task||0)-Number(w.earned_vm||0));
+    return `<div class="card" style="margin-bottom:10px;padding:16px 18px">
     <h2 class="plain">
-      ${esc(w.name||w.id)} <span class="tag ${w.online?'on':'off'}">${w.online?'在线':'离线'}</span></h2>
+      ${esc(w.name||w.id)} <span class="tag ${w.online?'on':'off'}">${w.online?'在线':'离线'}</span>
+      ${w.paused?'<span class="tag">已暂停</span>':''}
+      ${dup[w.id]?'<span class="tag warn">同设备重复节点，建议删除</span>':''}
+      ${!w.device_id?'<span class="tag warn">旧版节点（无设备指纹）</span>':''}</h2>
     <div class="stats">
-      <div class="stat"><b>${f2(w.earned||0)}</b><span>累计收益点</span></div>
-      <div class="stat"><b>${f1(w.seconds_billed||0)}s</b><span>已结算算力</span></div>
+      <div class="stat"><b>${f2(w.earned||0)}</b><span>节点贡献（点）</span></div>
+      <div class="stat"><b>${f2(w.earned_task||0)}</b><span>其中：任务算力</span></div>
+      <div class="stat"><b>${f2(w.earned_vm||0)}</b><span>其中：云主机</span></div>
+      <div class="stat"><b>${f1(w.billed_task_sec||0)}s</b><span>已结算任务时长</span></div>
+      <div class="stat"><b>${f1(w.billed_vm_sec||0)}s</b><span>已结算租用时长</span></div>
       <div class="stat"><b>${w.active}/${w.slots}</b><span>占用槽位</span></div>
       <div class="stat"><b>${f2(w.price)}</b><span>当前单价</span></div>
-      <div class="stat"><b>${w.speed>0?f2(w.speed)+'×':'—'}</b><span>实测吞吐</span></div>
       <div class="stat"><b>${w.ok}/${w.ok+w.bad}</b><span>成功/总数</span></div>
     </div>
-    <div class="hint">编号 <span class="num">${esc(w.id)}</span> · ${esc(w.hostname||'')} · ${esc(w.os)} · ${w.cpus} 核 ·
+    <div class="hint">编号 <span class="num">${esc(w.id)}</span> · 设备 <span class="num">${esc(w.device_id||'（旧版节点未采集）')}</span>
+      · ${esc(w.hostname||'')} · ${esc(w.os)} · ${w.cpus} 核 ·
       ${w.mem_mb?Math.round(w.mem_mb/1024)+'GB':''} · 空闲磁盘 ${w.disk_free_mb?Math.round(w.disk_free_mb/1024)+'GB':'未知'}</div>
+    <div class="hint">任务时长是视频/墙钟秒，租用时长是运行秒，两者分开累计；贡献只算校验通过的任务分片和已结算的云主机租用，在线挂机不计。${legacy>0.01?'其中 '+f2(legacy)+' 点为升级前未分类的历史收益。':''}</div>
     ${w.paused?'<div class="hint warn">已停止派活：正在跑的分片会做完，但不再接新的。</div>':''}
-    <div style="display:flex;gap:8px;margin-top:12px">
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
       <button class="ghost tiny" onclick="reprice('${esc(w.id)}',${w.price})">调整单价</button>
       <button class="ghost tiny"
         onclick="togglePause('${esc(w.id)}',${!w.paused})">${w.paused?'恢复派活':'暂停派活'}</button>
+      <button class="ghost tiny" onclick="deleteNode('${esc(w.id)}')">删除节点</button>
     </div>
-  </div>`).join('');
+  </div>`}).join('');
 }
 
 /* ---------------- 账单 ---------------- */
 const KIND={hold:'预扣',settle:'结算',refund:'退还',earn:'收益',recharge:'充值'};
+function paintContrib(){
+  const c=CONTRIB;
+  if(!c||!c.seller){$('#contribstat').innerHTML='<div class="empty">正在读取贡献账目…</div>';return}
+  const b=c.seller.by_source||{};
+  const cell=(v,k)=>`<div class="stat"><b>${f2(v)}</b><span>${k}</span></div>`;
+  $('#contribstat').innerHTML=
+    cell(c.seller.total_earned,'卖家贡献合计')+
+    cell(b.task,'任务算力（节点 100%）')+
+    cell(b.vm,'云主机（卖方 90%）')+
+    cell(b.model,'模型上游（无节点）')+
+    cell(c.node_total_earned,'Σ 当前名下节点贡献')+
+    cell(c.other_earned,'其它收益');
+}
 async function paintBill(){
+  paintContrib();
   try{
     const d=await api('/api/ledger');
     const ts=t=>new Date(t*1000).toLocaleString('zh-CN',{hour12:false});

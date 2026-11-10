@@ -38,7 +38,8 @@ Page({
           id: w.id,
           name: w.name || w.id,
           online: !!w.online,
-          meta: `${w.cpus} 核 · ${w.mem_mb ? Math.round(w.mem_mb / 1024) + 'G' : ''} · ${f2(w.price)} 点/秒 · 已赚 ${f2(w.earned || 0)}`,
+          meta: `${w.cpus} 核 · ${w.mem_mb ? Math.round(w.mem_mb / 1024) + 'G' : ''} · ${f2(w.price)} 点/秒 · 贡献 ${f2(w.earned || 0)} 点`,
+          device: w.device_id || '（旧版节点未采集）',
         }))
       this.setData({ me, balanceText: f2(me.credits), nodes, adv: !!settings.advanced, loading: false, msg: '' })
     } catch (e) {
@@ -59,6 +60,24 @@ Page({
 
   openNodeLogs(e) {
     wx.navigateTo({ url: '/pages/commlog/index?type=node&id=' + encodeURIComponent(e.currentTarget.dataset.id) })
+  },
+
+  deleteNode(e) {
+    const id = e.currentTarget.dataset.id
+    wx.showModal({
+      title: '删除节点',
+      content: '这台机器会从你的节点列表移除；已结算的收益流水会保留用于对账。若节点程序仍在运行，请关闭它，想重新加入请重新下载节点包。',
+      success: async (r) => {
+        if (!r.confirm) return
+        try {
+          await api.deleteNode(id)
+          wx.showToast({ title: '节点已删除', icon: 'none' })
+          this.load()
+        } catch (err) {
+          wx.showToast({ title: '删除失败：' + (err.message || err), icon: 'none' })
+        }
+      },
+    })
   },
 
   onBase(e) {

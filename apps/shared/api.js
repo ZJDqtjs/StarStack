@@ -105,6 +105,8 @@ export function createApi({ baseUrl, getToken, request, upload }) {
     pair: (code) => post('/api/pair', { code }),
     setNodePrice: (id, price) => put('/api/nodes/' + enc(id), { price }),
     pauseNode: (id, paused) => put('/api/nodes/' + enc(id) + '/pause', { paused }),
+    deleteNode: (id) => del('/api/nodes/' + enc(id)),
+    contribution: () => get('/api/contribution'),
 
     // IPv6 cloud hosts
     vmOffers: () => get('/api/vm/offers'),
