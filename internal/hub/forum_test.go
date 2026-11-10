@@ -64,7 +64,13 @@ func TestForumPostCommentAndMedia(t *testing.T) {
 	r = httptest.NewRequest("GET", "/api/forum/posts", nil)
 	r.AddCookie(bob)
 	s.handleForumPosts(rec, r)
-	var list struct{ Posts []struct{ ID string `json:"id"`; Author string `json:"author"`; MediaCount int `json:"media_count"` } }
+	var list struct {
+		Posts []struct {
+			ID         string `json:"id"`
+			Author     string `json:"author"`
+			MediaCount int    `json:"media_count"`
+		}
+	}
 	json.Unmarshal(rec.Body.Bytes(), &list)
 	if len(list.Posts) != 1 || list.Posts[0].Author != "alice" || list.Posts[0].MediaCount != 1 {
 		t.Fatalf("unexpected list: %s", rec.Body.String())
@@ -86,9 +92,19 @@ func TestForumPostCommentAndMedia(t *testing.T) {
 	r.AddCookie(alice)
 	s.handleForumPost(rec, r)
 	var detail struct {
-		Post     struct{ Comments int `json:"comments"` }
-		Media    []struct{ ID string `json:"id"`; Mime string `json:"mime"` }
-		Comments []struct{ Author string `json:"author"`; Media []struct{ ID string `json:"id"` } `json:"media"` } `json:"comments"`
+		Post struct {
+			Comments int `json:"comments"`
+		}
+		Media []struct {
+			ID   string `json:"id"`
+			Mime string `json:"mime"`
+		}
+		Comments []struct {
+			Author string `json:"author"`
+			Media  []struct {
+				ID string `json:"id"`
+			} `json:"media"`
+		} `json:"comments"`
 	}
 	json.Unmarshal(rec.Body.Bytes(), &detail)
 	if len(detail.Comments) != 1 || detail.Comments[0].Author != "bob" || len(detail.Comments[0].Media) != 1 {
@@ -142,7 +158,11 @@ func TestForumRejectsNonMedia(t *testing.T) {
 	r = httptest.NewRequest("GET", "/api/forum/posts", nil)
 	r.AddCookie(alice)
 	s.handleForumPosts(rec, r)
-	var list struct{ Posts []struct{ MediaCount int `json:"media_count"` } }
+	var list struct {
+		Posts []struct {
+			MediaCount int `json:"media_count"`
+		}
+	}
 	json.Unmarshal(rec.Body.Bytes(), &list)
 	if len(list.Posts) != 1 || list.Posts[0].MediaCount != 0 {
 		t.Fatalf("non-media file was stored: %s", rec.Body.String())

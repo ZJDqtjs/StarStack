@@ -45,11 +45,11 @@ type Policy struct {
 	// restricted to named accounts even when on: the provider still has to opt in
 	// with --allow-build on its own agent, which is what makes the trust explicit
 	// on both sides.
-	AllowBuild bool
-	BuildUsers []string
-	secureCookie   bool    // set the Secure flag on session cookies (TLS / reverse proxy)
-	CookiePath     string  // Path the session cookie is scoped to ("/starstack/" behind a proxy)
-	TrustProxy     bool    // believe X-Forwarded-For for the client address
+	AllowBuild   bool
+	BuildUsers   []string
+	secureCookie bool   // set the Secure flag on session cookies (TLS / reverse proxy)
+	CookiePath   string // Path the session cookie is scoped to ("/starstack/" behind a proxy)
+	TrustProxy   bool   // believe X-Forwarded-For for the client address
 
 	MaxUploadBytes int64 // request body cap for a job submission
 	MemoryBuffer   int64 // how much of that body may sit in RAM
