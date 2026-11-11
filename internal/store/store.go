@@ -232,7 +232,6 @@ CREATE TABLE IF NOT EXISTS vm_instances(
 CREATE INDEX IF NOT EXISTS idx_seg_job ON segments(job_id);
 CREATE INDEX IF NOT EXISTS idx_led_user ON ledger(user_id, ts);
 CREATE INDEX IF NOT EXISTS idx_led_node ON ledger(node_id, ts);
-CREATE INDEX IF NOT EXISTS idx_node_device ON nodes(device_id, owner_id);
 CREATE INDEX IF NOT EXISTS idx_sess_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_key_user ON api_keys(user_id);
 CREATE INDEX IF NOT EXISTS idx_up_owner ON upstreams(owner_id);
@@ -300,8 +299,43 @@ CREATE TABLE IF NOT EXISTS service_offers(
   unit       TEXT NOT NULL DEFAULT '点/次',
   image      TEXT NOT NULL DEFAULT '',
   image_mime TEXT NOT NULL DEFAULT '',
+  auto_share INTEGER NOT NULL DEFAULT 0,
+  node_id    TEXT NOT NULL DEFAULT '',
+  scene      TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_offer_cat ON service_offers(category, created_at);
+
+-- 自动共享的使用授权：同一买家对同一挂牌只授权一次，重复点击不产生新订单。
+CREATE TABLE IF NOT EXISTS offer_orders(
+  id         TEXT PRIMARY KEY,
+  offer_id   TEXT NOT NULL,
+  buyer_id   TEXT NOT NULL,
+  seller_id  TEXT NOT NULL,
+  node_id    TEXT NOT NULL DEFAULT '',
+  scene      TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  UNIQUE(offer_id, buyer_id));
+CREATE INDEX IF NOT EXISTS idx_offer_order_buyer ON offer_orders(buyer_id, created_at);
+
+-- 买卖双方围绕一条挂牌的一对一会话；卖家可看到该挂牌下的所有买家会话。
+CREATE TABLE IF NOT EXISTS offer_conversations(
+  id         TEXT PRIMARY KEY,
+  offer_id   TEXT NOT NULL,
+  buyer_id   TEXT NOT NULL,
+  seller_id  TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(offer_id, buyer_id));
+CREATE INDEX IF NOT EXISTS idx_offer_conv_buyer ON offer_conversations(buyer_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_offer_conv_seller ON offer_conversations(seller_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS offer_messages(
+  id               TEXT PRIMARY KEY,
+  conversation_id  TEXT NOT NULL,
+  sender_id        TEXT NOT NULL,
+  body             TEXT NOT NULL,
+  created_at       INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_offer_msg_conv ON offer_messages(conversation_id, created_at);
 
 -- ComfyUI 工作流：部署的图、我的预设和草稿。graph 存 UI 格式 JSON 原文。
 CREATE TABLE IF NOT EXISTS comfy_workflows(
@@ -339,6 +373,16 @@ ALTER TABLE nodes ADD COLUMN earned_vm REAL NOT NULL DEFAULT 0;
 ALTER TABLE nodes ADD COLUMN billed_task_sec REAL NOT NULL DEFAULT 0;
 ALTER TABLE nodes ADD COLUMN billed_vm_sec REAL NOT NULL DEFAULT 0;
 ALTER TABLE ledger ADD COLUMN source TEXT NOT NULL DEFAULT '';
+ALTER TABLE service_offers ADD COLUMN auto_share INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE service_offers ADD COLUMN node_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE service_offers ADD COLUMN scene TEXT NOT NULL DEFAULT '';
+`
+
+// Indexes on columns introduced by columnMigrations must be created after the
+// ALTERs: a database written by an earlier build does not have those columns
+// yet when schema runs, and SQLite rejects CREATE INDEX on a missing column.
+const postMigrationIndexes = `
+CREATE INDEX IF NOT EXISTS idx_node_device ON nodes(device_id, owner_id);
 `
 
 func Open(path string) (*Store, error) {
@@ -356,6 +400,10 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	runColumnMigrations(db)
+	if _, err := db.Exec(postMigrationIndexes); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
 	return &Store{db: db}, nil
 }
 

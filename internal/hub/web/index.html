@@ -350,7 +350,7 @@ a.btn:hover{text-decoration:none}
   color:var(--bili-pink);font-weight:500}
 .sky-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
   gap:22px 16px;align-items:start}
-.sky-card{min-width:0}
+.sky-card{min-width:0;cursor:pointer}
 .sky-card .sky-cover{position:relative;display:block;aspect-ratio:16/9;border-radius:10px;
   overflow:hidden;background:var(--soft);transition:transform .18s ease,box-shadow .18s ease}
 .sky-card:hover .sky-cover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(0,0,0,.13)}
@@ -377,6 +377,15 @@ a.btn:hover{text-decoration:none}
 .sky-meta .oname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
 .sky-spec{margin:5px 2px 0;font:400 11px/1.5 var(--mono);color:var(--faint);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sky-card .sky-auto{position:absolute;left:7px;bottom:7px;padding:2px 7px;border-radius:4px;
+  background:rgba(0,168,112,.9);color:#fff;font:500 10.5px/1.6 var(--mono)}
+.od-msg{padding:8px 10px;margin-bottom:8px;border-radius:8px;background:var(--inset);
+  font-size:12.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.od-msg.me{background:var(--bili-blue-soft)}
+.od-msg .od-who{font-size:11px;color:var(--mute);margin-bottom:3px}
+#od-chat-list{max-height:240px;overflow:auto;border:1px solid var(--hair);border-radius:8px;
+  padding:10px;margin:8px 0}
+.od-conv{display:block;width:100%;text-align:left;white-space:normal;margin-bottom:8px}
 
 .sky-form{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:24px;
   box-shadow:var(--shadow);margin-bottom:30px;
@@ -1166,6 +1175,7 @@ a.btn:hover{text-decoration:none}
       <button id="sky-tab-stack" onclick="skyTab('stack')">星栈</button>
     </div>
     <div class="sky-bar-hint" id="sky-bar-hint">推荐卖家节点 · 按最新发布排序</div>
+    <button class="ghost tiny" onclick="openOfferConvs()">我的会话</button>
   </div>
 
   <div id="sky-sea">
@@ -1207,6 +1217,24 @@ a.btn:hover{text-decoration:none}
           <option>点/次</option><option>点/千 token</option><option>点/视频秒</option>
           <option>点/小时</option><option>点/帧</option></select></div>
         <div><label>配置</label><input id="st-spec" maxlength="500" placeholder="例如 双 RTX 4090 · 24G ×2 · ComfyUI"></div>
+      </div>
+      <div class="sky-field">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:16px;font-weight:500">
+          <input type="checkbox" id="st-auto" onchange="toggleShareFields()" style="width:auto">
+          开通售出自动共享：买家无需沟通即可直接使用下方节点或场景任务
+        </label>
+        <div id="st-share-fields" style="display:none">
+          <div class="row" style="margin-top:12px">
+            <div><label>绑定我的节点</label><select id="st-node"><option value="">不绑定节点</option></select>
+              <div class="hint" id="st-node-hint">仅用于渲染 / 编译任务的指定派发。</div></div>
+            <div><label>场景 / 提示词 / 编译命令（可选）</label><input id="st-scene" maxlength="200" placeholder="例如 scene.blend、一段提示词或编译命令"></div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div><label>帧范围（渲染）</label><input id="st-frames" maxlength="30" placeholder="例如 1-120"></div>
+            <div><label>采样数（渲染）</label><input id="st-samples" maxlength="8" inputmode="numeric" placeholder="0=场景设置"></div>
+          </div>
+          <div class="hint" style="margin-top:8px">这里只授权买家直接使用；任务费用仍由平台按实际用量预扣、结算。</div>
+        </div>
       </div>
       <label>简介（可选）</label>
       <textarea id="st-body" rows="3" maxlength="2000" placeholder="说明交付时间、模型、售后和联系方式"></textarea>
@@ -2200,6 +2228,28 @@ a.btn:hover{text-decoration:none}
   </div>
 </div>
 
+<div id="offerpanel" style="display:none;position:fixed;inset:0;z-index:76;background:rgba(0,0,0,.45);padding:16px">
+  <div class="card" style="max-width:720px;margin:6vh auto;max-height:86vh;overflow:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <h2 id="od-title" style="margin:0"></h2>
+      <button class="ghost" id="od-close">关闭</button>
+    </div>
+    <div id="od-info" style="margin-top:10px"></div>
+    <div id="od-actions" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px"></div>
+    <div id="od-convs" style="display:none;margin-top:14px"></div>
+    <div id="od-chat" style="display:none;margin-top:14px">
+      <div id="od-chat-head" class="hint"></div>
+      <div id="od-chat-list"></div>
+      <textarea id="od-chat-body" rows="2" maxlength="1000" placeholder="问问交付时间、模型、配置或售后…"></textarea>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
+        <button class="btn auto" id="od-chat-send">发送</button>
+        <button class="ghost tiny" id="od-chat-refresh">刷新</button>
+        <span class="hint" id="od-chat-msg"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="assets/comfy.js"></script>
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -2442,6 +2492,7 @@ function skyTab(tab){
     ? '推荐卖家节点 · 按最新发布排序'
     : '选服务类型、写配置、配封面，发布后进入星海';
   if(tab==='sea') paintSky(true);
+  if(tab==='stack') loadMyNodes();
 }
 function openSkyStack(){showView('sky');skyTab('stack')}
 
@@ -2477,13 +2528,14 @@ function renderSky(){
 }
 
 function skyCard(o, manage){
-  return `<article class="sky-card">
+  return `<article class="sky-card" onclick="openOffer('${esc(o.id)}')">
     <div class="sky-cover">
-      ${manage?`<div class="sky-del"><button onclick="delOffer('${esc(o.id)}')">删除</button></div>`:''}
+      ${manage?`<div class="sky-del"><button onclick="event.stopPropagation();delOffer('${esc(o.id)}')">删除</button></div>`:''}
       ${o.has_image
         ? `<img loading="lazy" src="${BASE}/api/offers/media/${encodeURIComponent(o.id)}" alt="${esc(o.title)}">`
         : `<div class="sky-ph">${esc(o.title.slice(0,10))}</div>`}
       <span class="sky-cat">${esc(CAT_LABEL[o.category]||o.category)}</span>
+      ${o.auto_share?'<span class="sky-auto">自动共享</span>':''}
       <span class="sky-price">${f2(o.price)} ${esc(o.unit)}</span>
     </div>
     <h3 class="sky-title">${esc(o.title)}</h3>
@@ -2507,10 +2559,45 @@ function stackPreview(input){
   img.style.display='block';ph.style.display='none';
 }
 
+function toggleShareFields(){
+  const on=$('#st-auto').checked;
+  $('#st-share-fields').style.display=on?'':'none';
+  if(on) loadMyNodes();
+}
+
+async function loadMyNodes(){
+  const sel=$('#st-node'); if(!sel) return;
+  const keep=sel.value;
+  try{
+    const st=await api('/api/state');
+    const mine=(st.workers||[]).filter(w=>w.mine);
+    sel.innerHTML='<option value="">不绑定节点</option>'+mine.map(w=>
+      `<option value="${esc(w.id)}">${esc(w.name||w.id)} · ${w.online?'在线':'离线'}</option>`).join('');
+    if(keep&&mine.some(w=>w.id===keep)) sel.value=keep;
+    $('#st-node-hint').textContent=mine.length
+      ? `你有 ${mine.length} 台节点；离线节点会排队等待上线。`
+      : '你还没有绑定节点，可以只共享场景任务。';
+  }catch(e){ $('#st-node-hint').textContent='节点列表读取失败：'+e }
+}
+
 $('#st-publish').onclick=async()=>{
   const btn=$('#st-publish'), msg=$('#st-msg');
   const title=$('#st-title').value.trim();
   if(!title){msg.textContent='标题不能为空';return}
+  const auto=$('#st-auto').checked, tpl={};
+  let nodeID='';
+  if(auto){
+    nodeID=$('#st-node').value.trim();
+    const scene=$('#st-scene').value.trim();
+    if(scene) tpl.scene=scene;
+    const m=$('#st-frames').value.trim().match(/^(\d+)\s*[-~至]\s*(\d+)$/);
+    if(m){tpl.from=+m[1];tpl.to=+m[2]}
+    const samples=Number($('#st-samples').value);
+    if(Number.isFinite(samples)&&samples>0) tpl.samples=samples;
+    if(!nodeID&&!Object.keys(tpl).length){
+      msg.textContent='开通自动共享需要绑定节点或填写场景任务';return;
+    }
+  }
   const fd=new FormData();
   fd.set('category',ST_CAT);
   fd.set('title',title);
@@ -2518,6 +2605,11 @@ $('#st-publish').onclick=async()=>{
   fd.set('spec',$('#st-spec').value.trim());
   fd.set('price',$('#st-price').value||'0');
   fd.set('unit',$('#st-unit').value);
+  if(auto){
+    fd.set('auto_share','1');
+    if(nodeID) fd.set('node_id',nodeID);
+    if(Object.keys(tpl).length) fd.set('scene',JSON.stringify(tpl));
+  }
   const img=$('#st-image').files[0];
   if(img) fd.append('image',img);
   btn.disabled=true;msg.textContent='发布中…';
@@ -2526,6 +2618,8 @@ $('#st-publish').onclick=async()=>{
     const t=await r.text();let d=null;try{d=JSON.parse(t)}catch(e){}
     if(!r.ok) throw (d&&d.error)||t;
     $('#st-title').value='';$('#st-body').value='';$('#st-spec').value='';
+    $('#st-auto').checked=false;toggleShareFields();
+    $('#st-node').value='';$('#st-scene').value='';$('#st-frames').value='';$('#st-samples').value='';
     $('#st-image').value='';stackPreview($('#st-image'));
     msg.textContent='已发布，星海里已经能看到这条服务。';
     paintSky(true);
@@ -2539,6 +2633,199 @@ async function delOffer(id){
     await api('/api/offers/'+encodeURIComponent(id),{method:'DELETE'});
     paintSky(true);
   }catch(e){alert('删除失败：'+e)}
+}
+
+/* ---------------- 星空：挂牌详情、买卖会话与自动共享直用 ---------------- */
+let OD=null, OD_CHAT=null;
+function parseScene(s){
+  try{const v=JSON.parse(s||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}
+  catch(e){return {}}
+}
+function skyFlash(text){
+  const el=document.createElement('div');
+  el.className='card';
+  el.style.cssText='position:fixed;right:18px;bottom:18px;z-index:9999;max-width:360px;'+
+    'padding:12px 16px;font-size:12.5px;line-height:1.6';
+  el.textContent=text;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),4500);
+}
+function closeOfferPanel(){
+  $('#offerpanel').style.display='none';
+  OD=null;OD_CHAT=null;
+}
+$('#od-close').onclick=closeOfferPanel;
+
+async function openOffer(id){
+  let o=SKY_OFFERS.find(x=>x.id===id);
+  if(!o){
+    try{o=(await api('/api/offers/'+encodeURIComponent(id))).offer}
+    catch(e){skyFlash('读取共享失败：'+e);return}
+  }
+  if(!o){skyFlash('共享不存在');return}
+  OD=o;OD_CHAT=null;
+  $('#od-chat').style.display='none';
+  $('#od-convs').style.display='none';
+  renderOfferDetail();
+  $('#offerpanel').style.display='block';
+}
+
+function renderOfferDetail(){
+  const o=OD;
+  if(!o){
+    $('#od-title').textContent='我的会话';
+    $('#od-info').innerHTML='';$('#od-actions').innerHTML='';
+    return;
+  }
+  const tpl=parseScene(o.scene), keys=Object.keys(tpl);
+  const share=o.auto_share
+    ? '<span class="tag on">已开通自动共享</span> <span class="hint">买家可直接使用，无需先沟通。</span>'
+    : '<span class="tag off">未开通自动共享</span> <span class="hint">请先联系卖家协商。</span>';
+  $('#od-title').textContent=o.title;
+  $('#od-info').innerHTML=`
+    <div class="hint">${esc(CAT_LABEL[o.category]||o.category)} · ${f2(o.price)} ${esc(o.unit)}
+      · 卖家 ${esc(o.seller)} · ${fts(o.created_at)}</div>
+    ${o.spec?`<div class="postbody" style="white-space:pre-wrap;margin-top:8px">${esc(o.spec)}</div>`:''}
+    ${o.body?`<div class="postbody" style="white-space:pre-wrap;margin-top:8px">${esc(o.body)}</div>`
+      :'<div class="hint" style="margin-top:8px">卖家未填写简介和联系方式。</div>'}
+    <div style="margin-top:10px">${share}</div>
+    ${o.node_id?`<div class="hint mono" style="margin-top:6px">共享节点 ${esc(o.node_id)}</div>`:''}
+    ${keys.length?`<div class="hint mono" style="margin-top:6px">场景模板 ${esc(JSON.stringify(tpl))}</div>`:''}`;
+  const useLabel=o.node_id&&keys.length?'立即使用节点 / 场景':o.node_id?'立即使用节点':'立即使用场景任务';
+  $('#od-actions').innerHTML=o.mine
+    ? '<button class="ghost" onclick="openOfferConvs()">查看买家咨询</button>'
+    : `${o.auto_share?`<button class="btn auto" id="od-use">${useLabel}</button>`:''}
+       <button class="btn" id="od-chat-open">联系卖家</button>
+       <button class="ghost tiny" onclick="openOfferConvs()">我的会话</button>
+       ${o.auto_share?'':'<div class="hint" style="width:100%">卖家未开通自动共享，请先联系卖家协商。</div>'}`;
+  const use=$('#od-use'); if(use) use.onclick=useOffer;
+  const chat=$('#od-chat-open'); if(chat) chat.onclick=startOfferChat;
+}
+
+async function openOfferConvs(){
+  OD=null;OD_CHAT=null;
+  renderOfferDetail();
+  $('#od-chat').style.display='none';
+  $('#od-convs').style.display='';
+  $('#od-convs').innerHTML='<div class="empty">加载中…</div>';
+  $('#offerpanel').style.display='block';
+  try{
+    const d=await api('/api/offers/conversations');
+    const list=d.conversations||[];
+    $('#od-convs').innerHTML=list.length?list.map(c=>`
+      <button class="ghost od-conv" onclick="openChatFromList('${esc(c.id)}')">
+        <b>${esc(c.title||c.offer_id)}</b> <span class="tag">${esc(c.peer)}</span>
+        <div class="hint">${esc(c.last_body||'还没有消息')} · ${fts(c.updated_at)}</div>
+      </button>`).join('')
+      :'<div class="empty">还没有会话。点开一条共享，选择「联系卖家」发起对话。</div>';
+  }catch(e){$('#od-convs').innerHTML=`<div class="empty">读取失败：${esc(e)}</div>`}
+}
+
+async function openChatFromList(cid){
+  try{
+    const d=await api('/api/offers/conversations/'+encodeURIComponent(cid));
+    OD=d.offer||null;OD_CHAT=cid;
+    renderOfferDetail();
+    $('#od-title').textContent=(OD?OD.title:'共享')+' · 会话';
+    $('#od-convs').style.display='none';
+    $('#od-chat').style.display='';
+    $('#od-chat-head').textContent='与 '+((d.conversation&&d.conversation.peer)||'对方')+' 沟通';
+    renderOfferMessages(d.messages||[]);
+  }catch(e){skyFlash('打开会话失败：'+e)}
+}
+
+async function startOfferChat(){
+  if(!OD) return;
+  if(OD.mine){openOfferConvs();return}
+  const btn=$('#od-chat-open'); if(btn) btn.disabled=true;
+  try{
+    const d=await post('/api/offers/'+encodeURIComponent(OD.id)+'/conversation',{});
+    OD_CHAT=d.conversation.id;
+    $('#od-convs').style.display='none';
+    $('#od-chat').style.display='';
+    $('#od-chat-head').textContent='与 '+(d.conversation.peer||OD.seller)+' 沟通';
+    renderOfferMessages(d.messages||[]);
+    $('#od-chat-body').focus();
+  }catch(e){skyFlash('发起会话失败：'+e)}
+  finally{if(btn) btn.disabled=false}
+}
+
+async function loadOfferChat(cid){
+  if(!cid) return;
+  try{
+    const d=await api('/api/offers/conversations/'+encodeURIComponent(cid));
+    if(d.conversation) $('#od-chat-head').textContent='与 '+(d.conversation.peer||'对方')+' 沟通';
+    renderOfferMessages(d.messages||[]);
+  }catch(e){$('#od-chat-msg').textContent='刷新失败：'+e}
+}
+
+function renderOfferMessages(msgs){
+  const box=$('#od-chat-list');
+  box.innerHTML=msgs.length?msgs.map(m=>`
+    <div class="od-msg${m.mine?' me':''}">
+      <div class="od-who">${esc(m.sender)} · ${fts(m.created_at)}</div>${esc(m.body)}
+    </div>`).join(''):'<div class="empty">还没有消息，先打个招呼吧。</div>';
+  box.scrollTop=box.scrollHeight;
+}
+
+async function sendOfferChat(){
+  if(!OD_CHAT) return;
+  const input=$('#od-chat-body'), body=input.value.trim();
+  if(!body){$('#od-chat-msg').textContent='写点内容再发送';return}
+  const btn=$('#od-chat-send');
+  btn.disabled=true;$('#od-chat-msg').textContent='发送中…';
+  try{
+    await post('/api/offers/conversations/'+encodeURIComponent(OD_CHAT),{body});
+    input.value='';$('#od-chat-msg').textContent='';
+    await loadOfferChat(OD_CHAT);
+  }catch(e){$('#od-chat-msg').textContent='发送失败：'+e}
+  finally{btn.disabled=false}
+}
+$('#od-chat-send').onclick=sendOfferChat;
+$('#od-chat-refresh').onclick=()=>loadOfferChat(OD_CHAT);
+
+async function useOffer(){
+  if(!OD) return;
+  const btn=$('#od-use'); if(btn) btn.disabled=true;
+  try{
+    const d=await api('/api/offers/'+encodeURIComponent(OD.id)+'/use',{method:'POST'});
+    const o=d.offer||OD;
+    closeOfferPanel();
+    applyOfferUse(o);
+  }catch(e){skyFlash('使用共享失败：'+e)}
+  finally{if(btn) btn.disabled=false}
+}
+
+function applyOfferUse(o){
+  const tpl=parseScene(o.scene), keys=Object.keys(tpl);
+  const view=CAT_LABEL[o.category]?o.category:'render';
+  if(o.node_id) TARGET=o.node_id;
+  if(view==='render'||view==='build'){
+    if(view==='render'&&(tpl.scene||tpl.from||tpl.to||tpl.samples)){
+      const k=$('#jobkind'); if(k) k.value='blender';
+    }
+    const names=view==='build'?['command','output','timeout']
+      :['scene','engine','samples','from','to','fps','percent'];
+    names.forEach(n=>{
+      if(tpl[n]===undefined||tpl[n]===null||tpl[n]==='') return;
+      const el=$('#f [name='+n+']'); if(el) el.value=tpl[n];
+    });
+    if(view==='build'&&!tpl.command&&tpl.scene){
+      const el=$('#f [name=command]'); if(el) el.value=tpl.scene;
+    }
+  }
+  const prompt=tpl.prompt||tpl.scene||'';
+  if(view==='image'&&prompt&&$('#img-prompt')) $('#img-prompt').value=prompt;
+  if(view==='video'&&prompt&&$('#vid-prompt')) $('#vid-prompt').value=prompt;
+  if(view==='api'&&prompt&&$('#api-prompt')) $('#api-prompt').value=prompt;
+  showView(view);
+  if(view==='render'||view==='build') syncKind();
+  if(o.node_id) updateTargetChip();
+  const bits=[];
+  if(o.node_id) bits.push('已绑定卖家节点');
+  if(keys.length) bits.push('已预填场景任务');
+  skyFlash(bits.length?bits.join('，')+'；请选择素材后提交，费用按平台实际用量结算。'
+    :'已获得共享使用授权。');
 }
 
 /* ---------------- 官方算力信息条 ---------------- */
@@ -3238,7 +3525,8 @@ function jobHTML(j){
 }
 const COMM_EVENT={'job.created':'任务创建','job.done':'任务完成','job.failed':'任务失败','job.cancelled':'任务取消',
   'seg.dispatched':'派发给节点','seg.fetching':'节点取源','seg.running':'节点开始执行','seg.uploading':'节点回传',
-  'seg.done':'分片完成','seg.failed':'分片失败','seg.settled':'结算'};
+  'seg.done':'分片完成','seg.failed':'分片失败','seg.settled':'结算',
+  'offer.auto_share':'共享自动交付'};
 const COMM_ACTOR={buyer:'买方',seller:'卖方',server:'平台'};
 function commDetail(e){
   try{
