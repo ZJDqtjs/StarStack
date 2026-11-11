@@ -344,19 +344,17 @@ func (s *Server) vmFinalizeLocked(inst *vm.Instance, status string, endAt int64,
 		}
 	}
 	if spent > 0 {
+		// The seller keeps 90% of the metered rental; the platform fee is the
+		// remainder and is never credited to anybody. Runtime seconds go into the
+		// node's VM split, not into the task/video-second counter.
 		earn := round4(spent * (1 - vmPlatformFee))
 		if owner, err := s.st.NodeOwner(inst.NodeID); err == nil && owner != "" {
-			if bal, err := s.st.AddCredits(owner, earn); err == nil {
-				s.st.Ledger(&store.Entry{TS: now, Kind: store.Earn, UserID: owner,
-					NodeID: inst.NodeID, JobID: inst.ID, Amount: earn, Balance: bal,
-					Note: fmt.Sprintf("云主机 %s 提供 %.0f 秒算力（平台费 %.0f%%）",
-						inst.Name, secs, vmPlatformFee*100)})
-			}
-			s.st.AddNodeEarnings(inst.NodeID, secs, earn)
-			if wd := s.workers[inst.NodeID]; wd != nil {
-				wd.Earned = round4(wd.Earned + earn)
-				wd.Billed += secs
-			}
+			c := Contribution{OwnerID: owner, NodeID: inst.NodeID, JobID: inst.ID,
+				Source: ContribVM, Seconds: secs, Amount: earn,
+				Note: fmt.Sprintf("云主机 %s 提供 %.0f 秒算力（平台费 %.0f%%）",
+					inst.Name, secs, vmPlatformFee*100)}
+			s.recordContribution(c)
+			applyContributionLocked(s.workers[inst.NodeID], c)
 		}
 	}
 	s.saveVM(inst)

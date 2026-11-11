@@ -23,7 +23,7 @@
 | 存储 | 本地磁盘 + HTTP 分发源片 | demo 够用，预留 MinIO/NFS |
 | 渲染 | **ffmpeg + Blender 子进程，不自研渲染器** | PR/FCPXML 时间线还原、Blender 帧渲染都复用成熟引擎；平台负责按秒/按帧切片、分发、校验和合成 |
 | 模型推理 | **OpenAI 兼容网关，不自研推理内核** | llama.cpp / vLLM / Ollama 作为上游接入；平台只做按模型的低价路由、token 计量与 90/10 分成。MoE 用 `--n-cpu-moe` 或多机 `rpc-server` 部署 |
-| 前端 | `go:embed` 单页 HTML | 零构建链，二进制里自带仪表盘 |
+| 前端 | `go:embed` 单页 HTML + `web/assets/` 静态资源 | 零构建链，二进制里自带仪表盘与 ComfyUI 工作台的 JS/CSS |
 | 状态 | **SQLite（`modernc.org/sqlite`，纯 Go 免 CGO）+ 内存态热数据** | 账户/会话/节点/任务/分片/流水要能跨重启存活，否则"租约回收"和"按量结算"都没法验证；纯 Go 驱动才能继续维持"交叉编译一个二进制"这条前提。写路径是 write-through：内存调度照常，落库只做快照 |
 
 ## 跑起来
@@ -88,7 +88,48 @@ Broker 本地路径输入、待认领列表和基线对比，Agent 命令行也�
 
 ```bash
 go test ./internal/hub/    # 价格权重确实改变选择、Excluded/停派、预扣口径、冻结价结算、
-                           # 公平份额、任务墙钟、硬约束字段
+                           # 公平份额、任务墙钟、硬约束字段、工作流 CRUD 与代理鉴权
+```
+
+## 生图 / 生视频 · ComfyUI 工作台
+
+侧栏「生图 / 生视频」右侧的**预设工作台**是一个内嵌的、与 ComfyUI 官方操作一致的节点画布，
+不再只是复制提示词。启动本机 ComfyUI 后把 Broker 指过去即可：
+
+```bash
+python main.py --listen 127.0.0.1 --port 8188   # ComfyUI 本体
+
+./bin/starstack-server.exe --data ./data --addr :8787 \
+  --comfyui http://127.0.0.1:8188               # 或环境变量 STARSTACK_COMFYUI
+```
+
+Broker 把官方 `server.py` 的路由原样代理到 `/comfyui/api/`（复用平台登录会话，未登录一律 401）：
+`/object_info`、`/prompt`、`/upload/image`、`/view`、`/history`、`/queue`、`/interrupt`、
+`/system_stats`、`/extensions`、`/workflow_templates` 以及 WebSocket `/ws`（进度、节点高亮、错误信息）。
+Nginx 配置已为 `/comfyui/api/ws` 单独放行 `Upgrade` 头。
+
+页面能力：
+
+- **导入**：官方 `workflow.json`（UI 格式）、「导出 (API 格式)」的 `prompt.json`、含
+  `workflow`/`prompt` 元数据的 ComfyUI 输出 PNG；支持文件选择、拖放到画布/卡片、JSON 粘贴格式校验。
+- **编辑**：滚轮缩放、空白/中键平移、双击或右键搜索添加节点、拖拽连线与类型校验、
+  控件转输入、折叠/静音/绕过/复制粘贴/多选删除、种子 `control_after_generate`，
+  与官方 `loadGraphData` / `graphToPrompt` 的图结构语义一致。
+- **部署 / 预设 / 草稿**：`部署` 把当前图设为该版块默认工作流，表单的提示词、画幅、
+  风格、时长会写进对应节点；`存预设`、`存草稿` 落到 `comfy_workflows` 表
+  （未登录时退回浏览器本地存储），卡片上的三个 Tab 分别对应模板配置 / 我的预设 / 保存草稿。
+- **执行**：`运行 (Queue Prompt)` 或 Ctrl+Enter 转成官方 API 格式 POST `/prompt`，
+  `/ws` 实时回报 `executing` / `progress` / `executed` / `execution_error`，
+  结果通过 `/view` 显示在「结果」面板；可导出 UI / API 两种 JSON 到官方 ComfyUI 复现。
+- **离线**：没连上 ComfyUI 时自动使用内置节点库，仍可编辑、导入、导出与部署；
+  连上后 `/object_info` 会覆盖为服务器真实的节点定义（含自定义节点与模型列表）。
+
+验收（不需要浏览器服务与 ComfyUI）：
+
+```bash
+node scripts/verify-comfy-workbench.cjs     # 模板 / UI↔API 往返 / 真实工作流导入
+go test ./internal/hub/ -run TestComfy      # 工作流 CRUD、静态资源、代理鉴权
+# scripts/comfy-workbench-smoke.html 可用无头 Chrome --dump-dom 跑真实 DOM 冒烟
 ```
 
 ## 部署到公网服务器
@@ -153,14 +194,21 @@ Agent 只是往这个 base 后面拼 `/api/...`）。节点的注册、长轮询
 POST /api/nodes/launch      ->  {node_id, code, script, worker, ready}
 GET  /launch/<code>/<os>/<arch>  -> 启动脚本（带上一次性启动码）
 GET  /dl/starstack-worker-<os>-<arch>[.exe] -> 节点程序，来自 --node-bin-dir
+GET    /api/contribution     -> 卖家贡献（账户）与节点贡献（设备）两层口径、按来源汇总
+DELETE /api/nodes/{id}       -> 删除自己的节点（账本历史保留，写入注销墓碑）
 ```
 
-启动码是比接入令牌弱得多的凭证：只授权**一个**节点 ID、只属于铸出它的那个账户、
-30 分钟内有效、Agent 注册成功那一刻就花掉。绑定完成后 Broker 发回该节点自己的
-凭据，Agent 存成 `<work>/node-<id>.key`；之后重新双击同一个脚本不再需要任何码，
-`admitAgent` 认这台机器是"回来的"。文件名按节点 ID 走，因为同一台机器可能双击两个
-不同节点的脚本而共用一个 `--work` 目录——共用 `node.key` 会把 A 的凭据递给 B，
-而 Broker 正是把它当作"B 是我认识的节点"的证据。
+**一个账户 + 一台物理机器 = 一个节点**。Agent 上报稳定设备指纹（Windows MachineGuid /
+Linux machine-id / macOS IOPlatformUUID 的哈希），Broker 在 `hello` 时据此决定节点 ID：
+重复双击脚本、重启进程、或重新点「下载节点包」都回到同一个节点，价格、信誉和贡献历史
+连续累计；同一设备已被别的账户占用则直接拒绝，不会被抢走。旧版 Agent 不上报指纹时
+保持原行为，控制台会把这类节点标成「旧版节点」供手动删除。
+
+启动码是比接入令牌弱得多的凭证：只授权铸出它的那个账户、30 分钟内有效、Agent 注册
+成功那一刻就花掉；节点 ID 由 Broker 按设备指纹决定，脚本里的随机 `web-xxx` 只是下载
+句柄。绑定完成后 Broker 发回该节点自己的凭据，Agent 存成 `<work>/node-<device_id>.key`
+（按设备而非节点编号命名，节点被归并改名后仍能找回）；之后重新双击同一个脚本不再需要
+任何码，`admitAgent` 认这台机器是"回来的"。
 
 脚本里不含令牌，也不问配对码；Windows 那份刻意只写 ASCII：cmd.exe 按机器自身的
 OEM 代码页读 `.cmd`，UTF-8 中文在 GBK 机器上会变成解析错误（实测 `echo` 一行价格
@@ -510,7 +558,13 @@ score = 实测吞吐 × 信誉 × （可行池均价 ÷ 该节点单价）^ Cost
 每个分片完成并经 Broker 重算 SHA-256 一致后，按 `该分片视频秒数 × 派发时冻结的 seg.PriceAt`
 真实结算，任务结束时把预扣与实结的差额退还。用冻结价而不是"该节点当时的单价"是刻意的：
 买方授权的是这一片在这个价上的算力，节点跑一半涨价不该由买方买单。
-提供者侧同时记两张账：节点累计收益点、已结算算力秒数，账单页可查。
+提供者侧按来源记账，避免把两种单位混成一个数：**节点贡献（设备维度）**是
+`nodes.earned* / billed_*_sec`，任务记视频/墙钟秒、云主机记运行秒，分开累计；
+**卖家贡献（账户维度）**是 `ledger` 中该用户全部 `Earn` 流水之和（`source = task | vm | model`），
+账单页「贡献概览」直接查全量账本，不再用最近一页流水冒充总额。三者比例不同：任务分片
+100% 给节点 owner、云主机给卖方 90%、模型上游给 provider 90%（后两者平台留 10%）。
+模型上游没有节点，所以「卖家贡献 = Σ 当前名下节点贡献 + 其它收益」，其它收益包含
+模型上游、已删除节点的历史收益与升级前旧账。
 基线对比跑在 Broker 自己机器上、不产生分片，因此**不计费**——这条在代码注释里写明，
 免得答辩时被问"你自己单机跑一遍也要收钱？"。
 

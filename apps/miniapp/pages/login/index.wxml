@@ -1,6 +1,6 @@
 <view class="wrap">
   <view style="text-align:center; padding: 40rpx 0 20rpx">
-    <view style="width:88rpx;height:88rpx;border-radius:20rpx;background:var(--ink);color:var(--bg);display:inline-flex;align-items:center;justify-content:center;font-size:40rpx;font-weight:650">星</view>
+    <view style="width:88rpx;height:88rpx;border-radius:20rpx;background:linear-gradient(135deg,#5a6bff,#8b5cf6);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:40rpx;font-weight:650">星</view>
     <view style="font-size:48rpx;font-weight:650;color:var(--ink);margin-top:24rpx">星栈算力</view>
     <view class="hint" style="margin-top:12rpx">把闲置的机器接进来按量计价，用别人的算力跑任务，按实测用量结算。</view>
   </view>

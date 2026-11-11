@@ -1,8 +1,29 @@
 <view class="wrap tabpage">
-  <h1>账单</h1>
-  <view class="lead">账户流水与按节点结算的收益明细；校验不通过的分片不结算。</view>
+  <view class="hero account">
+    <view class="hero-main">
+      <text class="hero-eyebrow">BILLING & LEDGER</text>
+      <view class="hero-title">账单与收益</view>
+      <view class="hero-desc">账户流水与按节点结算的收益明细；校验不通过的分片不结算。</view>
+    </view>
+  </view>
 
   <view class="card" wx:if="{{err}}"><view class="err">{{err}}</view></view>
+
+  <view class="card" wx:if="{{contrib}}">
+    <view class="card-head"><text class="kicker">Contribution</text><text>贡献概览</text></view>
+    <view class="row">
+      <view style="flex:1">
+        <view class="kicker">卖家贡献（账户）</view>
+        <view style="font-size:34rpx;font-weight:600;color:var(--ink);margin-top:8rpx">{{contrib.total}} 点</view>
+      </view>
+      <view style="flex:1">
+        <view class="kicker">Σ 节点贡献（设备）</view>
+        <view style="font-size:34rpx;font-weight:600;color:var(--ink);margin-top:8rpx">{{contrib.nodes}} 点</view>
+      </view>
+    </view>
+    <view class="hint" style="margin-top:12rpx">任务算力 {{contrib.task}} · 云主机 {{contrib.vm}} · 模型上游 {{contrib.model}} · 其它收益 {{contrib.other}}</view>
+    <view class="hint" style="margin-top:10rpx">卖家贡献是账本全部收益之和，节点贡献只算各台机器已结算的算力；「其它收益」包含模型上游、已删除节点的历史收益和升级前的旧账。在线挂机不计贡献。</view>
+  </view>
 
   <view class="card" wx:if="{{canRecharge}}">
     <view class="card-head"><text class="kicker">Recharge</text><text>充值算力点</text></view>
@@ -31,7 +52,7 @@
   </view>
 
   <view class="card">
-    <view class="card-head"><text class="kicker">Earnings</text><text>我的节点收益</text></view>
+    <view class="card-head"><text class="kicker">Earnings</text><text>节点贡献明细（最近记录）</text></view>
     <view class="empty" wx:if="{{!loading && !earn.length}}">暂无收益</view>
     <view class="listrow" wx:for="{{earn}}" wx:key="index" wx:for-item="e">
       <view class="grow">

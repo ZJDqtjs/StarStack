@@ -42,7 +42,16 @@ if (-not (Test-Path (Join-Path $sdk 'platforms\android-34'))) { Write-Host '[ERR
 
 Write-Host '[build] gradle assembleDebug'
 $android = Join-Path $root 'android'
-$p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','gradlew.bat assembleDebug --no-daemon' -WorkingDirectory $android -NoNewWindow -Wait -PassThru -RedirectStandardOutput $log -RedirectStandardError $errLog
+# stop stale gradle daemons left by a timed-out job so they cannot hold locks
+$env:GRADLE_OPTS = '-Dorg.gradle.jvmargs=-Xmx1536m -Dfile.encoding=UTF-8'
+try { & cmd.exe /c 'gradlew.bat --stop' | Out-Host } catch { }
+$p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','gradlew.bat assembleDebug --no-daemon --console=plain' -WorkingDirectory $android -NoNewWindow -PassThru -RedirectStandardOutput $log -RedirectStandardError $errLog
+# 15-minute cap: fail fast if the wrapper download or dependency resolution hangs
+if (-not $p.WaitForExit(900000)) {
+  Write-Host '[build] gradle timeout after 15m; killing process tree'
+  & cmd.exe /c "taskkill /T /F /PID $($p.Id)" | Out-Host
+  exit 7
+}
 if ($p.ExitCode -ne 0) {
   Write-Host "[build] gradle exited $($p.ExitCode); last lines:"
   if (Test-Path $log) { Get-Content $log -Tail 25 | Out-Host }

@@ -4,10 +4,10 @@
   right: 0;
   bottom: 0;
   z-index: 100;
-  background: rgba(255, 255, 255, 0.97);
-  border-top: 1rpx solid #e5e5e2;
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1rpx solid #e7ebf5;
   padding-bottom: env(safe-area-inset-bottom);
-  box-shadow: 0 -6rpx 24rpx rgba(0, 0, 0, 0.04);
+  box-shadow: 0 -6rpx 24rpx rgba(20, 27, 51, 0.06);
 }
 
 .items {
@@ -36,7 +36,7 @@
 }
 
 .item.on .pill {
-  background: #f3f3f1;
+  background: linear-gradient(135deg, rgba(90, 107, 255, 0.16), rgba(139, 92, 246, 0.1));
 }
 
 .icon {
@@ -47,27 +47,27 @@
 .label {
   font-size: 24rpx;
   line-height: 1.2;
-  color: #8b8b88;
+  color: #8b96b1;
 }
 
 .item.on .label {
-  color: #161616;
+  color: #5a6bff;
   font-weight: 600;
 }
 
 @media (prefers-color-scheme: dark) {
   .tabbar {
-    background: rgba(19, 19, 21, 0.97);
-    border-top-color: #262629;
+    background: rgba(15, 21, 38, 0.97);
+    border-top-color: #222c45;
     box-shadow: 0 -6rpx 24rpx rgba(0, 0, 0, 0.35);
   }
   .item.on .pill {
-    background: #1b1b1f;
+    background: rgba(90, 107, 255, 0.22);
   }
   .label {
-    color: #86868a;
+    color: #7785a5;
   }
   .item.on .label {
-    color: #f3f3f2;
+    color: #8fa2ff;
   }
 }

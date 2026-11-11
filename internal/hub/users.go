@@ -435,8 +435,9 @@ func (s *Server) handlePending(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"pending": out})
 }
 
-// handleNodeOp is PUT /api/nodes/{id} with {"price": 0.8}: a provider re-prices
-// its own machine, and the new rate applies to segments matched from now on.
+// handleNodeOp is PUT /api/nodes/{id} with {"price": 0.8} (re-price, applied to
+// segments matched from now on) and DELETE /api/nodes/{id} (retire one's own
+// node; see identity.go). Both check ownership before touching anything.
 func (s *Server) handleNodeOp(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		if id, ok := commNodeSuffix(r.URL.Path); ok {
@@ -452,8 +453,30 @@ func (s *Server) handleNodeOp(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if r.Method == http.MethodDelete {
+		id := strings.TrimPrefix(r.URL.Path, "/api/nodes/")
+		if id == "" || strings.Contains(id, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		owner, err := s.st.NodeOwner(id)
+		if errors.Is(err, store.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, jsonErr("读取失败"), 500)
+			return
+		}
+		if owner != u.ID {
+			http.Error(w, jsonErr("这台机器不属于你"), 403)
+			return
+		}
+		s.deleteNode(w, r, u, id)
+		return
+	}
 	if r.Method != http.MethodPut {
-		http.Error(w, jsonErr("只支持 PUT"), 405)
+		http.Error(w, jsonErr("只支持 PUT / DELETE"), 405)
 		return
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/api/nodes/")
@@ -680,15 +703,13 @@ func (s *Server) settleSegment(j *Job, seg *Seg, wd *Worker) {
 	// still counts against the buyer's spend but the points go nowhere. A real
 	// platform would hold them in escrow until the machine finds an owner; here
 	// they are simply retained, which is why the demo always pairs its nodes first.
+	// Once claimed, the payout goes through recordContribution: one ledger row
+	// with its source, and the same amount mirrored into this node's task split.
 	if owner, err := s.st.NodeOwner(wd.ID); err == nil && owner != "" {
-		if bal, err := s.st.AddCredits(owner, cost); err == nil {
-			s.st.Ledger(&store.Entry{TS: time.Now().Unix(), Kind: store.Earn, UserID: owner,
-				NodeID: wd.ID, JobID: j.ID, Amount: cost, Balance: bal,
-				Note: note})
-		}
-		s.st.AddNodeEarnings(wd.ID, billed, cost)
-		wd.Earned = round4(wd.Earned + cost)
-		wd.Billed += billed
+		c := Contribution{OwnerID: owner, NodeID: wd.ID, JobID: j.ID,
+			Source: ContribTask, Seconds: billed, Amount: cost, Note: note}
+		s.recordContribution(c)
+		applyContributionLocked(wd, c)
 	}
 	s.segComm(seg, wd.ID, "server", "seg.settled", map[string]any{
 		"cost": cost, "price": price, "billed": billed, "note": note})

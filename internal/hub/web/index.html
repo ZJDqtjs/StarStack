@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>星栈算力 · 闲置算力共享平台</title>
+<link rel="stylesheet" href="assets/comfy.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23171717'/%3E%3Ctext x='16' y='22' font-family='sans-serif' font-size='16' font-weight='600' fill='%23fff' text-anchor='middle'%3E%E6%98%9F%3C/text%3E%3C/svg%3E">
 <script>
 /* 主题必须在首帧前定下来，否则深色用户会先看到一帧白底 */
@@ -349,7 +350,7 @@ a.btn:hover{text-decoration:none}
   color:var(--bili-pink);font-weight:500}
 .sky-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
   gap:22px 16px;align-items:start}
-.sky-card{min-width:0}
+.sky-card{min-width:0;cursor:pointer}
 .sky-card .sky-cover{position:relative;display:block;aspect-ratio:16/9;border-radius:10px;
   overflow:hidden;background:var(--soft);transition:transform .18s ease,box-shadow .18s ease}
 .sky-card:hover .sky-cover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(0,0,0,.13)}
@@ -376,6 +377,15 @@ a.btn:hover{text-decoration:none}
 .sky-meta .oname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
 .sky-spec{margin:5px 2px 0;font:400 11px/1.5 var(--mono);color:var(--faint);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sky-card .sky-auto{position:absolute;left:7px;bottom:7px;padding:2px 7px;border-radius:4px;
+  background:rgba(0,168,112,.9);color:#fff;font:500 10.5px/1.6 var(--mono)}
+.od-msg{padding:8px 10px;margin-bottom:8px;border-radius:8px;background:var(--inset);
+  font-size:12.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.od-msg.me{background:var(--bili-blue-soft)}
+.od-msg .od-who{font-size:11px;color:var(--mute);margin-bottom:3px}
+#od-chat-list{max-height:240px;overflow:auto;border:1px solid var(--hair);border-radius:8px;
+  padding:10px;margin:8px 0}
+.od-conv{display:block;width:100%;text-align:left;white-space:normal;margin-bottom:8px}
 
 .sky-form{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:24px;
   box-shadow:var(--shadow);margin-bottom:30px;
@@ -617,8 +627,6 @@ a.btn:hover{text-decoration:none}
 .nx .nx-hero>*{position:relative;z-index:1}
 .nx .nx-hero-image{background:linear-gradient(115deg,#e7548e,#a45ad8 52%,#5b6cff)}
 .nx .nx-hero-video{background:linear-gradient(115deg,#0d8fa8,#3f65d9 52%,#8b5cf6)}
-.nx .nx-hero-render{background:linear-gradient(115deg,#2f5bd8,#5b6cff 48%,#9b5de5)}
-.nx .nx-hero-build{background:linear-gradient(115deg,#34406f,#5a6bff 55%,#17a2a2)}
 .nx .nx-hero-forum{background:linear-gradient(115deg,#d8547f,#f0728b 48%,#f6a06a)}
 .nx .nx-hero-me{background:linear-gradient(115deg,#3b3f8f,#6a5cf0 52%,#c05aa8)}
 .nx .nx-hero-jobs{background:linear-gradient(115deg,#1f6f8b,#3f65d9 55%,#7a5cf0)}
@@ -783,6 +791,174 @@ a.btn:hover{text-decoration:none}
 .nx .quote .big{color:var(--nx-brand)}
 .nx .quote .hint{border-top-color:var(--nx-line)}
 .nx .val{color:var(--nx-ink)}
+
+/* ---------- 渲染 / 编排工作台 ----------
+   参考 fal.ai / Replicate 的 playground（类型卡片 + 右侧费用面板）、
+   云渲染农场的拖拽上传与实时估价、Vercel / GitHub Actions 的流水线视觉。 */
+.wb-sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.wb-pagehead{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 18px}
+.wb-pagehead-ic{width:52px;height:52px;flex:0 0 52px;border-radius:14px;display:grid;place-items:center;
+  background:linear-gradient(135deg,#2f5bd8,#5b6cff 55%,#9b5de5);box-shadow:0 10px 24px rgba(90,107,255,.3)}
+.wb-pagehead-ic svg{width:24px;height:24px;stroke:#fff;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.wb-pagehead-build .wb-pagehead-ic{background:linear-gradient(135deg,#34406f,#5a6bff 55%,#17a2a2);
+  box-shadow:0 10px 24px rgba(23,162,162,.25)}
+.wb-pagehead-txt{min-width:0;flex:1}
+.wb-pagehead h1{margin:5px 0 4px;font-size:22px;font-weight:650;letter-spacing:-.7px;color:var(--nx-ink)}
+.wb-pagehead p{margin:0;font-size:12.5px;color:var(--nx-mute);line-height:1.7;max-width:660px}
+.wb-pagehead>.ghost{margin-left:auto}
+.wb-eyebrow{color:var(--nx-brand)}
+.wb-eyebrow::before{background:var(--nx-brand)}
+
+/* 任务类型卡片 */
+.wb-kinds{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 18px}
+#wb[data-svc=build] .wb-kinds{display:none}
+.wb-kind{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:5px;
+  padding:14px;border:1px solid var(--nx-line);border-radius:12px;background:var(--nx-card);
+  cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s,background .15s}
+.wb-kind:hover{border-color:var(--nx-line-2);box-shadow:var(--nx-shadow-sm)}
+.wb-kind.on{border-color:var(--nx-brand);
+  background:linear-gradient(135deg,rgba(90,107,255,.08),rgba(139,92,246,.05));
+  box-shadow:0 0 0 3px rgba(90,107,255,.13)}
+.wb-kind-ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+  background:var(--nx-soft);color:var(--nx-brand);margin-bottom:3px;transition:background .15s,color .15s}
+.wb-kind-ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.wb-kind.on .wb-kind-ic{background:linear-gradient(135deg,var(--nx-brand),var(--nx-brand-2));color:#fff}
+.wb-kind b{font-size:13px;font-weight:650;color:var(--nx-ink)}
+.wb-kind>span:not(.wb-kind-ic):not(.wb-kind-tag){font-size:11px;color:var(--nx-mute);line-height:1.55}
+.wb-kind-tag{margin-top:2px;padding:1px 7px;border-radius:5px;background:var(--nx-soft);
+  border:1px solid var(--nx-line);font:500 10px/1.6 var(--mono);color:var(--nx-brand)}
+.wb-kind.on .wb-kind-tag{background:rgba(90,107,255,.12);border-color:transparent}
+.wb-kind::after{content:"";position:absolute;top:11px;right:11px;width:16px;height:16px;border-radius:99px;
+  border:1.5px solid var(--nx-line-2);transition:background .15s,border-color .15s}
+.wb-kind.on::after{border-color:var(--nx-brand);background:var(--nx-brand);
+  box-shadow:inset 0 0 0 3px var(--nx-card)}
+
+/* 步骤指示 */
+.wb-steps{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.wb-step{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--nx-mute)}
+.wb-step b{width:20px;height:20px;border-radius:99px;display:grid;place-items:center;
+  border:1px solid var(--nx-line-2);background:var(--nx-card);font:600 10px var(--mono);color:var(--nx-mute)}
+.wb-step.cur{color:var(--nx-ink)}
+.wb-step.cur b{border-color:var(--nx-brand);color:var(--nx-brand);box-shadow:0 0 0 3px rgba(90,107,255,.13)}
+.wb-step.done{color:var(--nx-ok)}
+.wb-step.done b{background:var(--nx-ok);border-color:transparent;color:#fff}
+.wb-step-line{width:22px;height:1px;background:var(--nx-line-2)}
+
+/* 分节标题 */
+.wb-sec{display:flex;align-items:center;gap:9px;margin:22px 0 12px;
+  font-size:12.5px;font-weight:650;color:var(--nx-ink)}
+.wb-sec i{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;flex:0 0 20px;
+  background:var(--nx-soft);color:var(--nx-brand);font:600 10px var(--mono);font-style:normal}
+.wb-sec small{margin-left:auto;font:400 10px var(--mono);letter-spacing:.08em;
+  text-transform:uppercase;color:var(--nx-mute)}
+.wb-pick{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 10px}
+.wb-pick .btn{min-width:150px}
+.wb-pick-or{font-size:11.5px;color:var(--nx-mute)}
+
+/* 拖拽上传区 */
+.wb-drop{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:7px;padding:28px 16px;border:1.5px dashed var(--nx-line-2);border-radius:12px;
+  background:var(--nx-soft);cursor:pointer;text-align:center;
+  transition:border-color .15s,background .15s,box-shadow .15s}
+.wb-drop:hover,.wb-drop.drag{border-color:var(--nx-brand);background:rgba(90,107,255,.06)}
+.wb-drop:focus-visible{outline:none;border-color:var(--nx-brand);box-shadow:0 0 0 3px rgba(90,107,255,.16)}
+.wb-drop-ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:var(--nx-card);border:1px solid var(--nx-line);color:var(--nx-brand)}
+.wb-drop-ic svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.wb-drop-ph{display:flex;flex-direction:column;align-items:center;gap:7px}
+.wb-drop-ph b{font-size:13px;font-weight:650;color:var(--nx-ink)}
+.wb-drop-ph span{font-size:11.5px;color:var(--nx-mute)}
+.wb-drop.has-file{flex-direction:row;padding:13px 15px;border-style:solid;border-color:var(--nx-line);
+  background:var(--nx-card);text-align:left}
+.wb-drop.has-file:hover{border-color:var(--nx-brand)}
+.wb-file{display:flex;align-items:center;gap:10px;width:100%;min-width:0}
+.wb-file-ic{width:32px;height:32px;flex:0 0 32px;border-radius:8px;display:grid;place-items:center;
+  background:var(--nx-soft);color:var(--nx-brand)}
+.wb-file-ic svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.wb-file-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font:500 12.5px var(--mono);color:var(--nx-ink)}
+.wb-file-size{flex:0 0 auto;font:400 11px var(--mono);color:var(--nx-mute)}
+.wb-file-x{flex:0 0 auto;width:26px;height:26px;border-radius:7px;border:1px solid var(--nx-line);
+  background:var(--nx-card);color:var(--nx-mute);font-size:11px;display:grid;place-items:center;
+  transition:color .14s,border-color .14s}
+.wb-file-x:hover{color:var(--nx-bad);border-color:var(--nx-bad)}
+
+/* 高级设置折叠 */
+.wb-adv{margin:22px 0 0;border:1px solid var(--nx-line);border-radius:10px;background:var(--nx-soft)}
+.wb-adv summary{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;
+  font-size:12px;font-weight:650;color:var(--nx-body);list-style:none;user-select:none}
+.wb-adv summary::-webkit-details-marker{display:none}
+.wb-adv summary::before{content:"";width:3px;height:13px;border-radius:3px;
+  background:linear-gradient(180deg,var(--nx-brand),var(--nx-pink))}
+.wb-adv summary::after{content:"";margin-left:auto;border:solid var(--nx-mute);
+  border-width:0 1.5px 1.5px 0;padding:3px;transform:rotate(45deg);transition:transform .15s}
+.wb-adv[open] summary::after{transform:rotate(-135deg)}
+.wb-adv summary:hover{color:var(--nx-brand)}
+.wb-adv-body{padding:0 14px 14px}
+.wb-adv-body .fieldset{margin-top:6px}
+.wb-adv-body .fieldset legend{border-top:0;padding-top:4px}
+
+/* 编排：流水线与终端命令 */
+.wb-pipe{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:stretch;margin:0 0 16px}
+.wb-pipe-step{display:flex;flex-direction:column;gap:4px;padding:16px;border:1px solid var(--nx-line);
+  border-radius:12px;background:var(--nx-card);box-shadow:var(--nx-shadow-sm)}
+.wb-pipe-ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+  background:var(--nx-soft);color:var(--nx-brand);margin-bottom:6px}
+.wb-pipe-ic svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.wb-pipe-step b{font-size:13px;font-weight:650;color:var(--nx-ink)}
+.wb-pipe-step span{font-size:11.5px;color:var(--nx-mute);line-height:1.65}
+.wb-pipe-line{align-self:center;width:26px;height:2px;border-radius:2px;position:relative;
+  background:linear-gradient(90deg,var(--nx-brand),var(--nx-cyan))}
+.wb-pipe-line::after{content:"";position:absolute;right:-1px;top:-3px;border:solid var(--nx-cyan);
+  border-width:0 2px 2px 0;padding:3px;transform:rotate(-45deg)}
+.wb-cmd{display:flex;align-items:center;gap:9px;padding:0 12px;border:1px solid var(--nx-line-2);
+  border-radius:9px;background:var(--nx-soft);transition:border-color .15s,box-shadow .15s}
+.wb-cmd:focus-within{border-color:var(--nx-brand);box-shadow:0 0 0 3px rgba(90,107,255,.16)}
+.wb-cmd-ps{font:600 13px var(--mono);color:var(--nx-brand)}
+.wb-cmd input{border:0;background:transparent;height:40px;padding:0;font:12.5px var(--mono);color:var(--nx-ink)}
+.wb-cmd input:hover,.wb-cmd input:focus{border:0;box-shadow:none}
+.wb-cmd-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.wb-cmd-chip{height:27px;padding:0 11px;border:1px solid var(--nx-line);border-radius:999px;
+  background:var(--nx-card);color:var(--nx-body);font:500 11.5px var(--mono);transition:.14s}
+.wb-cmd-chip:hover{border-color:var(--nx-brand);color:var(--nx-brand);background:var(--nx-soft)}
+
+/* 费用摘要面板 */
+.wb-sumrows{margin:0 0 14px;border:1px solid var(--nx-line);border-radius:10px;overflow:hidden}
+.wb-sumrow{display:flex;justify-content:space-between;gap:12px;padding:9px 12px;
+  font-size:12px;background:var(--nx-soft)}
+.wb-sumrow+.wb-sumrow{border-top:1px solid var(--nx-line)}
+.wb-sumrow span{color:var(--nx-mute);flex:0 0 auto}
+.wb-sumrow b{color:var(--nx-ink);font-weight:600;font-size:12px;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-submit{width:100%;margin-top:16px}
+#deadlinenote:empty,#msg:empty{display:none}
+.q-line{font-size:12px;color:var(--nx-body);line-height:1.8}
+.q-faint{color:var(--nx-mute);font-size:11px}
+.q-total{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:10px 0 6px}
+.q-total>span:first-child{font-size:12px;color:var(--nx-mute)}
+.q-unit{font-size:12px;color:var(--nx-body)}
+.q-basis{width:100%;font-size:11px;color:var(--nx-mute)}
+.q-nodes{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--nx-line)}
+.q-warn{margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(217,130,11,.1);
+  color:var(--nx-warn);font-size:11.5px;line-height:1.7}
+.q-note{font-size:12px;line-height:1.8;color:var(--nx-body)}
+
+@media(max-width:900px){
+  .wb-kinds{grid-template-columns:1fr}
+  .wb-kind{flex-direction:row;align-items:center;flex-wrap:wrap}
+  .wb-kind-ic{margin-bottom:0}
+  .wb-pipe{grid-template-columns:1fr}
+  .wb-pipe-line{width:2px;height:18px;justify-self:center;
+    background:linear-gradient(180deg,var(--nx-brand),var(--nx-cyan))}
+  .wb-pipe-line::after{right:-3px;top:auto;bottom:-1px;transform:rotate(45deg)}
+  .wb-pagehead>.ghost{margin-left:0}
+}
 
 /* ---------- 论坛 / 个人中心 ---------- */
 .nx .postitem{padding:14px 10px;border-bottom:1px solid var(--nx-line);border-radius:9px}
@@ -999,6 +1175,7 @@ a.btn:hover{text-decoration:none}
       <button id="sky-tab-stack" onclick="skyTab('stack')">星栈</button>
     </div>
     <div class="sky-bar-hint" id="sky-bar-hint">推荐卖家节点 · 按最新发布排序</div>
+    <button class="ghost tiny" onclick="openOfferConvs()">我的会话</button>
   </div>
 
   <div id="sky-sea">
@@ -1041,6 +1218,24 @@ a.btn:hover{text-decoration:none}
           <option>点/小时</option><option>点/帧</option></select></div>
         <div><label>配置</label><input id="st-spec" maxlength="500" placeholder="例如 双 RTX 4090 · 24G ×2 · ComfyUI"></div>
       </div>
+      <div class="sky-field">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:16px;font-weight:500">
+          <input type="checkbox" id="st-auto" onchange="toggleShareFields()" style="width:auto">
+          开通售出自动共享：买家无需沟通即可直接使用下方节点或场景任务
+        </label>
+        <div id="st-share-fields" style="display:none">
+          <div class="row" style="margin-top:12px">
+            <div><label>绑定我的节点</label><select id="st-node"><option value="">不绑定节点</option></select>
+              <div class="hint" id="st-node-hint">仅用于渲染 / 编译任务的指定派发。</div></div>
+            <div><label>场景 / 提示词 / 编译命令（可选）</label><input id="st-scene" maxlength="200" placeholder="例如 scene.blend、一段提示词或编译命令"></div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div><label>帧范围（渲染）</label><input id="st-frames" maxlength="30" placeholder="例如 1-120"></div>
+            <div><label>采样数（渲染）</label><input id="st-samples" maxlength="8" inputmode="numeric" placeholder="0=场景设置"></div>
+          </div>
+          <div class="hint" style="margin-top:8px">这里只授权买家直接使用；任务费用仍由平台按实际用量预扣、结算。</div>
+        </div>
+      </div>
       <label>简介（可选）</label>
       <textarea id="st-body" rows="3" maxlength="2000" placeholder="说明交付时间、模型、售后和联系方式"></textarea>
       <label>封面配图（可选）</label>
@@ -1068,16 +1263,16 @@ a.btn:hover{text-decoration:none}
 
 <!-- ---------- 渲染 ---------- -->
 <section class="view nx" id="v-render">
-  <div class="nx-hero nx-hero-render">
-    <div>
-      <span class="nx-eyebrow">Render Studio</span>
+  <div class="wb-pagehead">
+    <div class="wb-pagehead-ic">
+      <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5Z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/></svg>
+    </div>
+    <div class="wb-pagehead-txt">
+      <span class="nx-eyebrow wb-eyebrow">Render Studio</span>
       <h1>渲染工作台</h1>
       <p>Blender 帧渲染、剪辑时间线与视频转码共用一套提交流程；参数在本页填写，提交后按实测用量结算。</p>
     </div>
-    <div class="nx-hero-side">
-      <div class="nx-hero-badge"><b>3</b><span>种任务类型</span></div>
-      <button class="nx-hero-link" onclick="showView('jobs')">查看我的任务 →</button>
-    </div>
+    <button class="ghost" onclick="showView('jobs')">我的任务 →</button>
   </div>
 
   <div class="nx-kpis">
@@ -1093,35 +1288,73 @@ a.btn:hover{text-decoration:none}
   <div id="wb" class="grid">
     <div class="card">
       <h2><span class="kicker">New Task</span><span id="wb-title">提交渲染任务</span></h2>
-      <div class="nx-steps">
-        <span class="nx-step"><b>1</b> 选择素材</span>
-        <span class="nx-step"><b>2</b> 配置参数</span>
-        <span class="nx-step"><b>3</b> 确认报价并提交</span>
+      <div class="wb-steps" id="wb-steps">
+        <span class="wb-step cur" data-step="1"><b>1</b>上传素材</span><i class="wb-step-line"></i>
+        <span class="wb-step" data-step="2"><b>2</b>配置参数</span><i class="wb-step-line"></i>
+        <span class="wb-step" data-step="3"><b>3</b>提交结算</span>
       </div>
       <form id="f">
-        <div class="row">
-          <div><label>任务类型</label><select name="jobkind" id="jobkind">
-            <option value="transcode" selected>视频转码</option>
-            <option value="blender">Blender 动画渲染</option>
-            <option value="pr">剪辑时间线渲染</option>
-            <option value="build">编译打包</option>
-          </select></div>
-          <div id="qualitybox"><label>画质</label><select id="quality">
-            <option value="fast">快速</option>
-            <option value="balanced" selected>均衡（推荐）</option>
-            <option value="high">高质量</option>
-          </select></div>
+        <div class="wb-kinds" id="wb-kinds">
+          <button type="button" class="wb-kind" data-kind="transcode">
+            <span class="wb-kind-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3V9Z"/></svg></span>
+            <b>视频转码</b>
+            <span>切片并行加速，哈希校验一致性</span>
+            <span class="wb-kind-tag">按视频秒结算</span>
+          </button>
+          <button type="button" class="wb-kind" data-kind="blender">
+            <span class="wb-kind-ic"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5Z"/><path d="M3 12l9 5 9-5M3 16l9 5 9-5"/></svg></span>
+            <b>Blender 渲染</b>
+            <span>帧级拆分到多节点，Cycles / Eevee</span>
+            <span class="wb-kind-tag">按帧结算</span>
+          </button>
+          <button type="button" class="wb-kind" data-kind="pr">
+            <span class="wb-kind-ic"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14"/><circle cx="18" cy="12" r="2"/></svg></span>
+            <b>时间线渲染</b>
+            <span>Premiere FCPXML 工程整线输出</span>
+            <span class="wb-kind-tag">按时间线秒结算</span>
+          </button>
         </div>
+        <select name="jobkind" id="jobkind" class="wb-sr" aria-label="任务类型">
+          <option value="transcode" selected>视频转码</option>
+          <option value="blender">Blender 动画渲染</option>
+          <option value="pr">剪辑时间线渲染</option>
+          <option value="build">编译打包</option>
+        </select>
 
-        <label>选择文件</label>
-        <input type="file" name="file" id="fileinput" accept="video/*,audio/*">
+        <div id="qualitybox"><label>画质</label><select id="quality">
+          <option value="fast">快速</option>
+          <option value="balanced" selected>均衡（推荐）</option>
+          <option value="high">高质量</option>
+        </select></div>
+
+        <div class="wb-sec"><i>1</i>上传素材<small>支持拖拽上传</small></div>
+        <div class="wb-pick" id="wb-pick-build" style="display:none">
+          <button type="button" class="btn auto" id="wb-pick-folder">选择项目文件夹</button>
+          <span class="wb-pick-or">自动打包为 zip，排除 node_modules / .git 等目录</span>
+        </div>
+        <input type="file" id="folderinput" class="wb-sr" webkitdirectory directory multiple>
+        <div class="wb-drop" id="wb-drop" role="button" tabindex="0" aria-label="选择或拖拽文件">
+          <input type="file" name="file" id="fileinput" class="wb-sr" accept="video/*,audio/*">
+          <div class="wb-drop-ph" id="wb-drop-ph">
+            <span class="wb-drop-ic"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
+            <b>拖拽文件到此处，或点击选择</b>
+            <span id="wb-drop-hint">视频 / 音频文件，自动读取时长</span>
+          </div>
+          <div class="wb-file" id="wb-file" style="display:none">
+            <span class="wb-file-ic"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Z"/><path d="M14 3v6h6"/></svg></span>
+            <span class="wb-file-name" id="wb-file-name"></span>
+            <span class="wb-file-size" id="wb-file-size"></span>
+            <button type="button" class="wb-file-x" id="wb-file-x" aria-label="移除文件">✕</button>
+          </div>
+        </div>
+        <div id="wb-folder-info" class="hint" style="display:none"></div>
 
         <div id="adv-only" style="display:none">
         <div id="pathbox">
         <label>…或使用服务端本机路径</label>
         <input name="path" placeholder="D:/videos/input.mp4">
         </div>
-        <div class="row">
+        <div class="row" id="segsbox">
           <div><label>切分片数</label><input name="segs" value="4" inputmode="numeric"></div>
           <div></div>
         </div>
@@ -1157,21 +1390,27 @@ a.btn:hover{text-decoration:none}
         </div>
 
         <div id="build-fields" style="display:none">
-          <fieldset class="fieldset">
-            <legend>编译打包</legend>
-            <div class="hint" style="margin-top:0">
-              上传源码 zip；解压后的目录就是工作目录，命令在其中执行，产物按「输出目录」打包成
-              <code>result.zip</code> 回传。需要接收任务的节点以 <code>--allow-build</code> 启动，
-              且本部署把账号加入了编译白名单。
-            </div>
-            <label>编译命令</label>
-            <input name="command" placeholder='powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1'>
-            <div class="row">
-              <div><label>输出目录（相对路径）</label><input name="output" value="out"></div>
-              <div><label>超时（秒）</label><input name="timeout" value="1800" inputmode="numeric"></div>
-            </div>
-            <div class="hint">按实际墙钟分钟结算，预扣 10 分钟；编译失败不结算。</div>
-          </fieldset>
+          <div class="wb-sec"><i>2</i>编译配置<small>zip → result.zip</small></div>
+          <div class="hint" style="margin-top:0">
+            上传源码 zip；解压后的目录就是工作目录，命令在其中执行，产物按「输出目录」打包成
+            <code>result.zip</code> 回传。
+          </div>
+          <label>编译命令</label>
+          <div class="wb-cmd">
+            <span class="wb-cmd-ps">$</span>
+            <input name="command" id="wb-command" placeholder="powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1">
+          </div>
+          <div class="wb-cmd-chips">
+            <button type="button" class="wb-cmd-chip" data-cmd="powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1">PowerShell 脚本</button>
+            <button type="button" class="wb-cmd-chip" data-cmd="npm install &amp;&amp; npm run build">npm build</button>
+            <button type="button" class="wb-cmd-chip" data-cmd="go build -o out/app ./...">go build</button>
+            <button type="button" class="wb-cmd-chip" data-cmd="cmake -B build &amp;&amp; cmake --build build --config Release">cmake</button>
+          </div>
+          <div class="row">
+            <div><label>输出目录（相对路径）</label><input name="output" value="out"></div>
+            <div><label>超时（秒）</label><input name="timeout" value="1800" inputmode="numeric"></div>
+          </div>
+          <div class="hint">按实际墙钟分钟结算，预扣 10 分钟；编译失败不结算。</div>
         </div>
 
         <fieldset class="fieldset" id="transcode-fields">
@@ -1195,49 +1434,55 @@ a.btn:hover{text-decoration:none}
           </div>
         </fieldset>
 
-        <fieldset class="fieldset">
-          <legend>硬件要求（可选）</legend>
-          <div class="row">
-            <div><label>需要独显</label><select name="need_gpu"><option value="0">不限</option><option value="1">必须有 GPU</option></select></div>
-            <div><label>最小显存 MB</label><input name="min_gpu_mem" value="0" inputmode="numeric" placeholder="0=不限"></div>
+        <details class="wb-adv" id="wb-adv">
+          <summary>高级设置 · 硬件约束与调度偏好</summary>
+          <div class="wb-adv-body">
+            <fieldset class="fieldset">
+              <legend>硬件要求（可选）</legend>
+              <div class="row">
+                <div><label>需要独显</label><select name="need_gpu"><option value="0">不限</option><option value="1">必须有 GPU</option></select></div>
+                <div><label>最小显存 MB</label><input name="min_gpu_mem" value="0" inputmode="numeric" placeholder="0=不限"></div>
+              </div>
+              <div class="row">
+                <div><label>最少 CPU 核</label><input name="min_cpus" value="0" inputmode="numeric"></div>
+                <div><label>最小内存 MB</label><input name="min_mem" value="0" inputmode="numeric"></div>
+              </div>
+              <div class="row">
+                <div><label>要求运行时</label><select name="runtime">
+                  <option value="">不限</option><option value="ffmpeg">ffmpeg</option>
+                  <option value="blender">blender</option><option value="cuda">cuda (nvcc)</option>
+                  <option value="docker">docker</option><option value="python">python</option>
+                </select></div>
+                <div><label>限定系统架构</label><select name="arch">
+                  <option value="">不限</option><option value="amd64">amd64</option><option value="arm64">arm64</option>
+                </select></div>
+              </div>
+              <div class="row">
+                <div><label>单价上限 点/单位</label><input name="max_price" value="0" inputmode="decimal" placeholder="0=不限"></div>
+                <div id="durbox"><label>视频时长（估费用用，秒）</label><input name="duration" value="0" inputmode="decimal"></div>
+              </div>
+            </fieldset>
+            <label class="check" id="baselinebox">
+              <input type="checkbox" name="baseline" value="1" checked style="width:auto">
+              同时跑单机基线（用于真实加速比对比）
+            </label>
           </div>
-          <div class="row">
-            <div><label>最少 CPU 核</label><input name="min_cpus" value="0" inputmode="numeric"></div>
-            <div><label>最小内存 MB</label><input name="min_mem" value="0" inputmode="numeric"></div>
-          </div>
-          <div class="row">
-            <div><label>要求运行时</label><select name="runtime">
-              <option value="">不限</option><option value="ffmpeg">ffmpeg</option>
-              <option value="blender">blender</option><option value="cuda">cuda (nvcc)</option>
-              <option value="docker">docker</option><option value="python">python</option>
-            </select></div>
-            <div><label>限定系统架构</label><select name="arch">
-              <option value="">不限</option><option value="amd64">amd64</option><option value="arm64">arm64</option>
-            </select></div>
-          </div>
-          <div class="row">
-            <div><label>单价上限 点/单位</label><input name="max_price" value="0" inputmode="decimal" placeholder="0=不限"></div>
-            <div id="durbox"><label>视频时长（估费用用，秒）</label><input name="duration" value="0" inputmode="decimal"></div>
-          </div>
-        </fieldset>
-
-        <label class="check" id="baselinebox">
-          <input type="checkbox" name="baseline" value="1" checked style="width:auto">
-          同时跑单机基线（用于真实加速比对比）
-        </label>
-        </div>
-        <div class="formfoot">
-          <button type="submit" class="btn auto" id="submitbtn">开始处理</button>
-          <div id="msg" class="hint"></div>
+        </details>
         </div>
       </form>
     </div>
 
     <div class="sticky">
-      <div class="card">
-        <h2><span class="kicker">Estimate</span>预计花费</h2>
+      <div class="card wb-summary">
+        <h2><span class="kicker">Summary</span>费用摘要</h2>
+        <div class="wb-sumrows">
+          <div class="wb-sumrow"><span>任务类型</span><b id="sum-kind">—</b></div>
+          <div class="wb-sumrow"><span>素材</span><b id="sum-file">未选择</b></div>
+        </div>
         <div id="quote" class="quote">选择文件后自动估算</div>
         <div id="deadlinenote" class="hint"></div>
+        <button type="submit" form="f" class="btn wb-submit" id="submitbtn">提交渲染任务</button>
+        <div id="msg" class="hint"></div>
       </div>
       <div class="card" id="tipcard">
         <h2><span class="kicker">Tips</span>想要更多控制？</h2>
@@ -1251,14 +1496,35 @@ a.btn:hover{text-decoration:none}
 
 <!-- ---------- 编排 / 编译 ---------- -->
 <section class="view nx" id="v-build">
-  <div class="nx-hero nx-hero-build">
-    <div>
-      <span class="nx-eyebrow">Pipeline · Orchestration</span>
+  <div class="wb-pagehead wb-pagehead-build">
+    <div class="wb-pagehead-ic">
+      <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v6a4 4 0 0 0 4 4h6"/></svg>
+    </div>
+    <div class="wb-pagehead-txt">
+      <span class="nx-eyebrow wb-eyebrow">Pipeline · Orchestration</span>
       <h1>任务编排</h1>
       <p>源码 zip 上传后由算力节点执行编译 / 打包命令，产物按输出目录回传；按墙钟分钟结算，失败不结算。</p>
     </div>
-    <div class="nx-hero-side">
-      <div class="nx-hero-badge"><b>ZIP</b><span>源码 → 产物</span></div>
+    <button class="ghost" onclick="showView('jobs')">我的任务 →</button>
+  </div>
+
+  <div class="wb-pipe">
+    <div class="wb-pipe-step">
+      <span class="wb-pipe-ic"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
+      <b>① 上传源码</b>
+      <span>zip 打包上传，解压后的目录就是工作目录</span>
+    </div>
+    <i class="wb-pipe-line"></i>
+    <div class="wb-pipe-step">
+      <span class="wb-pipe-ic"><svg viewBox="0 0 24 24"><path d="M4 7l4 5-4 5M12 19h8"/></svg></span>
+      <b>② 节点编译</b>
+      <span>开启 --allow-build 的节点执行命令，按墙钟分钟计费</span>
+    </div>
+    <i class="wb-pipe-line"></i>
+    <div class="wb-pipe-step">
+      <span class="wb-pipe-ic"><svg viewBox="0 0 24 24"><path d="M12 4v12m0 0l-4-4m4 4l4-4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span>
+      <b>③ 产物回传</b>
+      <span>输出目录打包 result.zip，校验后在我的任务下载</span>
     </div>
   </div>
 
@@ -1269,8 +1535,7 @@ a.btn:hover{text-decoration:none}
     <div class="nx-kpi nx-kpi-action"><button class="ghost tiny" onclick="showView('sky')">去星海看卖家 →</button></div>
   </div>
 
-  <div class="nx-tip">提交流程：上传源码包 → 填写编译命令与输出目录 → 平台预扣 10 分钟 → 节点执行并回传
-    <code>result.zip</code>。接收该类任务需要节点以 <code>--allow-build</code> 启动，且账号在编译白名单内。</div>
+  <div class="nx-tip">接收编排任务需要节点以 <code>--allow-build</code> 启动，且账号在编译白名单内；提交后预扣 10 分钟，编译失败不结算、差额自动退还。</div>
   <div id="wb-slot-build"></div>
 </section>
 
@@ -1280,7 +1545,7 @@ a.btn:hover{text-decoration:none}
     <div>
       <span class="nx-eyebrow">Image Generation</span>
       <h1>生图工作台</h1>
-      <p>官方 Comfy 工作流，按张结算；写好画面描述后，一键把完整参数带到官方工作台执行。</p>
+      <p>部署或导入 ComfyUI 工作流后，画面描述会写进节点参数，一键提交到官方执行队列。</p>
     </div>
     <div class="nx-hero-side">
       <div class="nx-hero-badge"><b>4 种</b><span>画幅与风格</span></div>
@@ -1327,17 +1592,32 @@ a.btn:hover{text-decoration:none}
       </form>
     </div>
     <div class="sticky">
-      <div class="card">
-        <h2><span class="kicker">Workbench</span>官方工作台</h2>
-        <div class="nx-preview">生成结果在官方 Comfy 工作台查看</div>
-        <div class="nx-steps" style="margin:14px 0">
-          <span class="nx-step"><b>1</b> 填写参数</span>
-          <span class="nx-step"><b>2</b> 复制提示词</span>
-          <span class="nx-step"><b>3</b> 工作台生成</span>
+      <div class="card" data-cw-kind="image">
+        <div class="cw-card-head">
+          <h2 style="margin:0"><span class="kicker">PRESET WORKBENCH</span>预设工作台</h2>
+          <span class="cw-chip" data-cw-conn>检测中…</span>
         </div>
-        <div class="hint" style="margin-top:0">Comfy 工作流由平台维护：提交后会把提示词、画幅和风格一起复制到剪贴板，并打开官方工作台执行。</div>
-        <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer" style="margin-top:16px">直接打开工作台</a>
-        <div id="img-queue" class="hint">按张结算，失败不扣费。</div>
+        <div class="cw-card-tabs">
+          <button type="button" class="cw-card-tab on" data-cw-tab="template">模板配置</button>
+          <button type="button" class="cw-card-tab" data-cw-tab="preset">我的预设</button>
+          <button type="button" class="cw-card-tab" data-cw-tab="draft">保存草稿</button>
+        </div>
+        <div class="cw-card-pane" data-cw-pane></div>
+        <div class="cw-mini" data-cw-mini title="点击打开工作台，或拖入工作流文件">
+          <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet"></svg>
+          <span class="cw-mini-badge">WORKFLOW GRAPH</span>
+          <span class="cw-mini-empty">选择并配置一个 ComfyUI 工作流</span>
+        </div>
+        <div class="cw-mini-info"><span data-cw-info>载入中…</span><span>双击 / 拖入导入</span></div>
+        <div class="cw-chips" data-cw-chips></div>
+        <div class="cw-card-foot">
+          <button type="button" class="btn auto" data-cw-open>选择并打开工作台</button>
+          <button type="button" class="ghost tiny" data-cw-import>选择并上传</button>
+          <button type="button" class="ghost tiny" data-cw-save>保存草稿</button>
+          <button type="button" class="cw-link-btn" data-cw-help>使用教程</button>
+        </div>
+        <p class="cw-card-note" id="cw-note-image">支持官方 workflow.json、API 格式 prompt.json 与含工作流元数据的 PNG；部署后本页表单会把参数写入该工作流并提交 ComfyUI 队列。</p>
+        <input type="file" class="cw-hidden" data-cw-file accept=".json,.png,application/json,image/png">
       </div>
     </div>
   </div>
@@ -1349,7 +1629,7 @@ a.btn:hover{text-decoration:none}
     <div>
       <span class="nx-eyebrow">Video Generation</span>
       <h1>生视频工作台</h1>
-      <p>官方 Comfy 集群协同生成视频，按视频秒结算；分片生成与音视频封装由平台自动完成。</p>
+      <p>部署视频工作流，镜头描述、时长与画幅直接写入节点，提交后由 ComfyUI 队列生成并回传进度。</p>
     </div>
     <div class="nx-hero-side">
       <div class="nx-hero-badge"><b>10s</b><span>最长镜头时长</span></div>
@@ -1392,17 +1672,32 @@ a.btn:hover{text-decoration:none}
       </form>
     </div>
     <div class="sticky">
-      <div class="card">
-        <h2><span class="kicker">Workbench</span>官方工作台</h2>
-        <div class="nx-preview">生成结果在官方 Comfy 工作台查看</div>
-        <div class="nx-steps" style="margin:14px 0">
-          <span class="nx-step"><b>1</b> 描述镜头</span>
-          <span class="nx-step"><b>2</b> 复制参数</span>
-          <span class="nx-step"><b>3</b> 分片生成</span>
+      <div class="card" data-cw-kind="video">
+        <div class="cw-card-head">
+          <h2 style="margin:0"><span class="kicker">PRESET WORKBENCH</span>预设工作台</h2>
+          <span class="cw-chip" data-cw-conn>检测中…</span>
         </div>
-        <div class="hint" style="margin-top:0">提交后会把镜头描述、时长和画幅复制到剪贴板，并打开官方 Comfy 工作台执行。</div>
-        <a class="btn auto" href="/comfy/" target="_blank" rel="noreferrer" style="margin-top:16px">直接打开工作台</a>
-        <div class="hint">按视频秒结算，失败的分片不结算。</div>
+        <div class="cw-card-tabs">
+          <button type="button" class="cw-card-tab on" data-cw-tab="template">模板配置</button>
+          <button type="button" class="cw-card-tab" data-cw-tab="preset">我的预设</button>
+          <button type="button" class="cw-card-tab" data-cw-tab="draft">保存草稿</button>
+        </div>
+        <div class="cw-card-pane" data-cw-pane></div>
+        <div class="cw-mini" data-cw-mini title="点击打开工作台，或拖入工作流文件">
+          <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet"></svg>
+          <span class="cw-mini-badge">WORKFLOW GRAPH</span>
+          <span class="cw-mini-empty">选择并配置一个 ComfyUI 工作流</span>
+        </div>
+        <div class="cw-mini-info"><span data-cw-info>载入中…</span><span>双击 / 拖入导入</span></div>
+        <div class="cw-chips" data-cw-chips></div>
+        <div class="cw-card-foot">
+          <button type="button" class="btn auto" data-cw-open>选择并打开工作台</button>
+          <button type="button" class="ghost tiny" data-cw-import>选择并上传</button>
+          <button type="button" class="ghost tiny" data-cw-save>保存草稿</button>
+          <button type="button" class="cw-link-btn" data-cw-help>使用教程</button>
+        </div>
+        <p class="cw-card-note" id="cw-note-video">导入视频工作流后，镜头描述、时长与画幅会写入对应节点；生成由 ComfyUI 队列执行，WebSocket 实时回传进度。</p>
+        <input type="file" class="cw-hidden" data-cw-file accept=".json,.png,application/json,image/png">
       </div>
     </div>
   </div>
@@ -1715,6 +2010,7 @@ a.btn:hover{text-decoration:none}
       <span class="nx-eyebrow">Provider Nodes</span>
       <h1>我的节点</h1>
       <p>把闲置机器接进来赚算力点：下载节点包，解压后直接双击 exe 即可；启动脚本作为需要自定义参数时的备选。</p>
+      <p class="hint" style="margin-top:8px">一台电脑只对应一个节点：重复下载或重启节点包会复用原来的节点，收益与信誉连续累计，不会再生成第二个。贡献只统计校验通过的任务分片和已结算的云主机租用，在线挂机不计贡献。</p>
     </div>
     <div class="nx-hero-side">
       <button class="nx-hero-link" onclick="showView('bill')">查看收益 →</button>
@@ -1730,8 +2026,8 @@ a.btn:hover{text-decoration:none}
     <div class="card">
       <h2><span class="kicker">Provider</span>一键提供算力</h2>
       <div class="hint" style="margin-top:0">
-        填好参数后下载节点包，解压后双击其中的 exe，这台机器就会以你的账户身份加入算力池并开始计收益。
-        关掉窗口即停止。
+        填好参数后下载节点包，解压后双击其中的 exe，这台机器就会以你的账户身份加入算力池并开始接单。
+        关掉窗口即停止。在同一台电脑上重复启动只会回到原来那个节点，不会新开一个；不用的节点可在右侧删除。
       </div>
       <label>机器名称</label>
       <input id="lname" placeholder="例如 宿舍的台式机">
@@ -1788,6 +2084,12 @@ a.btn:hover{text-decoration:none}
     </div>
   </div>
   <div class="grid">
+    <div class="card" style="grid-column:1/-1">
+      <h2><span class="kicker">Contribution</span>贡献概览</h2>
+      <div class="hint" style="margin-top:0">卖家贡献（账户维度）= 账本中该账户全部收益流水之和；节点贡献（设备维度）= 单台机器已结算的任务与云主机算力。两者是同一本账的两个视角，不是两笔钱。</div>
+      <div class="stats" id="contribstat"><div class="empty">正在读取贡献账目…</div></div>
+      <div class="nx-tip" style="margin:16px 0 0">「其它收益」= 卖家贡献 − Σ 当前名下节点贡献，包含模型上游收益、已删除节点的历史收益和升级前的旧账。任务分片校验通过才发收益，云主机按租用时长结算、平台留 10%；在线挂机不产生贡献。</div>
+    </div>
     <div class="card">
       <h2><span class="kicker">Ledger</span>账户流水</h2>
       <div class="nx-sec">快速充值 <small>Top up</small></div>
@@ -1799,10 +2101,10 @@ a.btn:hover{text-decoration:none}
       <tbody><tr><td colspan="5" class="empty">暂无记录</td></tr></tbody></table></div>
     </div>
     <div class="card">
-      <h2><span class="kicker">Earnings</span>我的节点收益</h2>
+      <h2><span class="kicker">Earnings</span>节点贡献明细（最近记录）</h2>
       <div class="tablewrap"><table id="earn"><thead><tr><th>时间</th><th>节点</th><th>算力点</th><th>说明</th></tr></thead>
       <tbody><tr><td colspan="4" class="empty">暂无收益</td></tr></tbody></table></div>
-      <div class="nx-tip" style="margin:16px 0 0">收益只在「节点自报哈希 == broker 重算哈希」的分片上发放，避免虚假上报。</div>
+      <div class="nx-tip" style="margin:16px 0 0">这里只列最近的收益流水，总额请看上方「贡献概览」。任务收益只在「节点自报哈希 == broker 重算哈希」的分片上发放，避免虚假上报。</div>
     </div>
   </div>
 </section>
@@ -1926,6 +2228,29 @@ a.btn:hover{text-decoration:none}
   </div>
 </div>
 
+<div id="offerpanel" style="display:none;position:fixed;inset:0;z-index:76;background:rgba(0,0,0,.45);padding:16px">
+  <div class="card" style="max-width:720px;margin:6vh auto;max-height:86vh;overflow:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <h2 id="od-title" style="margin:0"></h2>
+      <button class="ghost" id="od-close">关闭</button>
+    </div>
+    <div id="od-info" style="margin-top:10px"></div>
+    <div id="od-actions" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px"></div>
+    <div id="od-convs" style="display:none;margin-top:14px"></div>
+    <div id="od-chat" style="display:none;margin-top:14px">
+      <div id="od-chat-head" class="hint"></div>
+      <div id="od-chat-list"></div>
+      <textarea id="od-chat-body" rows="2" maxlength="1000" placeholder="问问交付时间、模型、配置或售后…"></textarea>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px">
+        <button class="btn auto" id="od-chat-send">发送</button>
+        <button class="ghost tiny" id="od-chat-refresh">刷新</button>
+        <span class="hint" id="od-chat-msg"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/comfy.js"></script>
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 // A reverse proxy may mount the broker under a prefix (nginx: /starstack/).
@@ -1945,6 +2270,17 @@ const post=(u,body)=>api(u,{method:'POST',headers:{'Content-Type':'application/j
 
 let ME=null, POOL=[], LIVE={}, TIMER=null, DUR=0, POL=null, VIEW='sky';
 let SKY_CAT='all', SKY_OFFERS=[], SKY_LAST=0, ME_VM_LAST=0;
+// 贡献总账：/api/contribution 查的是全量 Earn 流水，不能用账单页最近一页流水冒充总额。
+let CONTRIB=null, CONTRIB_AT=0, CONTRIB_BUSY=false;
+function loadContribution(force){
+  if(CONTRIB_BUSY) return;
+  if(!force && CONTRIB && Date.now()-CONTRIB_AT<3000) return;
+  CONTRIB_BUSY=true; CONTRIB_AT=Date.now();
+  api('/api/contribution').then(c=>{
+    CONTRIB=c;
+    if(activeView()==='nodes'||activeView()==='bill') paint();
+  }).catch(()=>{}).finally(()=>{CONTRIB_BUSY=false});
+}
 
 /* ---------------- 新版 shell：导航分组、面包屑与状态栏 ---------------- */
 const NX_TITLE={sky:'星空',api:'API',image:'生图',video:'生视频',render:'渲染',
@@ -1996,6 +2332,7 @@ function showView(v){
   const el=$('#v-'+v);
   if(el) el.classList.add('on');
   paint();
+  if(v==='nodes'||v==='bill') loadContribution(true);
   window.scrollTo({top:0,behavior:'smooth'});
 }
 $$('#nav button[data-v]').forEach(b=>b.onclick=()=>showView(b.dataset.v));
@@ -2119,6 +2456,7 @@ async function refresh(){
     LIVE={};(st.jobs||[]).forEach(j=>LIVE[j.id]=j);
     nxWallet(); nxStatus();
     paint();
+    loadContribution();
   }catch(e){/* broker 正在重启 */}
   TIMER=setTimeout(refresh,1000);
 }
@@ -2154,6 +2492,7 @@ function skyTab(tab){
     ? '推荐卖家节点 · 按最新发布排序'
     : '选服务类型、写配置、配封面，发布后进入星海';
   if(tab==='sea') paintSky(true);
+  if(tab==='stack') loadMyNodes();
 }
 function openSkyStack(){showView('sky');skyTab('stack')}
 
@@ -2189,13 +2528,14 @@ function renderSky(){
 }
 
 function skyCard(o, manage){
-  return `<article class="sky-card">
+  return `<article class="sky-card" onclick="openOffer('${esc(o.id)}')">
     <div class="sky-cover">
-      ${manage?`<div class="sky-del"><button onclick="delOffer('${esc(o.id)}')">删除</button></div>`:''}
+      ${manage?`<div class="sky-del"><button onclick="event.stopPropagation();delOffer('${esc(o.id)}')">删除</button></div>`:''}
       ${o.has_image
         ? `<img loading="lazy" src="${BASE}/api/offers/media/${encodeURIComponent(o.id)}" alt="${esc(o.title)}">`
         : `<div class="sky-ph">${esc(o.title.slice(0,10))}</div>`}
       <span class="sky-cat">${esc(CAT_LABEL[o.category]||o.category)}</span>
+      ${o.auto_share?'<span class="sky-auto">自动共享</span>':''}
       <span class="sky-price">${f2(o.price)} ${esc(o.unit)}</span>
     </div>
     <h3 class="sky-title">${esc(o.title)}</h3>
@@ -2219,10 +2559,45 @@ function stackPreview(input){
   img.style.display='block';ph.style.display='none';
 }
 
+function toggleShareFields(){
+  const on=$('#st-auto').checked;
+  $('#st-share-fields').style.display=on?'':'none';
+  if(on) loadMyNodes();
+}
+
+async function loadMyNodes(){
+  const sel=$('#st-node'); if(!sel) return;
+  const keep=sel.value;
+  try{
+    const st=await api('/api/state');
+    const mine=(st.workers||[]).filter(w=>w.mine);
+    sel.innerHTML='<option value="">不绑定节点</option>'+mine.map(w=>
+      `<option value="${esc(w.id)}">${esc(w.name||w.id)} · ${w.online?'在线':'离线'}</option>`).join('');
+    if(keep&&mine.some(w=>w.id===keep)) sel.value=keep;
+    $('#st-node-hint').textContent=mine.length
+      ? `你有 ${mine.length} 台节点；离线节点会排队等待上线。`
+      : '你还没有绑定节点，可以只共享场景任务。';
+  }catch(e){ $('#st-node-hint').textContent='节点列表读取失败：'+e }
+}
+
 $('#st-publish').onclick=async()=>{
   const btn=$('#st-publish'), msg=$('#st-msg');
   const title=$('#st-title').value.trim();
   if(!title){msg.textContent='标题不能为空';return}
+  const auto=$('#st-auto').checked, tpl={};
+  let nodeID='';
+  if(auto){
+    nodeID=$('#st-node').value.trim();
+    const scene=$('#st-scene').value.trim();
+    if(scene) tpl.scene=scene;
+    const m=$('#st-frames').value.trim().match(/^(\d+)\s*[-~至]\s*(\d+)$/);
+    if(m){tpl.from=+m[1];tpl.to=+m[2]}
+    const samples=Number($('#st-samples').value);
+    if(Number.isFinite(samples)&&samples>0) tpl.samples=samples;
+    if(!nodeID&&!Object.keys(tpl).length){
+      msg.textContent='开通自动共享需要绑定节点或填写场景任务';return;
+    }
+  }
   const fd=new FormData();
   fd.set('category',ST_CAT);
   fd.set('title',title);
@@ -2230,6 +2605,11 @@ $('#st-publish').onclick=async()=>{
   fd.set('spec',$('#st-spec').value.trim());
   fd.set('price',$('#st-price').value||'0');
   fd.set('unit',$('#st-unit').value);
+  if(auto){
+    fd.set('auto_share','1');
+    if(nodeID) fd.set('node_id',nodeID);
+    if(Object.keys(tpl).length) fd.set('scene',JSON.stringify(tpl));
+  }
   const img=$('#st-image').files[0];
   if(img) fd.append('image',img);
   btn.disabled=true;msg.textContent='发布中…';
@@ -2238,6 +2618,8 @@ $('#st-publish').onclick=async()=>{
     const t=await r.text();let d=null;try{d=JSON.parse(t)}catch(e){}
     if(!r.ok) throw (d&&d.error)||t;
     $('#st-title').value='';$('#st-body').value='';$('#st-spec').value='';
+    $('#st-auto').checked=false;toggleShareFields();
+    $('#st-node').value='';$('#st-scene').value='';$('#st-frames').value='';$('#st-samples').value='';
     $('#st-image').value='';stackPreview($('#st-image'));
     msg.textContent='已发布，星海里已经能看到这条服务。';
     paintSky(true);
@@ -2251,6 +2633,199 @@ async function delOffer(id){
     await api('/api/offers/'+encodeURIComponent(id),{method:'DELETE'});
     paintSky(true);
   }catch(e){alert('删除失败：'+e)}
+}
+
+/* ---------------- 星空：挂牌详情、买卖会话与自动共享直用 ---------------- */
+let OD=null, OD_CHAT=null;
+function parseScene(s){
+  try{const v=JSON.parse(s||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{}}
+  catch(e){return {}}
+}
+function skyFlash(text){
+  const el=document.createElement('div');
+  el.className='card';
+  el.style.cssText='position:fixed;right:18px;bottom:18px;z-index:9999;max-width:360px;'+
+    'padding:12px 16px;font-size:12.5px;line-height:1.6';
+  el.textContent=text;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),4500);
+}
+function closeOfferPanel(){
+  $('#offerpanel').style.display='none';
+  OD=null;OD_CHAT=null;
+}
+$('#od-close').onclick=closeOfferPanel;
+
+async function openOffer(id){
+  let o=SKY_OFFERS.find(x=>x.id===id);
+  if(!o){
+    try{o=(await api('/api/offers/'+encodeURIComponent(id))).offer}
+    catch(e){skyFlash('读取共享失败：'+e);return}
+  }
+  if(!o){skyFlash('共享不存在');return}
+  OD=o;OD_CHAT=null;
+  $('#od-chat').style.display='none';
+  $('#od-convs').style.display='none';
+  renderOfferDetail();
+  $('#offerpanel').style.display='block';
+}
+
+function renderOfferDetail(){
+  const o=OD;
+  if(!o){
+    $('#od-title').textContent='我的会话';
+    $('#od-info').innerHTML='';$('#od-actions').innerHTML='';
+    return;
+  }
+  const tpl=parseScene(o.scene), keys=Object.keys(tpl);
+  const share=o.auto_share
+    ? '<span class="tag on">已开通自动共享</span> <span class="hint">买家可直接使用，无需先沟通。</span>'
+    : '<span class="tag off">未开通自动共享</span> <span class="hint">请先联系卖家协商。</span>';
+  $('#od-title').textContent=o.title;
+  $('#od-info').innerHTML=`
+    <div class="hint">${esc(CAT_LABEL[o.category]||o.category)} · ${f2(o.price)} ${esc(o.unit)}
+      · 卖家 ${esc(o.seller)} · ${fts(o.created_at)}</div>
+    ${o.spec?`<div class="postbody" style="white-space:pre-wrap;margin-top:8px">${esc(o.spec)}</div>`:''}
+    ${o.body?`<div class="postbody" style="white-space:pre-wrap;margin-top:8px">${esc(o.body)}</div>`
+      :'<div class="hint" style="margin-top:8px">卖家未填写简介和联系方式。</div>'}
+    <div style="margin-top:10px">${share}</div>
+    ${o.node_id?`<div class="hint mono" style="margin-top:6px">共享节点 ${esc(o.node_id)}</div>`:''}
+    ${keys.length?`<div class="hint mono" style="margin-top:6px">场景模板 ${esc(JSON.stringify(tpl))}</div>`:''}`;
+  const useLabel=o.node_id&&keys.length?'立即使用节点 / 场景':o.node_id?'立即使用节点':'立即使用场景任务';
+  $('#od-actions').innerHTML=o.mine
+    ? '<button class="ghost" onclick="openOfferConvs()">查看买家咨询</button>'
+    : `${o.auto_share?`<button class="btn auto" id="od-use">${useLabel}</button>`:''}
+       <button class="btn" id="od-chat-open">联系卖家</button>
+       <button class="ghost tiny" onclick="openOfferConvs()">我的会话</button>
+       ${o.auto_share?'':'<div class="hint" style="width:100%">卖家未开通自动共享，请先联系卖家协商。</div>'}`;
+  const use=$('#od-use'); if(use) use.onclick=useOffer;
+  const chat=$('#od-chat-open'); if(chat) chat.onclick=startOfferChat;
+}
+
+async function openOfferConvs(){
+  OD=null;OD_CHAT=null;
+  renderOfferDetail();
+  $('#od-chat').style.display='none';
+  $('#od-convs').style.display='';
+  $('#od-convs').innerHTML='<div class="empty">加载中…</div>';
+  $('#offerpanel').style.display='block';
+  try{
+    const d=await api('/api/offers/conversations');
+    const list=d.conversations||[];
+    $('#od-convs').innerHTML=list.length?list.map(c=>`
+      <button class="ghost od-conv" onclick="openChatFromList('${esc(c.id)}')">
+        <b>${esc(c.title||c.offer_id)}</b> <span class="tag">${esc(c.peer)}</span>
+        <div class="hint">${esc(c.last_body||'还没有消息')} · ${fts(c.updated_at)}</div>
+      </button>`).join('')
+      :'<div class="empty">还没有会话。点开一条共享，选择「联系卖家」发起对话。</div>';
+  }catch(e){$('#od-convs').innerHTML=`<div class="empty">读取失败：${esc(e)}</div>`}
+}
+
+async function openChatFromList(cid){
+  try{
+    const d=await api('/api/offers/conversations/'+encodeURIComponent(cid));
+    OD=d.offer||null;OD_CHAT=cid;
+    renderOfferDetail();
+    $('#od-title').textContent=(OD?OD.title:'共享')+' · 会话';
+    $('#od-convs').style.display='none';
+    $('#od-chat').style.display='';
+    $('#od-chat-head').textContent='与 '+((d.conversation&&d.conversation.peer)||'对方')+' 沟通';
+    renderOfferMessages(d.messages||[]);
+  }catch(e){skyFlash('打开会话失败：'+e)}
+}
+
+async function startOfferChat(){
+  if(!OD) return;
+  if(OD.mine){openOfferConvs();return}
+  const btn=$('#od-chat-open'); if(btn) btn.disabled=true;
+  try{
+    const d=await post('/api/offers/'+encodeURIComponent(OD.id)+'/conversation',{});
+    OD_CHAT=d.conversation.id;
+    $('#od-convs').style.display='none';
+    $('#od-chat').style.display='';
+    $('#od-chat-head').textContent='与 '+(d.conversation.peer||OD.seller)+' 沟通';
+    renderOfferMessages(d.messages||[]);
+    $('#od-chat-body').focus();
+  }catch(e){skyFlash('发起会话失败：'+e)}
+  finally{if(btn) btn.disabled=false}
+}
+
+async function loadOfferChat(cid){
+  if(!cid) return;
+  try{
+    const d=await api('/api/offers/conversations/'+encodeURIComponent(cid));
+    if(d.conversation) $('#od-chat-head').textContent='与 '+(d.conversation.peer||'对方')+' 沟通';
+    renderOfferMessages(d.messages||[]);
+  }catch(e){$('#od-chat-msg').textContent='刷新失败：'+e}
+}
+
+function renderOfferMessages(msgs){
+  const box=$('#od-chat-list');
+  box.innerHTML=msgs.length?msgs.map(m=>`
+    <div class="od-msg${m.mine?' me':''}">
+      <div class="od-who">${esc(m.sender)} · ${fts(m.created_at)}</div>${esc(m.body)}
+    </div>`).join(''):'<div class="empty">还没有消息，先打个招呼吧。</div>';
+  box.scrollTop=box.scrollHeight;
+}
+
+async function sendOfferChat(){
+  if(!OD_CHAT) return;
+  const input=$('#od-chat-body'), body=input.value.trim();
+  if(!body){$('#od-chat-msg').textContent='写点内容再发送';return}
+  const btn=$('#od-chat-send');
+  btn.disabled=true;$('#od-chat-msg').textContent='发送中…';
+  try{
+    await post('/api/offers/conversations/'+encodeURIComponent(OD_CHAT),{body});
+    input.value='';$('#od-chat-msg').textContent='';
+    await loadOfferChat(OD_CHAT);
+  }catch(e){$('#od-chat-msg').textContent='发送失败：'+e}
+  finally{btn.disabled=false}
+}
+$('#od-chat-send').onclick=sendOfferChat;
+$('#od-chat-refresh').onclick=()=>loadOfferChat(OD_CHAT);
+
+async function useOffer(){
+  if(!OD) return;
+  const btn=$('#od-use'); if(btn) btn.disabled=true;
+  try{
+    const d=await api('/api/offers/'+encodeURIComponent(OD.id)+'/use',{method:'POST'});
+    const o=d.offer||OD;
+    closeOfferPanel();
+    applyOfferUse(o);
+  }catch(e){skyFlash('使用共享失败：'+e)}
+  finally{if(btn) btn.disabled=false}
+}
+
+function applyOfferUse(o){
+  const tpl=parseScene(o.scene), keys=Object.keys(tpl);
+  const view=CAT_LABEL[o.category]?o.category:'render';
+  if(o.node_id) TARGET=o.node_id;
+  if(view==='render'||view==='build'){
+    if(view==='render'&&(tpl.scene||tpl.from||tpl.to||tpl.samples)){
+      const k=$('#jobkind'); if(k) k.value='blender';
+    }
+    const names=view==='build'?['command','output','timeout']
+      :['scene','engine','samples','from','to','fps','percent'];
+    names.forEach(n=>{
+      if(tpl[n]===undefined||tpl[n]===null||tpl[n]==='') return;
+      const el=$('#f [name='+n+']'); if(el) el.value=tpl[n];
+    });
+    if(view==='build'&&!tpl.command&&tpl.scene){
+      const el=$('#f [name=command]'); if(el) el.value=tpl.scene;
+    }
+  }
+  const prompt=tpl.prompt||tpl.scene||'';
+  if(view==='image'&&prompt&&$('#img-prompt')) $('#img-prompt').value=prompt;
+  if(view==='video'&&prompt&&$('#vid-prompt')) $('#vid-prompt').value=prompt;
+  if(view==='api'&&prompt&&$('#api-prompt')) $('#api-prompt').value=prompt;
+  showView(view);
+  if(view==='render'||view==='build') syncKind();
+  if(o.node_id) updateTargetChip();
+  const bits=[];
+  if(o.node_id) bits.push('已绑定卖家节点');
+  if(keys.length) bits.push('已预填场景任务');
+  skyFlash(bits.length?bits.join('，')+'；请选择素材后提交，费用按平台实际用量结算。'
+    :'已获得共享使用授权。');
 }
 
 /* ---------------- 官方算力信息条 ---------------- */
@@ -2273,9 +2848,183 @@ function mountWorkbench(svc){
   const wb=$('#wb'); if(!wb) return;
   const slot=$(svc==='build'?'#wb-slot-build':'#wb-slot-render');
   if(slot && wb.parentElement!==slot) slot.appendChild(wb);
+  if(wb.dataset.svc===svc) return;
+  wb.dataset.svc=svc;
   const title=$('#wb-title');
   if(title) title.textContent=svc==='build'?'提交编排任务':'提交渲染任务';
+  wbKindUI();
 }
+
+/* 工作台 presentation helpers：只改展示，不改字段值与提交契约 */
+const WB_KIND_NAME={transcode:'视频转码',blender:'Blender 渲染',pr:'时间线渲染',build:'编译打包'};
+const WB_DROP_HINT={transcode:'视频 / 音频文件，自动读取时长',
+  blender:'.blend 场景，或含贴图 / 缓存的 zip',
+  pr:'FCPXML 工程 + 全部素材打包的 zip',build:'源码 zip，解压目录即工作目录'};
+const wbExtOk=(name,k)=>{const n=name.toLowerCase();
+  return k==='build'||k==='pr'?/\.zip$/.test(n):k==='blender'?/\.(blend|zip)$/.test(n):
+    /\.(mp4|mov|mkv|avi|webm|flv|wmv|m4v|ts|mp3|wav|aac|flac|m4a|ogg|wma)$/.test(n);};
+function wbKindUI(){
+  const k=$('#jobkind').value;
+  const msg=$('#msg'); if(msg) msg.textContent='';
+  $$('#wb-kinds .wb-kind').forEach(b=>b.classList.toggle('on',b.dataset.kind===k));
+  const hint=$('#wb-drop-hint'); if(hint) hint.textContent=WB_DROP_HINT[k]||'';
+  const btn=$('#submitbtn');
+  if(btn) btn.textContent=k==='build'?'提交编排任务':k==='transcode'?'开始处理':'提交渲染任务';
+  const sk=$('#sum-kind'); if(sk) sk.textContent=WB_KIND_NAME[k]||k;
+  wbFileUI();
+}
+const wbSize=n=>n>=1073741824?(n/1073741824).toFixed(2)+' GB':
+  n>=1048576?(n/1048576).toFixed(1)+' MB':n>=1024?(n/1024).toFixed(0)+' KB':n+' B';
+function wbSumFile(){
+  const f=$('#fileinput').files[0];
+  const p=($('#f [name=path]').value||'').trim();
+  const el=$('#sum-file'); if(!el) return;
+  el.textContent=f?f.name:(p&&$('#jobkind').value==='transcode'?p:'未选择');
+  el.title=el.textContent;
+}
+function wbFileUI(){
+  const f=$('#fileinput').files[0];
+  const drop=$('#wb-drop'); if(!drop) return;
+  drop.classList.toggle('has-file',!!f);
+  $('#wb-drop-ph').style.display=f?'none':'';
+  $('#wb-file').style.display=f?'flex':'none';
+  if(f){$('#wb-file-name').textContent=f.name;$('#wb-file-size').textContent=wbSize(f.size);}
+  wbSumFile(); wbSteps();
+}
+function wbSteps(){
+  const box=$('#wb-steps'); if(!box) return;
+  const hasFile=!!$('#fileinput').files[0];
+  const k=$('#jobkind').value;
+  const cfg=k==='build'?!!($('#f [name=command]').value||'').trim():true;
+  const ready=$('#quote').dataset.ok==='1';
+  const set=(n,cls)=>{const el=box.querySelector('[data-step="'+n+'"]');
+    if(el) el.className='wb-step'+(cls?' '+cls:'');};
+  set(1,hasFile?'done':'cur');
+  set(2,hasFile?(cfg?'done':'cur'):'');
+  set(3,hasFile&&cfg&&ready?'cur':'');
+}
+$$('#wb-kinds .wb-kind').forEach(b=>b.addEventListener('click',()=>{
+  $('#jobkind').value=b.dataset.kind; syncKind();
+}));
+$$('.wb-cmd-chip').forEach(b=>b.addEventListener('click',()=>{
+  const el=$('#wb-command'); if(!el) return;
+  el.value=b.dataset.cmd; el.focus(); wbSteps();
+}));
+(function initDrop(){
+  const drop=$('#wb-drop'), input=$('#fileinput');
+  if(!drop||!input) return;
+  drop.addEventListener('click',()=>input.click());
+  drop.addEventListener('keydown',e=>{
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});
+  ['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{
+    e.preventDefault();drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{
+    e.preventDefault();drop.classList.remove('drag');}));
+  drop.addEventListener('drop',e=>{
+    const files=e.dataTransfer&&e.dataTransfer.files;
+    if(!files||!files.length) return;
+    const k=$('#jobkind').value;
+    if(!wbExtOk(files[0].name,k)){$('#msg').textContent='文件类型不匹配：'+(WB_DROP_HINT[k]||'请检查任务类型');return;}
+    input.files=files;
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  $('#wb-file-x').addEventListener('click',e=>{
+    e.stopPropagation();
+    input.value='';
+    if($('#jobkind').value==='transcode'){DUR=0;const d=$('#f [name=duration]');if(d)d.value='0';}
+    wbFileUI(); quote();
+  });
+})();
+
+/* 编排页：选择项目文件夹 → 浏览器内打标准 zip（STORE），仍走原 /api/jobs/build 接口 */
+let WB_FOLDER_INFO='';
+const WB_SKIP=/^(node_modules|\.git|\.gradle|\.idea|\.vscode|__pycache__|\.next|\.nuxt|\.cache|\.pytest_cache|venv|\.venv|env)$/i;
+const WB_CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;
+  for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function wbCrc32(u8){let c=0xFFFFFFFF;
+  for(let i=0;i<u8.length;i++)c=WB_CRC[(c^u8[i])&255]^(c>>>8);
+  return (c^0xFFFFFFFF)>>>0;}
+function wbZipStore(files){
+  const enc=new TextEncoder(),parts=[],central=[];let offset=0;
+  const u16=n=>new Uint8Array([n&255,(n>>>8)&255]);
+  const u32=n=>new Uint8Array([n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255]);
+  for(const f of files){
+    const name=enc.encode(f.path),data=f.data,crc=wbCrc32(data);
+    const local=new Uint8Array(30+name.length);
+    local.set(u32(0x04034b50),0);local.set(u16(20),4);local.set(u16(0x0800),6);
+    local.set(u16(0),8);local.set(u16(0),10);local.set(u16(0),12);
+    local.set(u32(crc),14);local.set(u32(data.length),18);local.set(u32(data.length),22);
+    local.set(u16(name.length),26);local.set(u16(0),28);local.set(name,30);
+    parts.push(local,data);
+    central.push({name,crc,size:data.length,offset});
+    offset+=30+name.length+data.length;
+  }
+  let cdSize=0;const cds=[];
+  for(const c of central){
+    const e=new Uint8Array(46+c.name.length);
+    e.set(u32(0x02014b50),0);e.set(u16(20),4);e.set(u16(20),6);e.set(u16(0x0800),8);
+    e.set(u16(0),10);e.set(u16(0),12);e.set(u16(0),14);
+    e.set(u32(c.crc),16);e.set(u32(c.size),20);e.set(u32(c.size),24);
+    e.set(u16(c.name.length),28);e.set(u16(0),30);e.set(u16(0),32);
+    e.set(u16(0),34);e.set(u16(0),36);e.set(u32(0),38);e.set(u32(c.offset),42);
+    e.set(c.name,46);cds.push(e);cdSize+=e.length;
+  }
+  const eocd=new Uint8Array(22);
+  eocd.set(u32(0x06054b50),0);eocd.set(u16(0),4);eocd.set(u16(0),6);
+  eocd.set(u16(central.length),8);eocd.set(u16(central.length),10);
+  eocd.set(u32(cdSize),12);eocd.set(u32(offset),16);eocd.set(u16(0),20);
+  return new Blob([...parts,...cds,eocd],{type:'application/zip'});
+}
+function wbFolderUI(){
+  const el=$('#wb-folder-info');if(!el)return;
+  const has=!!$('#fileinput').files[0]&&!!WB_FOLDER_INFO;
+  el.style.display=has?'':'none';
+  if(has) el.textContent=WB_FOLDER_INFO;
+}
+async function wbPackFolder(files){
+  const list=[...files];
+  if(!list.length) throw new Error('没有选择文件');
+  const root=(list[0].webkitRelativePath||'').split('/')[0]||'project';
+  const picked=[];
+  for(const f of list){
+    const rel=(f.webkitRelativePath||'').split('/').slice(1).join('/');
+    if(!rel) continue;
+    const segs=rel.split('/');
+    if(segs.some(s=>WB_SKIP.test(s))) continue;
+    if(/(^|\/)(Thumbs\.db|\.DS_Store)$/i.test(rel)) continue;
+    picked.push({path:rel,file:f});
+  }
+  if(!picked.length) throw new Error('文件夹里没有可打包的文件');
+  const total=picked.reduce((a,e)=>a+e.file.size,0);
+  if(total>400*1024*1024) throw new Error('文件夹超过 400MB，请清理构建产物或改用 zip');
+  const packed=[];
+  for(const e of picked) packed.push({path:e.path,data:new Uint8Array(await e.file.arrayBuffer())});
+  return {blob:wbZipStore(packed),root,count:picked.length,total};
+}
+(function initFolder(){
+  const folder=$('#folderinput'),pick=$('#wb-pick-folder');
+  if(!folder||!pick) return;
+  pick.addEventListener('click',e=>{e.stopPropagation();folder.click();});
+  folder.addEventListener('change',async()=>{
+    if(!folder.files||!folder.files.length) return;
+    $('#msg').textContent='正在打包文件夹…';
+    try{
+      const r=await wbPackFolder(folder.files);
+      const f=new File([r.blob],r.root+'.zip',{type:'application/zip'});
+      const dt=new DataTransfer();dt.items.add(f);
+      const input=$('#fileinput');input.files=dt.files;
+      WB_FOLDER_INFO='来自文件夹「'+r.root+'」· '+r.count+' 个文件 · '+wbSize(r.total)+'（已打包为 '+f.name+'）';
+      $('#msg').textContent='';
+      input.dispatchEvent(new Event('change',{bubbles:true}));
+      wbFolderUI();
+    }catch(err){$('#msg').textContent='打包失败：'+(err.message||err);}
+    finally{folder.value='';}
+  });
+  // 手动选 zip / 拖入 / 移除文件时，文件夹说明失效
+  $('#fileinput').addEventListener('click',()=>{WB_FOLDER_INFO='';wbFolderUI();});
+  $('#wb-drop').addEventListener('drop',()=>setTimeout(()=>{WB_FOLDER_INFO='';wbFolderUI();},0));
+  $('#wb-file-x').addEventListener('click',()=>{WB_FOLDER_INFO='';wbFolderUI();});
+})();
 
 /* ---------------- API 轻量调用助手 ---------------- */
 function hubFocus(id){
@@ -2326,30 +3075,27 @@ function copySnippet(btn){
     .then(()=>{btn.textContent='已复制'}).catch(()=>{});
 }
 
-/* ---------------- 生图 / 生视频：内嵌工作台表单 ---------------- */
-function copyText(t){if(navigator.clipboard)navigator.clipboard.writeText(t).catch(()=>{})}
-function openComfy(){window.open('/comfy/','_blank','noopener')}
-
+/* ---------------- 生图 / 生视频：ComfyUI 工作台 ----------------
+   提交时不再复制提示词到剪贴板：把参数写进已部署的工作流节点，打开节点
+   画布并在连接可用时直接 POST /comfyui/api/prompt 进入官方执行队列。 */
+function cwGenerate(kind){
+  const p = kind==='image'
+    ? {prompt:$('#img-prompt').value.trim(), size:$('#img-size').value,
+       style:$('#img-style').value, negative:$('#img-neg').value.trim()}
+    : {prompt:$('#vid-prompt').value.trim(), duration:$('#vid-dur').value,
+       size:$('#vid-size').value, motion:$('#vid-motion').value.trim()};
+  if(!p.prompt){return kind==='image'?'先写画面描述':'先写镜头描述'}
+  if(!window.ComfyWorkbench) return '工作台组件尚未加载，请刷新页面重试';
+  ComfyWorkbench.generate(kind,p);
+  return '已写入工作流并打开 ComfyUI 工作台';
+}
 $('#img-form').addEventListener('submit',e=>{
   e.preventDefault();
-  const p=$('#img-prompt').value.trim();
-  if(!p){$('#img-msg').textContent='先写画面描述';return}
-  let text=`画面：${p}\n画幅：${$('#img-size').value}\n风格：${$('#img-style').value}`;
-  if($('#img-neg').value.trim()) text+=`\n反向提示词：${$('#img-neg').value.trim()}`;
-  copyText(text);
-  $('#img-msg').textContent='提示词已复制，正在打开官方工作台…';
-  openComfy();
+  $('#img-msg').textContent=cwGenerate('image');
 });
-
 $('#vid-form').addEventListener('submit',e=>{
   e.preventDefault();
-  const p=$('#vid-prompt').value.trim();
-  if(!p){$('#vid-msg').textContent='先写镜头描述';return}
-  let text=`镜头：${p}\n时长：${$('#vid-dur').value}\n画幅：${$('#vid-size').value}`;
-  if($('#vid-motion').value.trim()) text+=`\n运镜/风格：${$('#vid-motion').value.trim()}`;
-  copyText(text);
-  $('#vid-msg').textContent='提示词已复制，正在打开官方工作台…';
-  openComfy();
+  $('#vid-msg').textContent=cwGenerate('video');
 });
 
 
@@ -2532,9 +3278,21 @@ function syncKind(){
   $('#render-blender').style.display=k==='blender'?'':'none';
   $('#render-pr').style.display=k==='pr'?'':'none';
   $('#build-fields').style.display=k==='build'?'':'none';
+  $('#segsbox').style.display=k==='build'?'none':'';
+  const pickbox=$('#wb-pick-build');
+  if(pickbox) pickbox.style.display=k==='build'?'':'none';
+  if(k!=='build'){WB_FOLDER_INFO='';wbFolderUI();}
   $('#baselinebox').style.display=k==='transcode'?'':'none';
   $('#durbox').style.display=k==='transcode'?'':'none';
   $('#fileinput').accept=k==='build'?'.zip':k==='blender'?'.blend,.zip':k==='pr'?'.zip':'video/*,audio/*';
+  // 跨页/跨类型切换时不携带不兼容的素材，避免把视频当源码 zip 提交
+  const cur=$('#fileinput').files[0];
+  if(cur&&!wbExtOk(cur.name,k)){
+    const wasMedia=wbExtOk(cur.name,'transcode');
+    $('#fileinput').value='';
+    if(wasMedia){DUR=0;const d=$('#f [name=duration]');if(d)d.value='0';}
+  }
+  wbKindUI();
   applyMode();
   quote();
 }
@@ -2555,24 +3313,34 @@ function reqFromForm(){
   return r;
 }
 $('#f').addEventListener('change',e=>{
-  if(e.target.name==='file'&&jobkind.value==='transcode'){
-    const f=e.target.files[0];if(!f)return;
-    const v=document.createElement('video');v.preload='metadata';
-    v.onloadedmetadata=()=>{if(isFinite(v.duration)&&v.duration>0){DUR=v.duration;
-      $('#f [name=duration]').value=Math.round(v.duration);quote()}};
-    v.src=URL.createObjectURL(f);
+  if(e.target.name==='file'){
+    wbFileUI();
+    if(jobkind.value==='transcode'){
+      const f=e.target.files[0];if(!f)return;
+      const v=document.createElement('video');v.preload='metadata';
+      v.onloadedmetadata=()=>{if(isFinite(v.duration)&&v.duration>0){DUR=v.duration;
+        $('#f [name=duration]').value=Math.round(v.duration);quote()}};
+      v.src=URL.createObjectURL(f);
+    }
   }
   quote();
+});
+$('#f').addEventListener('input',e=>{
+  if(e.target.name==='command') wbSteps();
+  if(e.target.name==='path') wbSumFile();
 });
 
 let quoteTimer=null;
 function quote(){
   clearTimeout(quoteTimer);quoteTimer=setTimeout(async()=>{
     const kind=jobkind.value;
+    const qEl=$('#quote');
+    const fail=msg=>{qEl.dataset.ok='0';qEl.innerHTML=`<div class="q-note">${msg}</div>`;wbSteps();};
     if(kind==='build'){
-      $('#quote').innerHTML=`<div>编译任务按实际墙钟分钟结算</div>
-        <div class="hint" style="margin-top:8px">预扣 10 分钟；编译失败不结算，差额自动退还。
-        只派给用 <code>--allow-build</code> 启动的节点，且本部署需把账号加入编译白名单。</div>`;
+      qEl.dataset.ok='1';
+      qEl.innerHTML=`<div class="q-note">编译任务按实际墙钟分钟结算，预扣 <b>10</b> 分钟；
+        编译失败不结算，差额自动退还。</div>`;
+      wbSteps();
       return;
     }
     if(kind!=='transcode'){
@@ -2580,46 +3348,51 @@ function quote(){
       if(kind==='blender'){
         const a=+($('#f [name=from]').value||0), b=+($('#f [name=to]').value||0);
         units=b-a+1;
-        if(!(units>0)){$('#quote').innerHTML='填写起止帧后按帧数估算';return}
-        head=`第 ${a}~${b} 帧，共 <b>${units}</b> 帧`;
+        if(!(units>0)){fail('填写起止帧后按帧数估算');return}
+        head=`第 ${a}~${b} 帧 · 共 <b>${units}</b> 帧`;
       }else{
-        head='时间线时长由工程决定，下面按每秒报价';
+        head='时间线时长由工程决定，按每秒报价';
       }
       const q=encodeURIComponent(JSON.stringify(reqFromForm()));
       try{
         const e=await api(`/api/estimate?duration=${units}&kind=${kind}&vcodec=libx264&req=${q}`);
         const ok=e.affordable&&e.eligible>0;
-        $('#quote').innerHTML=`
-          <div>${head} · 满足硬约束的在线节点 <b>${e.eligible}</b> 台</div>
-          <div style="margin:10px 0 6px" class="${ok?'':'no'}">${kind==='blender'?'预扣':'每秒预扣'}
-            <span class="big">${f2(e.hold)}</span> 点（${esc(e.hold_basis)} ${f2(e.hold_price)} 点/${esc(e.unit)}）</div>
-          <div>余额 ${f2(e.balance)} 点 ${e.affordable?'· 足够':'· <span class="no">不足，请到账单页充值</span>'}</div>
-          ${e.eligible>0?`<div class="hint">可派发到：${e.nodes.map(n=>
-            `${esc(n.name)}（${f2(n.price)} 点/${esc(e.unit)}${n.mine?' · 我的机器':''}）`).join('、')}</div>`
-            :`<div class="hint no">没有在线节点满足要求，任务会排队等待。Blender 任务需要节点安装了 blender 并上报该运行时。</div>`}
-          ${kind==='pr'?'<div class="hint">实际预扣 = 时间线时长 × 单价，提交后显示在任务卡上。</div>':''}`;
-      }catch(err){$('#quote').textContent='估算失败：'+err}
+        qEl.dataset.ok=ok?'1':'0';
+        qEl.innerHTML=`
+          <div class="q-line">${head} · 可用节点 <b>${e.eligible}</b> 台</div>
+          <div class="q-total ${ok?'':'no'}"><span>${kind==='blender'?'预扣':'每秒预扣'}</span>
+            <span class="big">${f2(e.hold)}</span><span class="q-unit">点</span>
+            <span class="q-basis">${esc(e.hold_basis)} ${f2(e.hold_price)} 点/${esc(e.unit)}</span></div>
+          <div class="q-line">余额 ${f2(e.balance)} 点 ${e.affordable?'· 足够':'· <span class="no">不足，请到账单页充值</span>'}</div>
+          ${e.eligible>0?`<div class="q-nodes">${e.nodes.map(n=>
+            `<span class="tag${n.mine?' mine':''}">${esc(n.name)} · ${f2(n.price)} 点/${esc(e.unit)}</span>`).join('')}</div>`
+            :`<div class="q-warn">没有在线节点满足要求，任务会排队等待。${kind==='blender'?'Blender 任务需要节点安装 blender 并上报该运行时。':''}</div>`}
+          ${kind==='pr'?'<div class="q-line q-faint">实际预扣 = 时间线时长 × 单价，提交后显示在任务卡上。</div>':''}`;
+        wbSteps();
+      }catch(err){fail('估算失败：'+esc(err))}
       return;
     }
     const dur=+($('#f [name=duration]').value||DUR||0);
-    if(!(dur>0)){$('#quote').innerHTML='填视频时长或选择文件后自动估算';return}
+    if(!(dur>0)){fail('填视频时长或选择文件后自动估算');return}
     const q=encodeURIComponent(JSON.stringify(reqFromForm()));
     const vc=$('#f [name=vcodec]').value;
     try{
       const e=await api(`/api/estimate?duration=${dur}&vcodec=${vc}&req=${q}`);
       const ok=e.affordable&&e.eligible>0;
-      const pick=e.first_pick?` · 首片预计派给 <b>${esc(e.first_pick.name)}</b>（${f2(e.first_pick.price)} 点/秒）`:'';
-      $('#quote').innerHTML=`
-        <div>时长 <b>${f1(dur)}</b> 秒 · 满足硬约束的在线节点 <b>${e.eligible}</b> 台</div>
-        <div style="margin:10px 0 6px" class="${ok?'':'no'}">预扣 <span class="big">${f2(e.hold)}</span> 点
-          （${esc(e.hold_basis)} ${f2(e.hold_price)} 点/秒） · 最省 <b>${f2(e.cheapest)}</b> 点${pick}</div>
-        <div>余额 ${f2(e.balance)} 点 ${e.affordable?'· 足够':'· <span class="no">不足，请到账单页充值</span>'}</div>
-        ${e.eligible>0?`<div class="hint">可派发到：${e.nodes.map(n=>
-          `${esc(n.name)}（${f2(n.price)} 点/秒${n.mine?' · 我的机器':''}）`).join('、')}</div>`
-          :`<div class="hint no">没有任何在线节点满足这些硬约束，任务会一直排队到匹配的算力上线。</div>`}
-        ${POL&&POL.cost_weight>0?`<div class="hint">派发打分 = 实测吞吐 × 信誉 ×（可行池均价 ÷ 该节点单价）^${f2(POL.cost_weight)}，
-          便宜与快一起参与竞争，不是只看速度。</div>`:''}`;
-    }catch(err){$('#quote').textContent='估算失败：'+err}
+      qEl.dataset.ok=ok?'1':'0';
+      qEl.innerHTML=`
+        <div class="q-line">时长 <b>${f1(dur)}</b> 秒 · 可用节点 <b>${e.eligible}</b> 台</div>
+        <div class="q-total ${ok?'':'no'}"><span>预扣</span>
+          <span class="big">${f2(e.hold)}</span><span class="q-unit">点</span>
+          <span class="q-basis">${esc(e.hold_basis)} ${f2(e.hold_price)} 点/秒 · 最省 ${f2(e.cheapest)} 点</span></div>
+        <div class="q-line">余额 ${f2(e.balance)} 点 ${e.affordable?'· 足够':'· <span class="no">不足，请到账单页充值</span>'}</div>
+        ${e.first_pick?`<div class="q-line q-faint">首片预计派给 <b>${esc(e.first_pick.name)}</b>（${f2(e.first_pick.price)} 点/秒）</div>`:''}
+        ${e.eligible>0?`<div class="q-nodes">${e.nodes.map(n=>
+          `<span class="tag${n.mine?' mine':''}">${esc(n.name)} · ${f2(n.price)} 点/秒</span>`).join('')}</div>`
+          :`<div class="q-warn">没有任何在线节点满足这些硬约束，任务会一直排队到匹配的算力上线。</div>`}
+        ${POL&&POL.cost_weight>0?`<div class="q-line q-faint">派发打分 = 实测吞吐 × 信誉 ×（可行池均价 ÷ 该节点单价）^${f2(POL.cost_weight)}，便宜与快一起参与竞争。</div>`:''}`;
+      wbSteps();
+    }catch(err){fail('估算失败：'+esc(err))}
   },250);
 }
 
@@ -2752,7 +3525,8 @@ function jobHTML(j){
 }
 const COMM_EVENT={'job.created':'任务创建','job.done':'任务完成','job.failed':'任务失败','job.cancelled':'任务取消',
   'seg.dispatched':'派发给节点','seg.fetching':'节点取源','seg.running':'节点开始执行','seg.uploading':'节点回传',
-  'seg.done':'分片完成','seg.failed':'分片失败','seg.settled':'结算'};
+  'seg.done':'分片完成','seg.failed':'分片失败','seg.settled':'结算',
+  'offer.auto_share':'共享自动交付'};
 const COMM_ACTOR={buyer:'买方',seller:'卖方',server:'平台'};
 function commDetail(e){
   try{
@@ -3245,6 +4019,21 @@ async function togglePause(id,paused){
     {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({paused})});
     refresh()}catch(e){alert('操作失败：'+e)}
 }
+
+// 删除只把设备移出自己的节点池：已结算的收益流水、分片与通讯记录都留作对账凭证，
+// 不会退回余额。Broker 会写注销墓碑，旧 Agent 拿着旧凭据再上线会被拒绝。
+async function deleteNode(id){
+  const w=POOL.find(x=>x.id===id), name=w?(w.name||w.id):id;
+  if(!confirm('删除节点「'+name+'」？\n\n'
+    +'这台机器会从「我的机器」里移除；已结算的收益流水会保留用于对账。\n'
+    +'如果节点程序还在运行，请把它关掉；想让这台机器重新加入，请重新下载节点包。'))return;
+  try{
+    await api('/api/nodes/'+encodeURIComponent(id),{method:'DELETE'});
+    CONTRIB=null; CONTRIB_AT=0;
+    loadContribution(true);
+    refresh();
+  }catch(e){alert('删除失败：'+e)}
+}
 $('#pair').onclick=async()=>{
   const code=$('#code').value.trim().toUpperCase();
   if(!code)return;
@@ -3279,31 +4068,58 @@ function paintNodes(){
   const mine=POOL.filter(w=>w.mine);
   if(!POL||POL.pending) paintPending();
   if(!mine.length){$('#mynodes').innerHTML='<div class="empty">还没有属于你的节点</div>';return}
-  $('#mynodes').innerHTML=mine.map(w=>`<div class="card" style="margin-bottom:10px;padding:16px 18px">
+  // 同设备出现多行 = 升级前留下的重复节点，提示用户删掉，别把两份都当贡献。
+  const dup={};
+  ((CONTRIB||{}).nodes||[]).forEach(n=>{if(n.duplicate)dup[n.id]=true});
+  $('#mynodes').innerHTML=mine.map(w=>{
+    const legacy=Math.max(0,Number(w.earned||0)-Number(w.earned_task||0)-Number(w.earned_vm||0));
+    return `<div class="card" style="margin-bottom:10px;padding:16px 18px">
     <h2 class="plain">
-      ${esc(w.name||w.id)} <span class="tag ${w.online?'on':'off'}">${w.online?'在线':'离线'}</span></h2>
+      ${esc(w.name||w.id)} <span class="tag ${w.online?'on':'off'}">${w.online?'在线':'离线'}</span>
+      ${w.paused?'<span class="tag">已暂停</span>':''}
+      ${dup[w.id]?'<span class="tag warn">同设备重复节点，建议删除</span>':''}
+      ${!w.device_id?'<span class="tag warn">旧版节点（无设备指纹）</span>':''}</h2>
     <div class="stats">
-      <div class="stat"><b>${f2(w.earned||0)}</b><span>累计收益点</span></div>
-      <div class="stat"><b>${f1(w.seconds_billed||0)}s</b><span>已结算算力</span></div>
+      <div class="stat"><b>${f2(w.earned||0)}</b><span>节点贡献（点）</span></div>
+      <div class="stat"><b>${f2(w.earned_task||0)}</b><span>其中：任务算力</span></div>
+      <div class="stat"><b>${f2(w.earned_vm||0)}</b><span>其中：云主机</span></div>
+      <div class="stat"><b>${f1(w.billed_task_sec||0)}s</b><span>已结算任务时长</span></div>
+      <div class="stat"><b>${f1(w.billed_vm_sec||0)}s</b><span>已结算租用时长</span></div>
       <div class="stat"><b>${w.active}/${w.slots}</b><span>占用槽位</span></div>
       <div class="stat"><b>${f2(w.price)}</b><span>当前单价</span></div>
-      <div class="stat"><b>${w.speed>0?f2(w.speed)+'×':'—'}</b><span>实测吞吐</span></div>
       <div class="stat"><b>${w.ok}/${w.ok+w.bad}</b><span>成功/总数</span></div>
     </div>
-    <div class="hint">编号 <span class="num">${esc(w.id)}</span> · ${esc(w.hostname||'')} · ${esc(w.os)} · ${w.cpus} 核 ·
+    <div class="hint">编号 <span class="num">${esc(w.id)}</span> · 设备 <span class="num">${esc(w.device_id||'（旧版节点未采集）')}</span>
+      · ${esc(w.hostname||'')} · ${esc(w.os)} · ${w.cpus} 核 ·
       ${w.mem_mb?Math.round(w.mem_mb/1024)+'GB':''} · 空闲磁盘 ${w.disk_free_mb?Math.round(w.disk_free_mb/1024)+'GB':'未知'}</div>
+    <div class="hint">任务时长是视频/墙钟秒，租用时长是运行秒，两者分开累计；贡献只算校验通过的任务分片和已结算的云主机租用，在线挂机不计。${legacy>0.01?'其中 '+f2(legacy)+' 点为升级前未分类的历史收益。':''}</div>
     ${w.paused?'<div class="hint warn">已停止派活：正在跑的分片会做完，但不再接新的。</div>':''}
-    <div style="display:flex;gap:8px;margin-top:12px">
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
       <button class="ghost tiny" onclick="reprice('${esc(w.id)}',${w.price})">调整单价</button>
       <button class="ghost tiny"
         onclick="togglePause('${esc(w.id)}',${!w.paused})">${w.paused?'恢复派活':'暂停派活'}</button>
+      <button class="ghost tiny" onclick="deleteNode('${esc(w.id)}')">删除节点</button>
     </div>
-  </div>`).join('');
+  </div>`}).join('');
 }
 
 /* ---------------- 账单 ---------------- */
 const KIND={hold:'预扣',settle:'结算',refund:'退还',earn:'收益',recharge:'充值'};
+function paintContrib(){
+  const c=CONTRIB;
+  if(!c||!c.seller){$('#contribstat').innerHTML='<div class="empty">正在读取贡献账目…</div>';return}
+  const b=c.seller.by_source||{};
+  const cell=(v,k)=>`<div class="stat"><b>${f2(v)}</b><span>${k}</span></div>`;
+  $('#contribstat').innerHTML=
+    cell(c.seller.total_earned,'卖家贡献合计')+
+    cell(b.task,'任务算力（节点 100%）')+
+    cell(b.vm,'云主机（卖方 90%）')+
+    cell(b.model,'模型上游（无节点）')+
+    cell(c.node_total_earned,'Σ 当前名下节点贡献')+
+    cell(c.other_earned,'其它收益');
+}
 async function paintBill(){
+  paintContrib();
   try{
     const d=await api('/api/ledger');
     const ts=t=>new Date(t*1000).toLocaleString('zh-CN',{hour12:false});
@@ -3340,6 +4156,7 @@ function applyMode(){
   $('#adv-only').style.display=(ADV||render)?'':'none';
   $('#qualitybox').style.display=(!ADV&&!render)?'':'none';
   $('#tipcard').style.display=ADV?'none':'';
+  const adv=$('#wb-adv'); if(adv) adv.open=ADV;
   if(!ADV) applyQuality();
   $('#advtoggle').checked=ADV;
   $('#advhint').textContent=ADV

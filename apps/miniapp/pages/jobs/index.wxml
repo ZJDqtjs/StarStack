@@ -1,6 +1,11 @@
 <view class="wrap tabpage">
-  <h1>我的任务</h1>
-  <view class="lead">分片去向、进度、哈希校验与结算；跨 Broker 重启恢复的任务不计量加速比。</view>
+  <view class="hero compute">
+    <view class="hero-main">
+      <text class="hero-eyebrow">MY JOBS</text>
+      <view class="hero-title">我的任务</view>
+      <view class="hero-desc">分片去向、进度、哈希校验与结算；跨 Broker 重启恢复的任务不计量加速比。</view>
+    </view>
+  </view>
 
   <view class="card" wx:if="{{err}}"><view class="err">{{err}}</view></view>
   <view class="card" wx:if="{{loading}}"><view class="empty">加载中…</view></view>

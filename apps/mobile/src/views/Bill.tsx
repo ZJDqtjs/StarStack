@@ -7,12 +7,15 @@ import { LEDGER_KIND } from '../../../shared/constants.js'
 export default function Bill() {
   const { api, me, policy, showToast } = useApp()
   const [d, setD] = useState<any>(null)
+  const [c, setC] = useState<any>(null)
   const [amount, setAmount] = useState('100')
   const [busy, setBusy] = useState(false)
 
   const load = async () => {
     try {
-      setD(await api.ledger())
+      const [bill, contrib] = await Promise.all([api.ledger(), api.contribution()])
+      setD(bill)
+      setC(contrib)
     } catch (e: any) {
       showToast('读取账单失败：' + (e.message || e), 'bad')
       setD({ spend: [], earn: [] })
@@ -41,8 +44,11 @@ export default function Bill() {
 
   const spend = d?.spend || []
   const earn = d?.earn || []
-  const income = earn.reduce((a: number, e: any) => a + Number(e.amount || 0), 0)
   const outgoing = spend.filter((e: any) => Number(e.amount) < 0).reduce((a: number, e: any) => a + Math.abs(Number(e.amount)), 0)
+  // The ledger endpoint is a page of recent rows, so summing it under-reports.
+  // Contribution totals come from the full Earn history instead.
+  const income = c ? Number(c.seller?.total_earned || 0) : earn.reduce((a: number, e: any) => a + Number(e.amount || 0), 0)
+  const src = c?.seller?.by_source || {}
 
   return (
     <div className="stack">
@@ -50,6 +56,24 @@ export default function Bill() {
         <h1>账单</h1>
         <p>账户流水与按节点结算的收益明细；校验不通过的分片不结算。</p>
       </div>
+
+      <Card kicker="Contribution" title="贡献概览">
+        <div className="hint">卖家贡献（账户）= 名下所有节点的贡献 + 无节点收益；节点贡献（设备）只算这台机器已结算的算力。两者是同一本账的两个视角。</div>
+        <Stats
+          items={[
+            { v: f2(income), k: '卖家贡献合计', hl: true },
+            { v: f2(src.task || 0), k: '任务算力' },
+            { v: f2(src.vm || 0), k: '云主机（卖方 90%）' },
+            { v: f2(src.model || 0), k: '模型上游（无节点）' },
+            { v: f2(c?.node_total_earned || 0), k: 'Σ 当前名下节点贡献' },
+            { v: f2(c?.other_earned || 0), k: '其它收益' },
+          ]}
+        />
+        <div className="hint" style={{ marginTop: 8 }}>
+          「其它收益」= 卖家贡献 − Σ 当前名下节点贡献，包含模型上游收益、已删除节点的历史收益和升级前的旧账。
+          只有哈希校验通过的任务分片与已结算的云主机租用计入贡献，在线挂机不计。
+        </div>
+      </Card>
 
       <Card kicker="Summary" title="账户概览">
         <Stats
@@ -101,7 +125,7 @@ export default function Bill() {
         )}
       </Card>
 
-      <Card kicker="Earnings" title="我的节点收益">
+      <Card kicker="Earnings" title="节点贡献明细（最近记录）">
         {!d ? (
           <Loader />
         ) : earn.length === 0 ? (
@@ -122,7 +146,9 @@ export default function Bill() {
             ))}
           </div>
         )}
-        <div className="hint" style={{ marginTop: 8 }}>收益只在「节点自报哈希 == broker 重算哈希」的分片上发放。</div>
+        <div className="hint" style={{ marginTop: 8 }}>
+          这里只列最近的收益流水，总额请看上方「贡献概览」。任务收益只在「节点自报哈希 == broker 重算哈希」的分片上发放；云主机收益按租用时长结算、平台留 10%。
+        </div>
       </Card>
     </div>
   )

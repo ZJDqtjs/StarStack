@@ -13,19 +13,40 @@ import Bill from './views/Bill'
 import Forum from './views/Forum'
 import Me from './views/Me'
 
-const NAV = [
-  ['submit', '提交'],
-  ['jobs', '任务'],
-  ['market', '市场'],
-  ['vm', '云主机'],
-  ['nodes', '节点'],
-  ['api', '模型 API'],
-  ['bill', '账单'],
-  ['forum', '论坛'],
-  ['me', '我的'],
+const NAV_GROUPS: { label: string; items: [string, string][] }[] = [
+  { label: 'Work · 工作台', items: [['render', '渲染'], ['build', '编排'], ['jobs', '任务'], ['market', '市场']] },
+  { label: 'Compute · 算力', items: [['vm', '云主机'], ['nodes', '节点'], ['api', '模型 API']] },
+  { label: 'Account · 账户', items: [['bill', '账单'], ['forum', '论坛'], ['me', '我的']] },
 ]
+const NAV: [string, string][] = NAV_GROUPS.reduce((all, g) => all.concat(g.items), [] as [string, string][])
 
-const VIEWS: Record<string, any> = { submit: Submit, jobs: Jobs, market: Market, vm: Vm, nodes: Nodes, api: ApiView, bill: Bill, forum: Forum, me: Me }
+const ICONS: Record<string, React.ReactNode> = {
+  render: <><path d="M12 3l9 5-9 5-9-5 9-5Z" /><path d="M3 12l9 5 9-5M3 16l9 5 9-5" /></>,
+  build: <><circle cx="6" cy="6" r="2" /><circle cx="18" cy="18" r="2" /><path d="M6 8v6a4 4 0 0 0 4 4h6" /></>,
+  jobs: <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M8 12h8M8 16h5" /></>,
+  market: <><path d="M4 7h16M5 7l1 12h12l1-12M9 11v5M15 11v5" /></>,
+  vm: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4M7 9h6" /></>,
+  nodes: <><rect x="3" y="4" width="18" height="7" rx="2" /><rect x="3" y="13" width="18" height="7" rx="2" /><path d="M7 7.5h.01M7 16.5h.01" /></>,
+  api: <><path d="M8 5 4 9l4 4M16 9l4 4-4 4M14 4l-4 12" /></>,
+  bill: <><path d="M5 3h14v18l-3-2-4 2-4-2-3 2V3Z" /><path d="M9 8h6M9 12h6" /></>,
+  forum: <><path d="M20 15a3 3 0 0 1-3 3H8l-4 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v9Z" /></>,
+  me: <><circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" /></>,
+}
+
+const PAGE_META: Record<string, { eyebrow: string; title: string; desc: string; tone: string }> = {
+  render: { eyebrow: 'Render Studio', title: '渲染工作台', desc: 'Blender 帧渲染、剪辑时间线与视频转码共用一套提交流程。', tone: 'compute' },
+  build: { eyebrow: 'Pipeline · Orchestration', title: '任务编排', desc: '源码 zip 上传后由算力节点执行编译 / 打包命令。', tone: 'compute' },
+  jobs: { eyebrow: 'My Jobs', title: '我的任务', desc: '分片派发、进度、哈希校验与结算明细都在这里。', tone: 'compute' },
+  market: { eyebrow: 'Capacity Market', title: '算力市场', desc: '在线节点、可调度切片与实时单价，点击节点可指定派发。', tone: 'market' },
+  vm: { eyebrow: 'Cloud Instances', title: '云主机', desc: '按小时租用虚拟机，或把自己的机器发布成可租用配置。', tone: 'compute' },
+  nodes: { eyebrow: 'Provider Nodes', title: '我的节点', desc: '把闲置机器接入算力池，按实测用量获得收益。', tone: 'market' },
+  api: { eyebrow: 'Model Gateway', title: '模型 API', desc: 'OpenAI 兼容网关、密钥管理与上游接入，按 token 结算。', tone: 'create' },
+  bill: { eyebrow: 'Billing & Ledger', title: '账单与收益', desc: '账户流水、充值与节点收益；校验不通过的分片不结算。', tone: 'account' },
+  forum: { eyebrow: 'Community', title: '星栈论坛', desc: '分享工作流、讨论调度策略、展示作品。', tone: 'community' },
+  me: { eyebrow: 'Account Center', title: '个人中心', desc: '账户资料、连接设置与界面偏好。', tone: 'account' },
+}
+
+const VIEWS: Record<string, any> = { render: Submit, build: Submit, jobs: Jobs, market: Market, vm: Vm, nodes: Nodes, api: ApiView, bill: Bill, forum: Forum, me: Me }
 
 export default function App() {
   const [theme, setTheme] = useState(store.get('ss-theme') || 'light')
@@ -33,7 +54,7 @@ export default function App() {
   const [policy, setPolicy] = useState<any>(null)
   const [workers, setWorkers] = useState<any[]>([])
   const [jobs, setJobs] = useState<any[]>([])
-  const [view, setView] = useState('submit')
+  const [view, setView] = useState('render')
   const [booting, setBooting] = useState(true)
   const [toast, setToast] = useState<{ msg: string; tone?: string } | null>(null)
   const [targetNode, setTargetNode] = useState<any>(null)
@@ -56,7 +77,7 @@ export default function App() {
     setMe(null)
     setJobs([])
     setWorkers([])
-    setView('submit')
+    setView('render')
   }, [])
 
   // Bootstrap: read the deployment policy before login so the auth card can
@@ -138,7 +159,7 @@ export default function App() {
               policy={policy}
               onDone={(m: any) => {
                 setMe(m)
-                setView('submit')
+                setView('render')
               }}
             />
           </div>
@@ -149,6 +170,32 @@ export default function App() {
   }
 
   const View = VIEWS[view] || Submit
+  const online = workers.filter((w) => w.online).length
+  const freeSlots = workers.filter((w) => w.online).reduce((a, w) => a + Math.max(0, (w.slots || 0) - (w.active || 0)), 0)
+  const meta = PAGE_META[view] || PAGE_META.render
+
+  const hero = (
+    <>
+      <div className="nx-hero" data-tone={meta.tone}>
+        <div>
+          <span className="nx-eyebrow">{meta.eyebrow}</span>
+          <h1>{meta.title}</h1>
+          <p>{meta.desc}</p>
+        </div>
+        <div className="nx-hero-side">
+          <div className="nx-hero-badge">
+            <b>{online}</b>
+            <span>在线节点</span>
+          </div>
+        </div>
+      </div>
+      <div className="nx-kpis">
+        <div className="nx-kpi"><span>空闲槽位</span><b>{freeSlots}</b><i>▦</i></div>
+        <div className="nx-kpi"><span>我的任务</span><b>{jobs.length}</b><i>◈</i></div>
+        <div className="nx-kpi"><span>账户余额</span><b>{f2(me.credits)}</b><i>◉</i></div>
+      </div>
+    </>
+  )
 
   const themeBtn = (
     <button className="iconbtn" aria-label="切换深浅色" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
@@ -174,20 +221,27 @@ export default function App() {
             </div>
           </div>
           <nav className="side-nav">
-            {NAV.map(([v, label]) => (
-              <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
-                {label}
-              </button>
+            {NAV_GROUPS.map((g) => (
+              <div className="nav-group" key={g.label}>
+                <span className="nav-group-label">{g.label}</span>
+                {g.items.map(([v, label]) => (
+                  <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
+                    <svg className="nav-ico" viewBox="0 0 24 24">{ICONS[v]}</svg>
+                    {label}
+                  </button>
+                ))}
+              </div>
             ))}
           </nav>
           <div className="side-foot">
             <div className="wallet">
-              余额 <b>{f2(me.credits)}</b>
+              <span>账户余额</span>
+              <b>{f2(me.credits)} 算力点</b>
             </div>
             <div className="side-row">
               {themeBtn}
               <span className="avatar">{me.name.slice(0, 1).toUpperCase()}</span>
-              <button className="ghost tiny" onClick={signOut}>
+              <button className="btn ghost tiny" onClick={signOut}>
                 退出
               </button>
             </div>
@@ -218,6 +272,7 @@ export default function App() {
             </nav>
           </header>
           <main className="main">
+            {view !== 'render' && view !== 'build' && hero}
             <View />
           </main>
         </div>

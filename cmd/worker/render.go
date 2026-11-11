@@ -336,7 +336,7 @@ func (a *agent) blenderRender(ctx context.Context, c *hub.Claim, args []string, 
 				pct = 99
 			}
 			a.post(a.server+"/api/report", map[string]any{
-				"worker": a.id, "seg": c.SegID, "state": "running", "pct": pct,
+				"worker": a.nodeID(), "seg": c.SegID, "state": "running", "pct": pct,
 			}, true)
 		}
 	}
@@ -512,7 +512,7 @@ func (a *agent) runTimeline(c *hub.Claim) {
 				pct = 99
 			}
 			a.post(a.server+"/api/report", map[string]any{
-				"worker": a.id, "seg": c.SegID, "state": "running",
+				"worker": a.nodeID(), "seg": c.SegID, "state": "running",
 				"pct": pct, "speed": pr.Speed,
 			}, true)
 		})
@@ -552,7 +552,7 @@ func (a *agent) runTimeline(c *hub.Claim) {
 // finish is the delivery half shared by all three job kinds: announce the
 // upload, keep the lease alive through it, verify what the broker stored.
 func (a *agent) finish(c *hub.Claim, path string, wall, speed float64) {
-	a.post(a.server+"/api/report", map[string]any{"worker": a.id, "seg": c.SegID, "state": "uploading"}, true)
+	a.post(a.server+"/api/report", map[string]any{"worker": a.nodeID(), "seg": c.SegID, "state": "uploading"}, true)
 	var pushed int64
 	stopBeat := a.beat(c.SegID, "uploading", &pushed, 0)
 	sha, size, err := a.upload(c.SegID, path)
@@ -562,7 +562,7 @@ func (a *agent) finish(c *hub.Claim, path string, wall, speed float64) {
 		return
 	}
 	a.post(a.server+"/api/report", map[string]any{
-		"worker": a.id, "seg": c.SegID, "state": "done",
+		"worker": a.nodeID(), "seg": c.SegID, "state": "done",
 		"speed": speed, "sha": sha, "bytes": size, "wall": wall,
 	}, true)
 	log.Printf("seg %s done in %.1fs (%.2f units/s, %.1f MiB)", c.SegID, wall, speed, float64(size)/(1<<20))

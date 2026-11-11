@@ -4,7 +4,7 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="星栈算力" Height="840" Width="1320" MinHeight="620" MinWidth="920"
         WindowStartupLocation="CenterScreen"
-        Background="#0b0b0c">
+        Background="#f6f8fd">
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -29,12 +29,24 @@
 
     <Grid Grid.Row="1">
       <wv2:WebView2 x:Name="Web" />
-      <Border x:Name="Overlay" Background="#0b0b0c">
+      <Border x:Name="Overlay" Background="#f6f8fd">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="560">
-          <TextBlock Text="星栈算力" FontSize="24" FontWeight="SemiBold" Foreground="#f3f3f2" HorizontalAlignment="Center" />
+          <Border Width="48" Height="48" CornerRadius="12" HorizontalAlignment="Center" Margin="0,0,0,18">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#5a6bff" Offset="0" />
+                <GradientStop Color="#8b5cf6" Offset="1" />
+              </LinearGradientBrush>
+            </Border.Background>
+            <TextBlock Text="星" FontSize="23" FontWeight="SemiBold" Foreground="White"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="星栈算力" FontSize="24" FontWeight="SemiBold" Foreground="#3d4bd8" HorizontalAlignment="Center" />
           <TextBlock x:Name="ErrorText" Text="正在启动本地控制台…" Margin="0,14,0,0"
-                     Foreground="#8a8a8a" TextWrapping="Wrap" TextAlignment="Center" />
-          <Button Content="重新加载" Click="Reload_Click" Margin="0,22,0,0" Padding="20,8" HorizontalAlignment="Center" />
+                     Foreground="#8b96b1" TextWrapping="Wrap" TextAlignment="Center" />
+          <Button Content="重新加载" Click="Reload_Click" Margin="0,22,0,0" Padding="22,9"
+                  Background="#5a6bff" Foreground="White" BorderThickness="0" FontWeight="SemiBold"
+                  HorizontalAlignment="Center" />
         </StackPanel>
       </Border>
     </Grid>

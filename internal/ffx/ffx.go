@@ -580,7 +580,11 @@ func filterHardwareEncoders(ctx context.Context, encs []string) []string {
 // measure is reported as zero and treated by the scheduler as "unknown"
 // (never a reason to exclude, nor a promise to a buyer).
 type Inventory struct {
-	Hostname   string      `json:"hostname"`
+	Hostname string `json:"hostname"`
+	// DeviceID is the stable machine fingerprint. The broker uses it to keep
+	// one account's one physical machine to one node; it is not a secret and
+	// carries no hardware serial.
+	DeviceID   string      `json:"device_id"`
 	OS         string      `json:"os"`
 	Arch       string      `json:"arch"`
 	CPUs       int         `json:"cpus"`
@@ -627,6 +631,7 @@ func Detect(ctx context.Context, workDir string) Inventory {
 	}
 	return Inventory{
 		Hostname:   host,
+		DeviceID:   MachineID(),
 		OS:         runtime.GOOS + "/" + runtime.GOARCH,
 		Arch:       runtime.GOARCH,
 		CPUs:       runtime.NumCPU(),

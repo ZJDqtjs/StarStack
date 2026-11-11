@@ -30,7 +30,7 @@ import (
 
 func main() {
 	server := flag.String("server", "http://127.0.0.1:8787", "platform server base URL")
-	id := flag.String("id", "", "stable node id (default: hostname-pid)")
+	id := flag.String("id", "", "stable node id (default: this machine's device fingerprint)")
 	name := flag.String("name", "", "display name shown in the compute market (default: hostname)")
 	slots := flag.Int("slots", 0, "concurrent segment slots (0 = auto)")
 	price := flag.Float64("price", 1.0, "算力点 / 视频秒 the provider asks for")
@@ -116,6 +116,13 @@ func main() {
 	// one measurement, reported verbatim: what this machine cannot see it does
 	// not advertise, and the broker will not promise it to a buyer
 	info := ffx.Detect(ctx, *work)
+	// A node is a physical machine, not a process. Launcher tickets carry a
+	// random web-xxx id and the old default was hostname-PID, so every restart
+	// or extra click used to create a twin node with empty history. An explicit
+	// --id is still honoured for manually run agents.
+	if info.DeviceID != "" && (*launch != "" || !explicit["id"]) {
+		*id = info.DeviceID
+	}
 	if *force != "" {
 		info.Encoders = []string{*force}
 	}
@@ -159,7 +166,8 @@ func main() {
 		}
 	}
 
-	a := &agent{server: *server, id: *id, token: *token, launch: *launch, work: *work,
+	a := &agent{server: *server, id: *id, deviceID: info.DeviceID,
+		token: *token, launch: *launch, work: *work,
 		hc: newClient(26 * time.Second)}
 	// A launcher from the console cannot carry the label the provider typed: cmd.exe
 	// parses a .cmd in the machine's OEM codepage, so the UTF-8 name would arrive
@@ -179,9 +187,9 @@ func main() {
 		// on the claim endpoint afterwards only hides that from the provider.
 		log.Fatalf("接入被拒绝: %v", err)
 	}
-	a.commNote("hello", "node="+*id)
+	a.commNote("hello", "node="+a.nodeID())
 	log.Printf("node %s online: %s/%s cpus=%d mem=%dMB gpus=%v slots=%d price=%.2f encoders=%v",
-		*id, info.OS, info.Arch, info.CPUs, info.MemMB, info.GPUs, *slots, *price, info.Encoders)
+		a.nodeID(), info.OS, info.Arch, info.CPUs, info.MemMB, info.GPUs, *slots, *price, info.Encoders)
 	if a.nodeSecret() == "" {
 		log.Printf("提示：Broker 没有发回节点凭据")
 	}
@@ -235,20 +243,42 @@ func main() {
 // slice or fill another machine's queue.
 type agent struct {
 	server, id, token, work string
-	hc                      *http.Client
+	// deviceID is the stable machine fingerprint. The broker may fold this
+	// machine into an existing node id, so the credential cache is keyed by the
+	// device rather than by the (changeable) node id.
+	deviceID string
+	hc       *http.Client
 
+	idMu      sync.RWMutex
 	mu        sync.Mutex
 	secret    string
 	launch    string // spent by the broker on the first accepted hello
 	lastHello hub.NodeInfo
 }
 
-// secretFile is the cached per-node credential. It is named after the node id
-// because one machine can run two launchers that share --work: a single node.key
-// would hand node A's credential to node B, and the broker reads that as proof
-// that B is a machine it already knows.
+// nodeID is read on every request; hello may replace it once when the broker
+// tells this machine which node it was folded into.
+func (a *agent) nodeID() string {
+	a.idMu.RLock()
+	defer a.idMu.RUnlock()
+	return a.id
+}
+
+func (a *agent) setNodeID(id string) {
+	a.idMu.Lock()
+	a.id = id
+	a.idMu.Unlock()
+}
+
+// secretFile is the cached per-node credential, named after the device
+// fingerprint: one-click launchers mint a fresh random node id on every click,
+// and a cache keyed by that id would lose the credential on the next run.
 func (a *agent) secretFile() string {
-	return filepath.Join(a.work, "node-"+a.id+".key")
+	name := a.deviceID
+	if name == "" {
+		name = a.nodeID()
+	}
+	return filepath.Join(a.work, "node-"+name+".key")
 }
 
 func (a *agent) setSecret(s string) {
@@ -360,11 +390,19 @@ func (a *agent) hello() (code string, owned bool, err error) {
 	if err := json.Unmarshal(body, &out); err != nil {
 		return "", false, nil
 	}
+	// The broker is authoritative about node identity: it may fold this device
+	// into an existing node, or issue a fresh id after the old one was deleted.
+	// Adopt the id before caching the credential so the re-announce heartbeat
+	// and every later request keep hitting the same node.
+	if out.ID != "" && out.ID != info.ID {
+		log.Printf("平台把本机归入节点 %s（原 %s）", out.ID, info.ID)
+		a.setNodeID(out.ID)
+		a.mu.Lock()
+		a.lastHello.ID = out.ID
+		a.mu.Unlock()
+	}
 	if out.Secret != "" {
 		a.setSecret(out.Secret)
-	}
-	if out.ID != info.ID {
-		log.Printf("note: platform registered this machine as %s", out.ID)
 	}
 	a.mu.Lock()
 	a.launch = "" // single-use; a stale code on the next re-announce is noise at best
@@ -373,7 +411,7 @@ func (a *agent) hello() (code string, owned bool, err error) {
 }
 
 func (a *agent) poll() *hub.Claim {
-	u := fmt.Sprintf("%s/api/claim?worker=%s&wait=20", a.server, url.QueryEscape(a.id))
+	u := fmt.Sprintf("%s/api/claim?worker=%s&wait=20", a.server, url.QueryEscape(a.nodeID()))
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		time.Sleep(3 * time.Second)
@@ -413,7 +451,7 @@ func (a *agent) poll() *hub.Claim {
 
 func (a *agent) idle() {
 	// light heartbeat so the broker keeps this node marked online
-	a.post(a.server+"/api/report", map[string]any{"worker": a.id, "seg": "", "state": "idle"}, true)
+	a.post(a.server+"/api/report", map[string]any{"worker": a.nodeID(), "seg": "", "state": "idle"}, true)
 }
 
 func (a *agent) run(c *hub.Claim) {
@@ -457,7 +495,7 @@ func (a *agent) runTranscode(c *hub.Claim) {
 			pct = 99
 		}
 		a.post(a.server+"/api/report", map[string]any{
-			"worker": a.id, "seg": c.SegID, "state": "running",
+			"worker": a.nodeID(), "seg": c.SegID, "state": "running",
 			"pct": pct, "speed": p.Speed,
 		}, true)
 	})
@@ -477,7 +515,7 @@ func (a *agent) fail(c *hub.Claim, msg string) {
 	log.Printf("seg %s FAILED: %s", c.SegID, msg)
 	a.commNote("failed", "seg="+c.SegID, "err="+strings.ReplaceAll(msg, "\n", " "))
 	a.post(a.server+"/api/report", map[string]any{
-		"worker": a.id, "seg": c.SegID, "state": "failed", "err": msg}, true)
+		"worker": a.nodeID(), "seg": c.SegID, "state": "failed", "err": msg}, true)
 }
 
 // fetchSource downloads the job source once per worker and caches it. The
@@ -590,7 +628,7 @@ func (a *agent) beat(segID, state string, got *int64, total int64) func() {
 					}
 				}
 				a.post(a.server+"/api/report", map[string]any{
-					"worker": a.id, "seg": segID, "state": state, "pct": pct,
+					"worker": a.nodeID(), "seg": segID, "state": state, "pct": pct,
 				}, true)
 			case <-stop:
 				return
@@ -695,7 +733,7 @@ func (a *agent) upload(segID, path string) (string, int64, error) {
 	}()
 	defer pr.Close()
 
-	u := a.server + "/api/upload?seg=" + url.QueryEscape(segID) + "&worker=" + url.QueryEscape(a.id)
+	u := a.server + "/api/upload?seg=" + url.QueryEscape(segID) + "&worker=" + url.QueryEscape(a.nodeID())
 	req, err := http.NewRequest("POST", u, pr)
 	if err != nil {
 		pr.CloseWithError(err)

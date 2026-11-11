@@ -8,7 +8,7 @@ const config: CapacitorConfig = {
   appName: '星栈算力',
   webDir: 'mobile/dist',
   server: { androidScheme: 'http', cleartext: true },
-  android: { allowMixedContent: true, backgroundColor: '#0b0b0c' },
+  android: { allowMixedContent: true, backgroundColor: '#f6f8fd' },
 }
 
 export default config

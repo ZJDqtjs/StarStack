@@ -40,6 +40,8 @@ func main() {
 		"served under /dl/ so the console can hand out a double-click launcher")
 	comfyhub := flag.String("comfyhub", "", "ComfyHub base URL to expose under /comfy/ (e.g. http://127.0.0.1:8788); "+
 		"prefer STARSTACK_COMFYHUB so the URL stays out of the process list")
+	comfyui := flag.String("comfyui", "", "ComfyUI base URL for the 生图/生视频 workflow workbench under "+
+		"/comfyui/api/ (default http://127.0.0.1:8188); prefer STARSTACK_COMFYUI")
 	allowBuild := flag.Bool("allow-build", false, "expose the compile/packaging job kind; "+
 		"a provider agent must also be started with --allow-build")
 	buildUsers := flag.String("build-users", "", "comma-separated account names allowed to submit build jobs "+
@@ -55,6 +57,12 @@ func main() {
 	}
 	if *comfyhub == "" {
 		*comfyhub = os.Getenv("STARSTACK_COMFYHUB")
+	}
+	if *comfyui == "" {
+		*comfyui = os.Getenv("STARSTACK_COMFYUI")
+	}
+	if *comfyui == "" {
+		*comfyui = "http://127.0.0.1:8188"
 	}
 	if *buildUsers == "" {
 		*buildUsers = os.Getenv("STARSTACK_BUILD_USERS")
@@ -136,6 +144,8 @@ func main() {
 	if *comfyhub == "" {
 		log.Printf("note: --comfyhub not set, /comfy/ AI video share page is disabled")
 	}
+	srv.SetComfyUIURL(*comfyui)
+	log.Printf("comfyui workbench: %s exposed at /comfyui/api/ (session guarded)", *comfyui)
 	if *nodeBin == "" {
 		log.Printf("note: --node-bin-dir not set, the console's one-click launcher has no " +
 			"starstack-worker binary to hand out (put starstack-worker-<os>-<arch>[.exe] in a directory and point at it)")

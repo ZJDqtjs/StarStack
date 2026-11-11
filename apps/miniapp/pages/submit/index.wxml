@@ -1,91 +1,179 @@
 <view class="wrap tabpage">
-  <h1>提交任务</h1>
-  <view class="lead">转码按视频秒计价，渲染按帧计价；提交即预扣，完成后按实际用量结算并退还差额。</view>
+  <view class="segmented wb-svc">
+    <button class="{{svc === 'render' ? 'on' : ''}}" bindtap="onSvc" data-svc="render">渲染工作台</button>
+    <button class="{{svc === 'build' ? 'on' : ''}}" bindtap="onSvc" data-svc="build">任务编排</button>
+  </view>
 
-  <view class="card">
-    <view class="card-head"><text class="kicker">Job</text><text>任务与文件</text></view>
-    <view class="row">
-      <label class="field" style="margin-top:0">
-        <text class="field-label">任务类型</text>
-        <picker mode="selector" range="{{kinds}}" value="{{kindIndex}}" bindchange="onKind">
-          <view class="picker-in">{{kinds[kindIndex]}}</view>
-        </picker>
-      </label>
-      <label class="field" wx:if="{{kindIndex === 0}}" style="margin-top:0">
-        <text class="field-label">画质</text>
-        <picker mode="selector" range="{{qualities}}" value="{{qualityIndex}}" bindchange="onQuality">
-          <view class="picker-in">{{qualities[qualityIndex]}}</view>
-        </picker>
-      </label>
-    </view>
-
-    <view class="btn ghost" style="margin-top:22rpx" bindtap="chooseFile">
-      {{file ? '重新选择文件' : (kindIndex === 1 ? '选择 .zip / .blend' : '选择视频')}}
-    </view>
-    <view class="hint" wx:if="{{file}}" style="margin-top:12rpx">
-      {{file.name}}<text wx:if="{{duration}}"> · {{duration}} 秒</text>
-    </view>
-    <view class="hint" wx:if="{{kindIndex === 1}}" style="margin-top:12rpx">
-      小程序只接受单个文件：请把 .blend 与贴图、缓存打成 zip 再上传。
+  <view class="wb-pagehead {{svc === 'build' ? 'build' : ''}}">
+    <view class="wb-pagehead-ic">{{svc === 'build' ? '⌘' : '◈'}}</view>
+    <view class="wb-pagehead-txt">
+      <text class="wb-eyebrow">{{svc === 'build' ? 'PIPELINE · ORCHESTRATION' : 'RENDER STUDIO'}}</text>
+      <view class="wb-title">{{svc === 'build' ? '任务编排' : '渲染工作台'}}</view>
+      <view class="wb-desc">{{svc === 'build' ? '源码 zip 由算力节点执行编译 / 打包命令，产物按输出目录回传；按墙钟分钟结算，失败不结算。' : '转码按视频秒计价，渲染按帧计价；提交即预扣，完成后按实测用量结算并退还差额。'}}</view>
     </view>
   </view>
 
-  <view class="card" wx:if="{{kindIndex === 1}}">
-    <view class="card-head"><text class="kicker">Blender</text><text>场景与输出</text></view>
-    <label class="field" style="margin-top:0">
-      <text class="field-label">渲染引擎</text>
-      <picker mode="selector" range="{{engines}}" value="{{engineIndex}}" bindchange="onEngine">
-        <view class="picker-in">{{engines[engineIndex]}}</view>
+  <view class="wb-pipe" wx:if="{{svc === 'build'}}">
+    <view class="wb-pipe-step">
+      <text class="wb-pipe-ic">↑</text>
+      <text class="wb-pipe-t">① 上传源码</text>
+      <text class="wb-pipe-d">zip 打包上传，解压后的目录就是工作目录</text>
+    </view>
+    <view class="wb-pipe-line"></view>
+    <view class="wb-pipe-step">
+      <text class="wb-pipe-ic">›_</text>
+      <text class="wb-pipe-t">② 节点编译</text>
+      <text class="wb-pipe-d">开启 --allow-build 的节点执行命令，按墙钟分钟计费</text>
+    </view>
+    <view class="wb-pipe-line"></view>
+    <view class="wb-pipe-step">
+      <text class="wb-pipe-ic">↓</text>
+      <text class="wb-pipe-t">③ 产物回传</text>
+      <text class="wb-pipe-d">输出目录打包 result.zip，校验后在任务页下载</text>
+    </view>
+  </view>
+
+  <view class="wb-tip" wx:if="{{svc === 'build'}}">接收编排任务需要节点以 --allow-build 启动，且账号在编译白名单内；提交后预扣 10 分钟，编译失败不结算。</view>
+
+  <view class="card">
+    <view class="card-head"><text class="kicker">New Task</text><text>{{svc === 'build' ? '提交编排任务' : '提交渲染任务'}}</text></view>
+    <view class="wb-steps">
+      <text class="wb-step {{step1}}"><text class="wb-step-n">1</text>上传素材</text>
+      <text class="wb-step-line"></text>
+      <text class="wb-step {{step2}}"><text class="wb-step-n">2</text>配置参数</text>
+      <text class="wb-step-line"></text>
+      <text class="wb-step {{step3}}"><text class="wb-step-n">3</text>提交结算</text>
+    </view>
+
+    <view class="wb-kinds" wx:if="{{svc === 'render'}}">
+      <view class="wb-kind {{kindIndex === 0 ? 'on' : ''}}" bindtap="onKindCard" data-k="0">
+        <text class="wb-kind-ic">▶</text>
+        <text class="wb-kind-t">视频转码</text>
+        <text class="wb-kind-d">切片并行加速，哈希校验一致性</text>
+        <text class="wb-kind-tag">按视频秒结算</text>
+      </view>
+      <view class="wb-kind {{kindIndex === 1 ? 'on' : ''}}" bindtap="onKindCard" data-k="1">
+        <text class="wb-kind-ic">◈</text>
+        <text class="wb-kind-t">Blender 渲染</text>
+        <text class="wb-kind-d">帧级拆分到多节点，Cycles / Eevee</text>
+        <text class="wb-kind-tag">按帧结算</text>
+      </view>
+    </view>
+
+    <label class="field" wx:if="{{svc === 'render' && kindIndex === 0}}" style="margin-top:0">
+      <text class="field-label">画质</text>
+      <picker mode="selector" range="{{qualities}}" value="{{qualityIndex}}" bindchange="onQuality">
+        <view class="picker-in">{{qualities[qualityIndex]}}</view>
       </picker>
     </label>
-    <view class="row">
-      <label class="field">
-        <text class="field-label">起始帧</text>
-        <input class="in" type="number" value="{{from}}" data-k="from" bindinput="onInput" />
-      </label>
-      <label class="field">
-        <text class="field-label">结束帧</text>
-        <input class="in" type="number" value="{{to}}" data-k="to" bindinput="onInput" />
-      </label>
+
+    <view class="wb-sec"><text class="wb-sec-n">1</text>上传素材</view>
+    <view class="wb-drop {{file ? 'has-file' : ''}}" bindtap="chooseFile">
+      <block wx:if="{{file}}">
+        <text class="wb-file-ic">▤</text>
+        <text class="wb-file-name">{{file.name}}</text>
+        <text class="wb-file-size">{{fileSize}}</text>
+        <text class="wb-file-x" catchtap="removeFile">✕</text>
+      </block>
+      <block wx:else>
+        <text class="wb-drop-ic">↑</text>
+        <text class="wb-drop-t">点击选择文件</text>
+        <text class="wb-drop-d">{{dropHint}}</text>
+      </block>
     </view>
-    <view class="row">
-      <label class="field">
-        <text class="field-label">采样数（0=场景）</text>
-        <input class="in" type="number" value="{{samples}}" data-k="samples" bindinput="onInput" />
-      </label>
-      <label class="field">
-        <text class="field-label">分辨率 %（0=场景）</text>
-        <input class="in" type="number" value="{{percent}}" data-k="percent" bindinput="onInput" />
-      </label>
+    <view class="hint" wx:if="{{svc === 'render' && kindIndex === 1}}" style="margin-top:12rpx">
+      小程序只接受单个文件：请把 .blend 与贴图、缓存打成 zip 再上传。
     </view>
-    <label class="field">
-      <text class="field-label">场景文件（zip 内可省略）</text>
-      <input class="in" value="{{scene}}" data-k="scene" bindinput="onInput" placeholder="scene.blend" />
-    </label>
+
+    <block wx:if="{{svc === 'render' && kindIndex === 1}}">
+      <view class="wb-sec"><text class="wb-sec-n">2</text>场景与输出</view>
+      <label class="field" style="margin-top:0">
+        <text class="field-label">渲染引擎</text>
+        <picker mode="selector" range="{{engines}}" value="{{engineIndex}}" bindchange="onEngine">
+          <view class="picker-in">{{engines[engineIndex]}}</view>
+        </picker>
+      </label>
+      <view class="row">
+        <label class="field">
+          <text class="field-label">起始帧</text>
+          <input class="in" type="number" value="{{from}}" data-k="from" bindinput="onInput" />
+        </label>
+        <label class="field">
+          <text class="field-label">结束帧</text>
+          <input class="in" type="number" value="{{to}}" data-k="to" bindinput="onInput" />
+        </label>
+      </view>
+      <view class="row">
+        <label class="field">
+          <text class="field-label">采样数（0=场景）</text>
+          <input class="in" type="number" value="{{samples}}" data-k="samples" bindinput="onInput" />
+        </label>
+        <label class="field">
+          <text class="field-label">分辨率 %（0=场景）</text>
+          <input class="in" type="number" value="{{percent}}" data-k="percent" bindinput="onInput" />
+        </label>
+      </view>
+      <label class="field">
+        <text class="field-label">场景文件（zip 内可省略）</text>
+        <input class="in" value="{{scene}}" data-k="scene" bindinput="onInput" placeholder="scene.blend" />
+      </label>
+    </block>
+
+    <block wx:if="{{svc === 'build'}}">
+      <view class="wb-sec"><text class="wb-sec-n">2</text>编译配置</view>
+      <label class="field" style="margin-top:0">
+        <text class="field-label">编译命令</text>
+        <view class="wb-cmd">
+          <text class="wb-cmd-ps">$</text>
+          <input class="wb-cmd-in" value="{{command}}" data-k="command" bindinput="onInput" placeholder="powershell -NoProfile -File build.ps1" />
+        </view>
+      </label>
+      <view class="wb-cmd-chips">
+        <text class="wb-cmd-chip" wx:for="{{cmdChips}}" wx:key="label" bindtap="onCmdChip" data-cmd="{{item.cmd}}">{{item.label}}</text>
+      </view>
+      <view class="row">
+        <label class="field">
+          <text class="field-label">输出目录（相对路径）</text>
+          <input class="in" value="{{output}}" data-k="output" bindinput="onInput" />
+        </label>
+        <label class="field">
+          <text class="field-label">超时（秒）</text>
+          <input class="in" type="number" value="{{timeout}}" data-k="timeout" bindinput="onInput" />
+        </label>
+      </view>
+      <view class="hint">按实际墙钟分钟结算，预扣 10 分钟；编译失败不结算。</view>
+    </block>
   </view>
 
   <view class="card">
-    <view class="card-head"><text class="kicker">Quote</text><text>预计花费</text></view>
-    <block wx:if="{{quote}}">
-      <view class="stats" style="margin-top:0">
-        <view class="stat hl"><text class="v">{{quote.holdText}}</text><text class="k">预扣</text></view>
-        <view class="stat"><text class="v">{{quote.eligible}}</text><text class="k">可派发节点</text></view>
-        <view class="stat"><text class="v">{{quote.balanceText}}</text><text class="k">当前余额</text></view>
+    <view class="card-head"><text class="kicker">Summary</text><text>费用摘要</text></view>
+    <view class="wb-sumrows">
+      <view class="wb-sumrow"><text>任务类型</text><text class="v">{{kindName}}</text></view>
+      <view class="wb-sumrow"><text>素材</text><text class="v">{{file ? file.name : '未选择'}}</text></view>
+    </view>
+    <block wx:if="{{svc === 'build'}}">
+      <view class="hint">编译任务按实际墙钟分钟结算，预扣 10 分钟；编译失败不结算，差额自动退还。</view>
+    </block>
+    <block wx:elif="{{quote}}">
+      <view class="q-line" wx:if="{{quote.head}}">{{quote.head}} · 可用节点 {{quote.eligible}} 台</view>
+      <view class="q-total {{quote.ok ? '' : 'no'}}">
+        <text class="q-label">预扣</text>
+        <text class="q-big">{{quote.holdText}}</text>
+        <text class="q-unit">点</text>
+        <text class="q-basis">{{quote.hold_basis}} {{quote.priceText}} 点/{{quote.unit}}</text>
       </view>
-      <view class="hint" style="margin-top:14rpx" wx:if="{{quote.head}}">{{quote.head}}</view>
+      <view class="q-line">余额 {{quote.balanceText}} 点 {{quote.affordable ? '· 足够' : '· 不足'}}</view>
       <view style="margin-top:12rpx">
         <text class="tag {{quote.ok ? 'ok' : 'warn'}}">
           {{quote.ok ? '余额与算力均可用' : (quote.affordable ? '暂无匹配节点，任务会排队' : '余额不足')}}
         </text>
-        <text class="tag">{{quote.hold_basis}} {{quote.priceText}} 点/{{quote.unit}}</text>
       </view>
     </block>
     <view class="hint" wx:else>{{quoteErr}}</view>
+    <view class="btn {{busy ? 'disabled' : ''}}" style="margin-top:24rpx" bindtap="submit">
+      {{busy ? msg : (svc === 'build' ? '提交编排任务' : (kindIndex === 0 ? '开始处理' : '提交渲染任务'))}}
+    </view>
+    <view class="bar" wx:if="{{busy}}"><view class="fill" style="width:{{progress}}%"></view></view>
+    <view class="hint" wx:if="{{!busy && msg}}" style="margin-top:16rpx">{{msg}}</view>
   </view>
-
-  <view class="btn {{busy ? 'disabled' : ''}}" bindtap="submit">
-    {{busy ? msg : '开始处理'}}
-  </view>
-  <view class="bar" wx:if="{{busy}}"><view class="fill" style="width:{{progress}}%"></view></view>
-  <view class="hint" wx:if="{{!busy && msg}}" style="margin-top:16rpx">{{msg}}</view>
 </view>

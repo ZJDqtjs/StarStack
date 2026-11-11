@@ -1,6 +1,11 @@
 <view class="wrap tabpage">
-  <h1>算力市场</h1>
-  <view class="lead">按编码能力聚合的切片与全部在线节点；他人机器只展示规格与价格。</view>
+  <view class="hero market">
+    <view class="hero-main">
+      <text class="hero-eyebrow">CAPACITY MARKET</text>
+      <view class="hero-title">算力市场</view>
+      <view class="hero-desc">按编码能力聚合的切片与全部在线节点；他人机器只展示规格与价格。</view>
+    </view>
+  </view>
 
   <view class="card" wx:if="{{err}}"><view class="err">{{err}}</view></view>
 

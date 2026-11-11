@@ -191,18 +191,21 @@ func (s *Server) mintLaunch(u *store.User, req launchReq) (*launchTicket, string
 	return t, ""
 }
 
-// consumeLaunch spends a ticket. The node id has to match: a leaked code cannot
-// be used to enrol a different machine or to squat an id that is already running.
-func (s *Server) consumeLaunch(code, wantID string) *launchTicket {
+// consumeLaunch spends a ticket. A ticket authorises an account, not a node
+// id: the broker now names nodes from the machine's stable device fingerprint,
+// so the launcher's random web-xxx id is only a download handle. The ticket
+// remains single-use, short-lived and bound to the account that minted it, and
+// the broker alone decides which node id the hello turns into.
+func (s *Server) consumeLaunch(code, presentedID string) *launchTicket {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t := s.launches[code]
 	if t == nil || t.ExpireAt.Before(time.Now()) {
 		return nil
 	}
-	if t.NodeID != wantID {
-		log.Printf("launch code %s presented by %q, minted for %q: refused", code, wantID, t.NodeID)
-		return nil
+	if t.NodeID != presentedID {
+		log.Printf("launch code %s presented by %q (minted as %q): identity follows the device",
+			code, presentedID, t.NodeID)
 	}
 	delete(s.launches, code)
 	return t
@@ -213,9 +216,9 @@ func (s *Server) consumeLaunch(code, wantID string) *launchTicket {
 // to refuse. The order matters: a code that has already been spent falls
 // through, because re-double-clicking the launcher is the normal thing to do and
 // the cached per-node credential below is what makes it work.
-func (s *Server) admitAgent(r *http.Request, id string) (*launchTicket, string) {
+func (s *Server) admitAgent(r *http.Request, info NodeInfo) (*launchTicket, string) {
 	if code := strings.TrimSpace(r.Header.Get("X-Launch-Code")); code != "" {
-		if t := s.consumeLaunch(code, id); t != nil {
+		if t := s.consumeLaunch(code, info.ID); t != nil {
 			return t, ""
 		}
 	}
@@ -226,25 +229,34 @@ func (s *Server) admitAgent(r *http.Request, id string) (*launchTicket, string) 
 		[]byte(s.policy.AgentToken)) == 1 {
 		return nil, ""
 	}
-	if s.knownNode(r, id) {
+	if s.knownNode(r, info) {
 		return nil, ""
 	}
 	return nil, "接入需要启动令牌或网页里生成的启动码"
 }
 
-// knownNode accepts a returning agent that proves it has been registered before
-// with the credential the broker derived for its node id. Without this every
-// restart of every provider machine would need a fresh code typed by hand.
-func (s *Server) knownNode(r *http.Request, id string) bool {
-	if id == "" {
-		return false
-	}
+// knownNode accepts a returning agent that proves it has been registered
+// before. The credential belongs to the node the broker finally settled on,
+// which may differ from the id in the launcher config (a device can be folded
+// into an older node), so all ids of that device are checked as well.
+func (s *Server) knownNode(r *http.Request, info NodeInfo) bool {
 	got := strings.TrimSpace(r.Header.Get("X-Node-Secret"))
-	if got == "" || !constantEqual(got, s.nodeSecret(id)) {
+	if got == "" {
 		return false
 	}
-	owner, err := s.st.NodeOwner(id)
-	return err == nil && owner != ""
+	ids := []string{info.ID}
+	if more, err := s.st.NodeIDsByDevice(info.DeviceID); err == nil {
+		ids = append(ids, more...)
+	}
+	for _, id := range ids {
+		if id == "" || !constantEqual(got, s.nodeSecret(id)) {
+			continue
+		}
+		if owner, err := s.st.NodeOwner(id); err == nil && owner != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // ---- http ----

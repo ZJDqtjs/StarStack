@@ -1,6 +1,11 @@
 <view class="wrap tabpage">
-  <h1>我的</h1>
-  <view class="lead">账户、节点与连接设置。</view>
+  <view class="hero account">
+    <view class="hero-main">
+      <text class="hero-eyebrow">ACCOUNT CENTER</text>
+      <view class="hero-title">个人中心</view>
+      <view class="hero-desc">账户、节点与连接设置。</view>
+    </view>
+  </view>
 
   <view class="card" wx:if="{{msg}}"><view class="err">{{msg}}</view></view>
 
@@ -35,13 +40,15 @@
         <view class="name">{{n.name}}</view>
         <view class="meta">{{n.meta}}</view>
         <view class="meta mono">编号 {{n.id}}</view>
+        <view class="meta mono">设备 {{n.device}}</view>
       </view>
       <view style="display:flex;flex-direction:column;gap:8rpx;align-items:flex-end">
         <text class="tag {{n.online ? 'ok' : 'bad'}}">{{n.online ? '在线' : '离线'}}</text>
         <view class="btn ghost tiny" data-id="{{n.id}}" bindtap="openNodeLogs">通讯日志</view>
+        <view class="btn ghost tiny" data-id="{{n.id}}" bindtap="deleteNode">删除节点</view>
       </view>
     </view>
-    <view class="hint" style="margin-top:12rpx">接节点、改单价请到网页控制台的「我的节点」；小程序只做查看。</view>
+    <view class="hint" style="margin-top:12rpx">一台电脑只对应一个节点，重复启动节点包会复用原节点。接节点、改单价请到网页控制台；小程序可查看通讯日志与删除不用的节点。</view>
   </view>
 
   <view class="card">

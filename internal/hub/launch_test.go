@@ -326,3 +326,117 @@ func TestPauseSwitchStopsNewSlices(t *testing.T) {
 		t.Fatal("a resumed node must be pickable again")
 	}
 }
+
+// TestDeviceIdentityAndNodeDeletion covers the three things the console now
+// promises: one account's one machine maps to one node, contribution is split
+// into an account view and a device view, and a deleted node stays deleted.
+func TestDeviceIdentityAndNodeDeletion(t *testing.T) {
+	s := newTestServer(t, PublicPolicy())
+	s.policy.AgentToken = "shared-token"
+	ck := asUser(t, s, "owner")
+	const dev = "dev-0123456789abcdef"
+
+	mint := func() string {
+		body, _ := json.Marshal(map[string]any{"price": 0.8, "slots": 2,
+			"os": "windows", "arch": "amd64"})
+		rec := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/api/nodes/launch", strings.NewReader(string(body)))
+		r.AddCookie(ck)
+		s.handleLaunchMint(rec, r)
+		if rec.Code != 200 {
+			t.Fatalf("mint: %d %s", rec.Code, rec.Body.String())
+		}
+		var out struct {
+			Code string `json:"code"`
+		}
+		json.Unmarshal(rec.Body.Bytes(), &out)
+		return out.Code
+	}
+
+	hello := func(code, id, token string) (int, string) {
+		b, _ := json.Marshal(NodeInfo{
+			ID: id, Name: "device test", Slots: 2, Price: 0.8,
+			Inventory: ffx.Inventory{Hostname: "testbox", OS: "windows", Arch: "amd64",
+				CPUs: 8, MemMB: 16384, Encoders: []string{"libx264"}, DeviceID: dev},
+		})
+		r := httptest.NewRequest("POST", "/api/worker/hello", strings.NewReader(string(b)))
+		if code != "" {
+			r.Header.Set("X-Launch-Code", code)
+		}
+		if token != "" {
+			r.Header.Set("X-Agent-Token", token)
+		}
+		rec := httptest.NewRecorder()
+		s.handleHello(rec, r)
+		var out struct {
+			ID string `json:"id"`
+		}
+		json.Unmarshal(rec.Body.Bytes(), &out)
+		return rec.Code, out.ID
+	}
+
+	// Two different launcher tickets on the same computer must not create a
+	// second node; the second hello lands on the first node's id.
+	if st, _ := hello(mint(), dev, ""); st != 200 {
+		t.Fatalf("first hello: %d", st)
+	}
+	st, nodeID := hello(mint(), dev, "")
+	if st != 200 || nodeID != dev {
+		t.Fatalf("second hello: %d id=%q, want 200 and %q", st, nodeID, dev)
+	}
+	rows, err := s.st.NodesByOwner("u-owner")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("one machine must leave exactly one node, got %d (%v)", len(rows), err)
+	}
+
+	// Contribution: the account view is all Earn rows, the device view is the
+	// node's own columns; a model upstream has no node at all.
+	s.recordContribution(Contribution{OwnerID: "u-owner", NodeID: nodeID,
+		Source: ContribTask, Seconds: 12, Amount: 3.5, Note: "test slice"})
+	s.recordContribution(Contribution{OwnerID: "u-owner", Source: ContribModel,
+		Amount: 1.25, Note: "test upstream"})
+	rec := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/contribution", nil)
+	r.AddCookie(ck)
+	s.handleContribution(rec, r)
+	if rec.Code != 200 {
+		t.Fatalf("contribution: %d %s", rec.Code, rec.Body.String())
+	}
+	var c struct {
+		Seller struct {
+			Total float64            `json:"total_earned"`
+			By    map[string]float64 `json:"by_source"`
+		} `json:"seller"`
+		NodeTotal float64 `json:"node_total_earned"`
+		Other     float64 `json:"other_earned"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &c)
+	if c.Seller.Total != 4.75 || c.Seller.By[ContribTask] != 3.5 ||
+		c.Seller.By[ContribModel] != 1.25 || c.NodeTotal != 3.5 || c.Other != 1.25 {
+		t.Fatalf("contribution split is wrong: %+v", c)
+	}
+
+	// Deleting removes the node but not the history, and its cached id cannot
+	// resurrect it on the next heartbeat.
+	rec = httptest.NewRecorder()
+	r = httptest.NewRequest("DELETE", "/api/nodes/"+nodeID, nil)
+	r.AddCookie(ck)
+	s.handleNodeOp(rec, r)
+	if rec.Code != 200 {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if after, _ := s.st.NodesByOwner("u-owner"); len(after) != 0 {
+		t.Fatalf("node still listed after deletion: %d", len(after))
+	}
+	if st, _ := hello("", dev, "shared-token"); st != http.StatusConflict {
+		t.Fatalf("deleted node resurrected: %d, want 409", st)
+	}
+	// A freshly downloaded package (new ticket) is allowed to join again.
+	st, fresh := hello(mint(), dev, "")
+	if st != 200 || fresh == dev {
+		t.Fatalf("rejoin after deletion: %d id=%q", st, fresh)
+	}
+	if again, _ := s.st.NodesByOwner("u-owner"); len(again) != 1 {
+		t.Fatalf("rejoin should leave one node, got %d", len(again))
+	}
+}
