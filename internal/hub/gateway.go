@@ -1154,12 +1154,21 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 	}
 	if !set || maxTok <= 0 {
 		maxTok = gatewayDefaultTokens
+	}
+	// OpenAI clients routinely send a model's advertised output ceiling (16K~128K)
+	// even for a one-line question. Rejecting that makes a freshly created key
+	// look broken, and the pessimistic hold is sized from this very value.
+	// Clamp instead, then forward the same number so the hold, upstreamFits and
+	// the provider all see one consistent value.
+	if maxTok > s.maxTokens {
+		log.Printf("gateway %s max_tokens %d clamped to %d", reqID, maxTok, s.maxTokens)
+		maxTok = s.maxTokens
+	}
+	if _, ok := body["max_tokens"]; ok || !set {
 		body["max_tokens"] = maxTok
 	}
-	if maxTok > s.maxTokens {
-		oaiError(w, http.StatusBadRequest, "max_tokens_too_large", "invalid_request_error",
-			fmt.Sprintf("max_tokens 最大 %d", s.maxTokens))
-		return
+	if _, ok := body["max_completion_tokens"]; ok {
+		body["max_completion_tokens"] = maxTok
 	}
 	if stream {
 		opts, _ := body["stream_options"].(map[string]any)

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -458,6 +459,59 @@ func TestGatewayErrorDoesNotLeakUpstreamKey(t *testing.T) {
 	}
 }
 
+// TestGatewayClampsLargeMaxTokens checks the compatibility fix: an SDK that
+// sends its model's advertised output ceiling must still work with a fresh key,
+// and the number forwarded upstream must be the clamped one (the reserve and
+// upstreamFits are sized from it).
+func TestGatewayClampsLargeMaxTokens(t *testing.T) {
+	var mu sync.Mutex
+	var seenMax, seenCompletion any
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		var doc map[string]any
+		json.Unmarshal(b, &doc)
+		mu.Lock()
+		seenMax, seenCompletion = doc["max_tokens"], doc["max_completion_tokens"]
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"choices":[{"message":{"content":"ok"}}],
+			"usage":{"prompt_tokens":10,"completion_tokens":4}}`)
+	}))
+	defer up.Close()
+
+	s := newTestServer(t, DefaultPolicy()) // maxTokens = 8192
+	broker := httptest.NewServer(s.Handlers())
+	defer broker.Close()
+	providerCookie, _ := registerAndCookie(t, broker.URL, "provider")
+	buyerCookie, _ := registerAndCookie(t, broker.URL, "buyer")
+	createUpstream(t, broker.URL, providerCookie, "u", up.URL, "m", 0.5)
+	key := createKey(t, broker.URL, buyerCookie, "clamp")
+
+	if code, body := chat(t, broker.URL, key,
+		`{"model":"m","messages":[{"role":"user","content":"hi"}],"max_completion_tokens":65536}`); code != 200 {
+		t.Fatalf("超大 max_completion_tokens 应被夹取而非拒绝：HTTP %d %s", code, body)
+	}
+	mu.Lock()
+	if seenMax != nil {
+		t.Fatalf("只发 max_completion_tokens 时不应凭空添加 max_tokens：%v", seenMax)
+	}
+	if seenCompletion != float64(DefaultGatewayMaxTokens) {
+		t.Fatalf("转发值应夹取到 %d，实际 %v", DefaultGatewayMaxTokens, seenCompletion)
+	}
+	mu.Unlock()
+
+	if code, body := chat(t, broker.URL, key,
+		`{"model":"m","messages":[{"role":"user","content":"hi"}],"max_tokens":65536}`); code != 200 {
+		t.Fatalf("超大 max_tokens 应被夹取而非拒绝：HTTP %d %s", code, body)
+	}
+	mu.Lock()
+	if seenMax != float64(DefaultGatewayMaxTokens) || seenCompletion != nil {
+		t.Fatalf("max_tokens 应夹取到 %d 且不残留旧字段：%v / %v",
+			DefaultGatewayMaxTokens, seenMax, seenCompletion)
+	}
+	mu.Unlock()
+}
+
 func TestGatewayLimitsConfigurable(t *testing.T) {
 	s := newTestServer(t, DefaultPolicy())
 	s.SetGatewayLimits(99999999, 99999999)
@@ -476,12 +530,12 @@ func TestGatewayLimitsConfigurable(t *testing.T) {
 	key := createKey(t, broker.URL, buyerCookie, "上限测试")
 
 	big := `{"model":"long","messages":[{"role":"user","content":"hello"}],"max_tokens":10000}`
-	if code, _ := chat(t, broker.URL, key, big); code != 400 {
-		t.Fatalf("默认 8192 应拒绝 max_tokens=10000，实际 %d", code)
+	if code, body := chat(t, broker.URL, key, big); code != 200 {
+		t.Fatalf("默认 8192 下超出的 max_tokens 应被夹取而非拒绝：HTTP %d %s", code, body)
 	}
 	s.SetGatewayLimits(65536, 16384)
 	if code, body := chat(t, broker.URL, key, big); code != 200 {
-		t.Fatalf("放宽后 max_tokens=10000 应通过：HTTP %d %s", code, body)
+		t.Fatalf("放宽到 16384 后 max_tokens=10000 应原样通过：HTTP %d %s", code, body)
 	}
 
 	// ~40K tokens of prompt: rejected by the old hardcoded 32768, accepted at 65536.
