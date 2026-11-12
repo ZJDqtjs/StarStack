@@ -651,6 +651,7 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/models/upstreams", s.handleUpstreams)
 	mux.HandleFunc("/api/models/upstreams/", s.handleUpstreamOp)
 	mux.HandleFunc("/api/models/catalog", s.handleModelCatalog)
+	mux.HandleFunc("/api/models/try", s.handleTryChat)
 	mux.HandleFunc("/api/models/usage", s.handleModelUsage)
 	mux.HandleFunc("/v1/models", s.handleV1Models)
 	mux.HandleFunc("/v1/chat/completions", s.handleV1Chat)

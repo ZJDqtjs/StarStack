@@ -56,6 +56,17 @@ const (
 	gatewayCooldown               = 20 * time.Second
 	gatewayTimeout                = 10 * time.Minute
 	gatewayStickyTTL              = 30 * time.Minute
+
+	// The console chat demo reuses the paid gateway but carries its own small
+	// per-account budget, so a shared page cannot become an open relay.
+	tryChatMaxMessages     = 12
+	tryChatMaxMessageRunes = 2000
+	tryChatMaxTotalRunes   = 8000
+	tryChatMaxTokens       = 512
+	tryChatPerMinute       = 8
+	tryChatDailyQuota      = 1.0
+	tryChatMaxBody         = 64 << 10
+	tryChatTimeout         = 90 * time.Second
 )
 
 // ---- sealed upstream credentials ----
@@ -1121,6 +1132,12 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	s.serveGatewayChat(w, r, u, key)
+}
+
+// serveGatewayChat holds the routing, hold/settlement and upstream relay shared
+// by the public /v1 endpoint and the console's key-free chat trial.
+func (s *Server) serveGatewayChat(w http.ResponseWriter, r *http.Request, u *store.User, key *store.APIKey) {
 	reqID := "req_" + newID() + newID()
 
 	r.Body = http.MaxBytesReader(w, r.Body, gatewayMaxBody)
@@ -1403,6 +1420,128 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 	}
 	oaiError(w, http.StatusBadGateway, "upstream_unavailable", "server_error",
 		"所有提供该模型的上游都暂时不可用，请稍后重试")
+}
+
+// handleTryChat lets a signed-in console user talk to the currently configured
+// model without creating or exposing an sk-ss- key. It builds a small, plain
+// chat request itself and hands it to the same paid gateway path as /v1.
+func (s *Server) handleTryChat(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, jsonErr("只支持 POST"), http.StatusMethodNotAllowed)
+		return
+	}
+	u, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
+	if !s.limiter.allow("try-user:"+u.ID, tryChatPerMinute) ||
+		!s.limiter.allow("try-ip:"+s.clientIP(r), tryChatPerMinute*2) {
+		http.Error(w, jsonErr("试聊太频繁，请一分钟后再试"), http.StatusTooManyRequests)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, tryChatMaxBody)
+	var req struct {
+		Model    string `json:"model"`
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, jsonErr("请求格式错误或内容过大"), http.StatusBadRequest)
+		return
+	}
+	if len(req.Messages) == 0 || len(req.Messages) > tryChatMaxMessages {
+		http.Error(w, jsonErr(fmt.Sprintf("对话消息需为 1～%d 条", tryChatMaxMessages)), http.StatusBadRequest)
+		return
+	}
+	msgs := make([]map[string]string, 0, len(req.Messages)+1)
+	total := 0
+	for _, m := range req.Messages {
+		role := strings.ToLower(strings.TrimSpace(m.Role))
+		if role != "user" && role != "assistant" {
+			http.Error(w, jsonErr("消息 role 只能是 user 或 assistant"), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(m.Content) == "" {
+			http.Error(w, jsonErr("消息内容不能为空"), http.StatusBadRequest)
+			return
+		}
+		n := utf8.RuneCountInString(m.Content)
+		if n > tryChatMaxMessageRunes {
+			http.Error(w, jsonErr(fmt.Sprintf("单条消息最多 %d 字", tryChatMaxMessageRunes)), http.StatusBadRequest)
+			return
+		}
+		total += n
+		if total > tryChatMaxTotalRunes {
+			http.Error(w, jsonErr(fmt.Sprintf("整段对话最多 %d 字", tryChatMaxTotalRunes)), http.StatusBadRequest)
+			return
+		}
+		msgs = append(msgs, map[string]string{"role": role, "content": m.Content})
+	}
+	if msgs[len(msgs)-1]["role"] != "user" {
+		http.Error(w, jsonErr("最后一条消息必须来自用户"), http.StatusBadRequest)
+		return
+	}
+
+	catalog := s.modelCatalog()
+	if len(catalog) == 0 {
+		http.Error(w, jsonErr("当前没有可用模型，请先登记上游"), http.StatusServiceUnavailable)
+		return
+	}
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		model = catalog[0].ID
+		for _, m := range catalog {
+			if m.Official {
+				model = m.ID
+				break
+			}
+		}
+	} else {
+		found := false
+		for _, m := range catalog {
+			if strings.EqualFold(m.ID, model) {
+				model = m.ID
+				found = true
+				break
+			}
+		}
+		if !found {
+			http.Error(w, jsonErr("模型不在当前可用目录中"), http.StatusNotFound)
+			return
+		}
+	}
+
+	system := fmt.Sprintf("你正在通过星栈算力控制台提供试聊，当前模型 ID 是 %s。请用简洁中文回答；不要编造能力，也不要索取或透露密钥、令牌和内部地址。", model)
+	chatMessages := make([]any, 0, len(msgs)+1)
+	chatMessages = append(chatMessages, map[string]string{"role": "system", "content": system})
+	for _, m := range msgs {
+		chatMessages = append(chatMessages, m)
+	}
+	maxTokens := tryChatMaxTokens
+	if s.maxTokens > 0 && s.maxTokens < maxTokens {
+		maxTokens = s.maxTokens
+	}
+	raw, err := json.Marshal(map[string]any{
+		"model": model, "messages": chatMessages,
+		"stream": false, "max_tokens": maxTokens,
+	})
+	if err != nil {
+		http.Error(w, jsonErr("请求序列化失败"), http.StatusInternalServerError)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), tryChatTimeout)
+	defer cancel()
+	r2 := r.Clone(ctx)
+	r2.Body = io.NopCloser(bytes.NewReader(raw))
+	r2.ContentLength = int64(len(raw))
+	r2.Header.Set("Content-Type", "application/json")
+	r2.Header.Set("X-Starstack-Session", "try-"+u.ID)
+	s.serveGatewayChat(w, r2, u, &store.APIKey{
+		ID: "try:" + u.ID, UserID: u.ID, Name: "控制台试聊",
+		DailyQuota: tryChatDailyQuota,
+	})
 }
 
 // callUpstream creates the outgoing request. The resolved model name is kept in

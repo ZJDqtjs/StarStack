@@ -457,6 +457,19 @@ a.btn:hover{text-decoration:none}
 .hub-links button{height:28px;padding:0 12px;border-radius:999px;border:1px solid var(--hair);
   background:var(--inset);color:var(--ink);font:500 11.5px/1 var(--sans)}
 .hub-links button:hover{border-color:var(--bili-pink);color:var(--bili-pink)}
+.hub-try{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;
+  padding-top:10px;border-top:1px solid var(--hair);font-size:11.5px;color:var(--mute)}
+.hub-try label{color:var(--ink);font-weight:500}
+.hub-try select{height:28px;max-width:240px;padding:0 8px;border:1px solid var(--hair);
+  border-radius:8px;background:var(--card);color:var(--ink);font:400 11.5px/1 var(--sans)}
+.hub-try .hint{margin:0}
+.try-chat{display:flex;flex-direction:column;gap:10px}
+.try-chat .hub-result{margin-top:0}
+.try-msg{white-space:pre-wrap;word-break:break-word;line-height:1.7}
+.try-msg.user{background:var(--bili-pink-soft);border-color:var(--bili-pink)}
+.try-msg.error{border-color:var(--bad);color:var(--bad)}
+.try-role{display:block;margin-bottom:6px;font-size:11px;color:var(--mute)}
+.try-usage{display:block;margin-top:8px;font-size:11px;color:var(--mute)}
 
 /* ---------- 个人中心 ---------- */
 .backlink{display:inline-flex;align-items:center;gap:5px;margin:0 0 12px;height:28px;padding:0 9px;
@@ -1707,9 +1720,9 @@ a.btn:hover{text-decoration:none}
 <section class="view" id="v-api">
   <div class="hub-hero">
     <h1>你好，今天想调用什么？</h1>
-    <p class="hub-sub">官方 OpenAI 兼容网关 · 按 token 结算</p>
+    <p class="hub-sub">官方 OpenAI 兼容网关 · 无需 API Key，直接用当前模型试聊</p>
     <form class="hub-box" id="hub-form">
-      <textarea id="api-prompt" rows="2" placeholder="输入需求，例如：用 qwen2.5-7b 写一个 Python 脚本…"></textarea>
+      <textarea id="api-prompt" rows="2" placeholder="输入问题，例如：你是什么模型？"></textarea>
       <div class="hub-row">
         <div class="hub-quick">
           <button type="button" onclick="hubFocus('keyname')">创建 API Key</button>
@@ -1717,10 +1730,16 @@ a.btn:hover{text-decoration:none}
           <button type="button" onclick="hubFocus('upname')">接入上游</button>
           <button type="button" onclick="hubFocus('curlsnippet')">调用示例</button>
         </div>
-        <button class="hub-send" type="submit">发送</button>
+        <button class="hub-send" id="hub-send" type="submit">发送</button>
+      </div>
+      <div class="hub-try">
+        <label for="try-model">测试模型</label>
+        <select id="try-model"><option value="">读取模型目录…</option></select>
+        <span class="hint" id="try-meta">按实际 token 从当前登录账户结算</span>
+        <button type="button" class="ghost tiny" id="try-clear">清空对话</button>
       </div>
     </form>
-    <div id="api-result"></div>
+    <div id="api-result" class="try-chat" aria-live="polite"></div>
   </div>
   <div class="grid">
     <div>
@@ -3041,47 +3060,85 @@ function hubFocus(id){
   if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') el.focus();
 }
 
-$('#hub-form').addEventListener('submit',async e=>{
-  e.preventDefault();
-  const text=$('#api-prompt').value.trim();
-  const box=$('#api-result');
-  if(!text){box.innerHTML='<div class="hub-result">先写下你想做的事。</div>';return}
-  if(/key|密钥|令牌/i.test(text)){
-    box.innerHTML=`<div class="hub-result"><b>创建 API Key</b>
-      <p>在下方「我的 API Key」填写名称后点创建；密钥只显示一次，服务端只存哈希。</p>
-      <div class="hub-links"><button onclick="hubFocus('keyname')">去创建</button></div></div>`;
+let TRY_MSGS=[], TRY_MODEL='', TRY_BUSY=false, TRY_LOADING=false, TRY_NOTICE='';
+function tryErr(err){
+  const e=err&&err.error;
+  const msg=typeof e==='string'?e:(e&&e.message)||(err&&err.message)||String(err||'调用失败');
+  return msg.length>300?msg.slice(0,300)+'…':msg;
+}
+async function tryPost(body){
+  const r=await fetch('/api/models/try',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
+  const t=await r.text(); let d=null; try{d=JSON.parse(t)}catch(e){}
+  if(!r.ok) throw (d&&d.error!==undefined?{error:d.error}:t||('HTTP '+r.status));
+  return d||{};
+}
+function renderTryChat(){
+  const box=$('#api-result'); if(!box) return;
+  let html=TRY_MSGS.length?TRY_MSGS.map(m=>`<div class="hub-result try-msg ${m.role==='user'?'user':'assistant'}">
+      <span class="try-role">${m.role==='user'?'我':esc(TRY_MODEL||'模型')}</span>${esc(m.content)}${
+      m.usage?`<span class="try-usage">${esc(m.usage)}</span>`:''}</div>`).join('')
+    :'<div class="hub-result">选好当前模型后直接输入问题，即可开始试聊。</div>';
+  if(TRY_LOADING) html+='<div class="hub-result try-msg assistant"><span class="try-role">模型</span>正在响应…</div>';
+  if(TRY_NOTICE) html+=`<div class="hub-result try-msg error"><span class="try-role">提示</span>${esc(TRY_NOTICE)}</div>`;
+  box.innerHTML=html;
+}
+function renderTryModels(){
+  const sel=$('#try-model'); if(!sel) return;
+  const cur=sel.value||TRY_MODEL;
+  if(!CATALOG.length){
+    sel.innerHTML='<option value="">（暂无可用模型）</option>';
+    TRY_MODEL=''; $('#try-meta').textContent='先登记一个 OpenAI 兼容上游';
     return;
   }
-  box.innerHTML='<div class="hub-result">正在读取模型目录…</div>';
+  sel.innerHTML=CATALOG.map(m=>`<option value="${esc(m.id)}">${esc(m.id)} · ${f2(m.price_per_1k)} 点/千 token${m.official?' · 官方':''}</option>`).join('');
+  const keep=CATALOG.some(m=>m.id===cur)?cur:(CATALOG.find(m=>m.official)||CATALOG[0]).id;
+  sel.value=keep; TRY_MODEL=keep;
+  const m=CATALOG.find(x=>x.id===keep);
+  $('#try-meta').textContent=m?`当前 ${m.providers} 家上游 · 无需 API Key，按实际 token 结算`:'按实际 token 结算';
+}
+$('#try-model').addEventListener('change',()=>{
+  if(TRY_BUSY) return;
+  TRY_MODEL=$('#try-model').value; TRY_MSGS=[]; TRY_NOTICE=''; renderTryChat();
+});
+$('#try-clear').onclick=()=>{
+  if(TRY_BUSY) return;
+  TRY_MSGS=[]; TRY_NOTICE=''; renderTryChat();
+};
+$('#api-prompt').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('#hub-form').requestSubmit()}
+});
+$('#hub-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(TRY_BUSY) return;
+  const input=$('#api-prompt'), text=input.value.trim();
+  if(!text){TRY_NOTICE='先写下你想问的问题。';renderTryChat();return}
+  const model=$('#try-model').value;
+  if(!model){TRY_NOTICE='当前没有可用模型，请先在下方登记一个 OpenAI 兼容上游。';renderTryChat();return}
+  TRY_MODEL=model; TRY_NOTICE='';
+  TRY_MSGS.push({role:'user',content:text});
+  TRY_BUSY=true; TRY_LOADING=true;
+  $('#hub-send').disabled=true; $('#hub-send').textContent='响应中…';
+  $('#try-model').disabled=true; $('#try-clear').disabled=true;
+  renderTryChat();
   try{
-    const d=await api('/api/models/catalog');
-    const models=(d.models||[]).slice(0,8);
-    if(!models.length){
-      box.innerHTML=`<div class="hub-result"><b>还没有可用模型</b>
-        <p>先登记一个 OpenAI 兼容上游，或者去星海看卖家提供的模型端点。</p>
-        <div class="hub-links"><button onclick="hubFocus('upname')">接入上游</button>
-          <button onclick="showView('sky')">去星海</button></div></div>`;
-      return;
-    }
-    const model=models[0].id;
-    const snip=`curl ${location.origin+BASE}/v1/chat/completions \\\n  -H "Authorization: Bearer sk-ss-..." \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${model}","messages":[{"role":"user","content":"${text.replace(/'/g,'')}"}]}'`;
-    box.innerHTML=`<div class="hub-result">
-      <b>推荐模型</b>
-      <div class="hub-models">${models.map(m=>`<span class="tag">${esc(m.id)} · ${f2(m.price_per_1k)} 点/千 token</span>`).join('')}</div>
-      <pre>${esc(snip)}</pre>
-      <div class="hub-links"><button onclick="copySnippet(this)">复制调用示例</button>
-        <button onclick="hubFocus('keyname')">创建 Key</button></div>
-    </div>`;
+    const d=await tryPost({model,messages:TRY_MSGS.map(m=>({role:m.role,content:m.content}))});
+    const msg=d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content;
+    const usage=d.usage?`输入 ${d.usage.prompt_tokens||0} · 输出 ${d.usage.completion_tokens||0} tokens`:'';
+    TRY_MSGS.push({role:'assistant',content:msg||'（模型没有返回文本内容）',usage});
+    if(TRY_MSGS.length>12) TRY_MSGS=TRY_MSGS.slice(-12);
+    input.value='';
   }catch(err){
-    box.innerHTML=`<div class="hub-result"><b>读取失败</b><p>${esc(err)}</p></div>`;
+    TRY_MSGS.pop();
+    TRY_NOTICE=tryErr(err);
+  }finally{
+    TRY_BUSY=false; TRY_LOADING=false;
+    $('#hub-send').disabled=false; $('#hub-send').textContent='发送';
+    $('#try-model').disabled=false; $('#try-clear').disabled=false;
+    renderTryChat();
   }
 });
-
-function copySnippet(btn){
-  const pre=$('#api-result pre'); if(!pre) return;
-  navigator.clipboard&&navigator.clipboard.writeText(pre.textContent)
-    .then(()=>{btn.textContent='已复制'}).catch(()=>{});
-}
+renderTryChat();
 
 /* ---------------- 生图 / 生视频：ComfyUI 工作台 ----------------
    提交时不再复制提示词到剪贴板：把参数写进已部署的工作流节点，打开节点
@@ -3224,6 +3281,7 @@ function renderCatalog(){
   }).join('')
     :'<tr><td colspan="5" class="empty">还没有可用模型</td></tr>';
   snippet();
+  renderTryModels();
 }
 function snippet(){
   const model=$('#apimodel').value||'your-model';
