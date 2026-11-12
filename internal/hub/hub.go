@@ -341,6 +341,13 @@ type Server struct {
 	gateway    *gatewayState
 	comfyHub   string // optional reverse-proxy target for the AI video share page
 	comfyUI    string // optional upstream ComfyUI server for the workflow workbench
+	// Gateway ceilings are per-process configuration, not constants: vendor
+	// models routinely advertise 64K~128K contexts. Defaults keep old behaviour.
+	maxPromptTokens    int
+	maxTokens          int
+	gatewayDailyBudget float64 // 0 = unlimited, points per day across all keys
+	platformOwnerID    string  // set by P0-1 seeding; owner of 官方 upstreams
+	platformOwnerName  string  // STARSTACK_PLATFORM_USER, reserved account name
 	// Cloud hosts are a second market on the same nodes: offers are snapshots
 	// published by sellers, instances are prepaid rentals that keep their own
 	// lifecycle and billing clock.
@@ -356,6 +363,7 @@ func NewServer(dataDir, baseURL string, st *store.Store, pol Policy) *Server {
 		launches: map[string]*launchTicket{},
 		policy:   pol, key: loadAgentKey(dataDir), limiter: newRateLimiter(),
 		secrets: loadSecretBox(dataDir), gateway: newGatewayState(),
+		maxPromptTokens: DefaultGatewayMaxPromptTokens, maxTokens: DefaultGatewayMaxTokens,
 		voffers: map[string]*vm.Offer{}, vms: map[string]*vm.Instance{},
 	}
 	// A broker reached over HTTPS must not send its session cookie in the clear
@@ -643,6 +651,7 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/models/upstreams", s.handleUpstreams)
 	mux.HandleFunc("/api/models/upstreams/", s.handleUpstreamOp)
 	mux.HandleFunc("/api/models/catalog", s.handleModelCatalog)
+	mux.HandleFunc("/api/models/usage", s.handleModelUsage)
 	mux.HandleFunc("/v1/models", s.handleV1Models)
 	mux.HandleFunc("/v1/chat/completions", s.handleV1Chat)
 

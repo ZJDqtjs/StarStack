@@ -126,6 +126,13 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, jsonErr(err.Error()), 400)
 		return
 	}
+	// The self-operated upstream owner is an ordinary account, but its name is
+	// reserved so nobody can pre-register it and claim the console's 官方 badge
+	// or the reconciliation endpoint.
+	if s.platformOwnerName != "" && strings.EqualFold(name, s.platformOwnerName) {
+		http.Error(w, jsonErr("该账户名已保留"), 403)
+		return
+	}
 	if err := auth.ValidPassword(req.Password); err != nil {
 		http.Error(w, jsonErr(err.Error()), 400)
 		return

@@ -265,9 +265,10 @@ clip 裁剪、缩放/补边、统一帧率与像素格式后编码，Broker 直�
 30 分钟，复用其前缀缓存；上游冷却或消失时价格重新接管。
 
 **计费**按未缓存输入 / 缓存命中输入 / 输出三段计价，未填写的段沿用输入价。
-预扣按 prompt 估算 + `max_tokens`（默认 1024，上限 8192）取候选上游的最高价，余额不足 402；
+预扣按 prompt 估算 + `max_tokens`（默认 1024，上限由 `STARSTACK_GATEWAY_MAX_TOKENS` 配置，默认 8192）
+取候选上游的最高价，余额不足 402；提示词上限由 `STARSTACK_GATEWAY_MAX_PROMPT` 配置（默认 32768）。
 结束后优先用上游 `usage`（含 `cached_tokens`），缺失时按输出文本估算，多退少补。
-提供方拿 90%，平台留 10% 撮合费。
+提供方拿 90%，平台留 10% 撮合费。密钥可设每日限额（触发 429），平台可设每日预算熔断（触发 503）。
 
 **可复现与结构化输出**：`"starstack_deterministic": true` 只路由到声明了
 `deterministic` 的上游，网关注入 `temperature=0`、`seed=1`，并在响应头返回
@@ -276,6 +277,58 @@ clip 裁剪、缩放/补边、统一帧率与像素格式后编码，Broker 直�
 
 上游凭据用数据目录下的 `gateway.key` 做 AES-GCM 加密后入库；公网档会拒绝把上游指向
 私网/链路本地/云元数据地址。
+
+### 平台自营上游（官方供给）
+
+平台早期没有真实算力方入驻时，由平台自己充当第一个供给方。它**不是**第二套转发服务：
+自营上游就是 `upstreams` 表里由平台自营账户持有的普通行，走同一条路由、同一套结算；
+`/v1/models`、`/v1/chat/completions`、SSE 和 `X-Starstack-*` 响应头全部不变。
+
+启动时由 `STARSTACK_SEED_UPSTREAMS` 一次性播种，**不存在才创建**：重启不会重复插入，也不会
+覆盖控制台里手改过的价格与开关。解析失败、账户/口令缺失、DNS 不通、厂商 4xx 都只打日志，
+不会阻断 broker 启动。厂商凭据只允许出现在服务端 env（`/etc/starstack/env`，`640 root:starstack`），
+入库经 `secretBox.seal`（AES-GCM），日志与错误响应里都不出现明文。上游主机受
+`internal/hub/gateway_seed.go` 的官方厂商/聚合平台白名单约束，禁止转售、拼车或来源不明的 key。
+
+```bash
+# 全部可选；不配则与旧版本行为完全一致。占位符不要填真实密钥。
+STARSTACK_SEED_UPSTREAMS='[
+ {"name":"DeepSeek 官方","base_url":"https://api.deepseek.com",
+  "api_key":"<DEEPSEEK_KEY>","models":["deepseek-chat","deepseek-reasoner"],
+  "cost_in_yuan_per_1k":0.002,"cost_out_yuan_per_1k":0.008,"markup":1.35,
+  "max_context":65536,"caps":["tools","json_object","prefix_cache"]},
+ {"name":"硅基流动","base_url":"https://api.siliconflow.cn/v1",
+  "api_key":"<SILICONFLOW_KEY>","models":["Qwen/Qwen3-32B"],
+  "cost_in_yuan_per_1k":0.002,"markup":1.35,"max_context":32768,"caps":["tools"]}
+]'
+STARSTACK_PLATFORM_USER=starstack-platform
+STARSTACK_PLATFORM_PASSWORD=<平台自营账户口令>
+STARSTACK_POINT_YUAN=0.01
+STARSTACK_GATEWAY_MAX_PROMPT=65536
+STARSTACK_GATEWAY_MAX_TOKENS=8192
+STARSTACK_GATEWAY_DAILY_BUDGET=200
+```
+
+- **定价口径**：`STARSTACK_POINT_YUAN` 默认 `0.01`（1 元 = 100 点），只在播种换算时使用，
+  不进入结算路径。给了 `price` 就直接用；否则 `price = round4(cost_in_yuan_per_1k / 点值 * markup)`，
+  `price_out` 同理，`markup` 缺省 1.2。自营按**参考价**定价、定位是可用性下限与兜底，
+  刻意略高于预期市场价，让真实算力有下探空间；`routesFor` 按价格升序选，自营若永远最便宜，
+  真实 provider 就永远拿不到流量。
+- **收益口径**：买家扣点的 90% 通过 `recordContribution` 记到上游 owner、10% 是平台撮合费。
+  自营上游的 owner 就是平台自营账户，**售价全额留在平台**，真实成本是厂商账单；因此定价
+  只需覆盖厂商成本并留利润，**不要再额外加 10%**。owner 必须是真实账户，否则收益会静默丢账。
+- **官方标识**：控制台上游列表与可用模型目录给自营上游打「官方」标签，纯展示、不参与路由。
+- **护栏**：`STARSTACK_GATEWAY_DAILY_BUDGET`（点，0 = 不限）是平台级当日预算熔断；创建 API Key
+  时可设 `daily_quota`（0 = 不限）。公网档 `Recharge: false`，消耗的是新用户赠额对应的真金白银。
+- **模型列表探测**：部分厂商网关只开放 `/v1/chat/completions`、不提供 `/v1/models`。此时播种探测
+  会打一条失败日志（非致命，不影响落库与路由），模型 ID 应以厂商 chat 响应里的 `model` 字段为准；
+  控制台「探测」按钮同样会失败，手工填写模型名即可。
+- **对账**：`GET /api/models/usage?days=7` 仅平台自营账户可访问，按上游 / 按模型聚合调用量、
+  失败次数与成本；控制台「模型 API」页有对应小表。
+- **退出机制（可执行规则）**：当真实 provider 数量 **≥ 3** 且能稳定供上主力模型时，把自营上游
+  价格上调到参考价以上；数量 **≥ 5** 时在控制台对自营上游
+  `PUT /api/models/upstreams/{id} {"enabled":false}`。该接口已存在，无需开发。只停自营也可以把
+  `STARSTACK_SEED_UPSTREAMS` 置空重启（已有行不会被删除），**不要**用 `DELETE FROM upstreams` 清理。
 
 MoE 与分布式部署的具体参数、脚本和 systemd 示例见
 [`deploy/models/README.md`](deploy/models/README.md)：

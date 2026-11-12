@@ -147,7 +147,36 @@ CREATE TABLE IF NOT EXISTS api_keys(
   prefix     TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   last_used  INTEGER NOT NULL DEFAULT 0,
-  revoked    INTEGER NOT NULL DEFAULT 0);
+  revoked    INTEGER NOT NULL DEFAULT 0,
+  daily_quota REAL NOT NULL DEFAULT 0);
+
+-- Per-key daily spend. Day is broker-local YYYY-MM-DD; one row per key/day so
+-- a leaked key cannot burn the whole platform budget. Stored, not cached: the
+-- counter has to survive a broker restart.
+CREATE TABLE IF NOT EXISTS gateway_spend(
+  key_id   TEXT NOT NULL,
+  day      TEXT NOT NULL,
+  credits  REAL NOT NULL DEFAULT 0,
+  requests INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(key_id, day));
+
+-- One row per gateway request, settled or failed. This is the reconciliation
+-- view for vendor bills: cost is what the buyer paid in points, tokens come
+-- from the upstream usage block.
+CREATE TABLE IF NOT EXISTS gateway_usage(
+  id          TEXT PRIMARY KEY,
+  ts          INTEGER NOT NULL,
+  req_id      TEXT NOT NULL DEFAULT '',
+  key_id      TEXT NOT NULL DEFAULT '',
+  user_id     TEXT NOT NULL DEFAULT '',
+  upstream_id TEXT NOT NULL DEFAULT '',
+  model       TEXT NOT NULL DEFAULT '',
+  prompt      INTEGER NOT NULL DEFAULT 0,
+  cached      INTEGER NOT NULL DEFAULT 0,
+  completion  INTEGER NOT NULL DEFAULT 0,
+  cost        REAL NOT NULL DEFAULT 0,
+  ok          INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_gw_usage_ts ON gateway_usage(ts);
 
 CREATE TABLE IF NOT EXISTS upstreams(
   id          TEXT PRIMARY KEY,
@@ -366,6 +395,7 @@ ALTER TABLE upstreams ADD COLUMN max_context INTEGER NOT NULL DEFAULT 32768;
 ALTER TABLE upstreams ADD COLUMN caps TEXT NOT NULL DEFAULT '["chat"]';
 ALTER TABLE upstreams ADD COLUMN price_out REAL NOT NULL DEFAULT 0;
 ALTER TABLE upstreams ADD COLUMN price_cached REAL NOT NULL DEFAULT 0;
+ALTER TABLE api_keys ADD COLUMN daily_quota REAL NOT NULL DEFAULT 0;
 ALTER TABLE service_offers ADD COLUMN spec TEXT NOT NULL DEFAULT '';
 ALTER TABLE nodes ADD COLUMN device_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE nodes ADD COLUMN earned_task REAL NOT NULL DEFAULT 0;
