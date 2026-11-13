@@ -2,8 +2,23 @@
 export const BASE = (location.pathname.match(/^(\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*)\/[^/]*$/) || ['', ''])[1]
 export const href = u => (typeof u === 'string' && u.startsWith('/') ? BASE + u : u)
 
+// 独立管理控制台模式：携带 admin token，并把 /api/* 重写到 /api/admin/*（独立认证面）。
+let adminToken = null
+export function setAdminToken(t) { adminToken = t || null }
+export function getAdminToken() { return adminToken }
+function adminUrl(u) {
+  const full = href(u)
+  if (!adminToken) return full
+  const prefix = BASE + '/api/'
+  if (full.startsWith(prefix)) return BASE + '/api/admin/' + full.slice(prefix.length)
+  return full
+}
+
 export async function api(u, o) {
-  const r = await fetch(href(u), o)
+  const opts = o || {}
+  const headers = new Headers(opts.headers || {})
+  if (adminToken) headers.set('Authorization', 'Bearer ' + adminToken)
+  const r = await fetch(adminUrl(u), { ...opts, headers })
   const t = await r.text()
   let d = null
   try { d = JSON.parse(t) } catch (e) {}

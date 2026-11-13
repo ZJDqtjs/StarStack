@@ -4,8 +4,8 @@ import { Card, Btn, Tag, St, Empty, Stat, Field } from '../../ui.jsx'
 import { api, f2 } from '../../api.js'
 
 export default function AdminAlloc() {
-  const { workers, target, setTarget, toast, confirm } = useApp()
-  const platform = workers.filter(w => w.mine)
+  const { workers, target, setTarget, toast, confirm, isAdminApp } = useApp()
+  const platform = isAdminApp ? workers : workers.filter(w => w.mine)
   const [nodeId, setNodeId] = useState('')
   const [price, setPrice] = useState('0.8')
   const [ups, setUps] = useState([])
@@ -106,7 +106,7 @@ export default function AdminAlloc() {
         </Card>
       </div>
 
-      <Card kicker="Platform Nodes" title="平台自营节点（可 inline 调拨）">
+      <Card kicker="Platform Nodes" title={isAdminApp ? '可调度节点（inline 调拨）' : '平台自营节点（可 inline 调拨）'}>
         <div className="tablewrap"><table><thead><tr><th>节点</th><th>状态</th><th>槽位</th><th>当前单价</th><th>调拨单价</th><th>派活</th></tr></thead>
           <tbody>{platform.length ? platform.map(w => (
             <tr key={w.id}>

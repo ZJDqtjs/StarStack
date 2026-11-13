@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useApp } from '../../store.jsx'
-import { nav } from '../../App.jsx'
+import { nav } from '../../router.js'
 import { Card, Kpi, Tag, St, Empty, Btn } from '../../ui.jsx'
 import { HBar, Spark, Donut, PALETTE } from '../../charts.jsx'
 import { api, f1, f2 } from '../../api.js'

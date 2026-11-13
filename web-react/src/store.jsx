@@ -2,6 +2,7 @@ import React, { createContext, useContext, useCallback, useEffect, useMemo, useR
 import { api, post } from './api.js'
 
 const Ctx = createContext(null)
+export { Ctx as AppCtx }
 export const useApp = () => useContext(Ctx)
 
 const sortWorkers = ws => ws.slice().sort((a, b) =>

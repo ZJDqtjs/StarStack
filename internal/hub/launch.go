@@ -721,7 +721,7 @@ func (s *Server) handleNodePause(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, jsonErr("读取失败"), http.StatusInternalServerError)
 		return
 	}
-	if owner != u.ID {
+	if owner != u.ID && !s.isAdminReq(r) {
 		http.Error(w, jsonErr("这台机器不属于你"), http.StatusForbidden)
 		return
 	}

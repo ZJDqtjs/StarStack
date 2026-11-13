@@ -39,6 +39,9 @@ func sessionToken(r *http.Request) string {
 }
 
 func (s *Server) currentUser(r *http.Request) *store.User {
+	if u, ok := r.Context().Value(adminUserCtxKey{}).(*store.User); ok && u != nil {
+		return u
+	}
 	tok := sessionToken(r)
 	if tok == "" {
 		return nil
@@ -486,7 +489,7 @@ func (s *Server) handleNodeOp(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, jsonErr("读取失败"), 500)
 			return
 		}
-		if owner != u.ID {
+		if owner != u.ID && !s.isAdminReq(r) {
 			http.Error(w, jsonErr("这台机器不属于你"), 403)
 			return
 		}
@@ -511,7 +514,7 @@ func (s *Server) handleNodeOp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, jsonErr("读取失败"), 500)
 		return
 	}
-	if owner != u.ID {
+	if owner != u.ID && !s.isAdminReq(r) {
 		http.Error(w, jsonErr("这台机器不属于你"), 403)
 		return
 	}

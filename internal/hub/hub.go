@@ -348,6 +348,9 @@ type Server struct {
 	gatewayDailyBudget float64 // 0 = unlimited, points per day across all keys
 	platformOwnerID    string  // set by P0-1 seeding; owner of 官方 upstreams
 	platformOwnerName  string  // STARSTACK_PLATFORM_USER, reserved account name
+	adminMu            sync.Mutex
+	adminSessions      map[string]time.Time // independent admin console tokens
+	apiMux             http.Handler         // inner API mux reused by /api/admin proxy
 	// Cloud hosts are a second market on the same nodes: offers are snapshots
 	// published by sellers, instances are prepaid rentals that keep their own
 	// lifecycle and billing clock.
@@ -681,7 +684,9 @@ func (s *Server) Handlers() http.Handler {
 			})
 		}
 	}
+	mux.HandleFunc("/api/admin/", s.handleAdmin)
 	mux.HandleFunc("/", handleIndex)
+	s.apiMux = mux
 	return logWrap(corsWrap(mux))
 }
 
@@ -2088,7 +2093,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		ws := make([]map[string]any, 0, len(s.workers))
 		for _, wd := range s.workers {
-			mine := wd.OwnerID == u.ID
+			mine := wd.OwnerID == u.ID || s.isAdminReq(r)
 			view := map[string]any{
 				"id": wd.ID, "name": wd.Name, "os": wd.OS, "arch": wd.Arch, "cpus": wd.CPUs,
 				"mem_mb": wd.MemMB, "gpus": wd.GPUs, "encoders": wd.Encoders,

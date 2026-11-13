@@ -4,7 +4,8 @@ import { Card, Btn, Tag, St, Empty, SearchBox, Chip, Stat, Bar, Field } from '..
 import { api, f1, f2 } from '../../api.js'
 
 export default function AdminNodes() {
-  const { workers, toast, confirm, prompt } = useApp()
+  const { workers, toast, confirm, prompt, isAdminApp } = useApp()
+  const canControl = w => w.mine || !!isAdminApp
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('load')
@@ -27,7 +28,7 @@ export default function AdminNodes() {
 
   const toggleSel = id => setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
   const bulkPause = async paused => {
-    const ids = sel.filter(id => workers.find(w => w.id === id && w.mine))
+    const ids = sel.filter(id => workers.find(w => w.id === id && canControl(w)))
     if (!ids.length) { toast('所选均为第三方节点，平台无权暂停', 'warn'); return }
     for (const id of ids) { try { await api('/api/nodes/' + encodeURIComponent(id) + '/pause', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused }) }) } catch (e) {} }
     toast(paused ? '已暂停所选平台节点' : '已恢复所选平台节点', 'ok'); setSel([])
@@ -75,7 +76,7 @@ export default function AdminNodes() {
             const rel = w.ok + w.bad > 0 ? Math.round(100 * w.ok / (w.ok + w.bad)) + '%' : '—'
             return (
               <tr key={w.id} className="tap" onClick={() => openDrawer(w)}>
-                <td onClick={e => e.stopPropagation()}>{w.mine && <input type="checkbox" checked={sel.includes(w.id)} onChange={() => toggleSel(w.id)} aria-label="选择" />}</td>
+                <td onClick={e => e.stopPropagation()}>{canControl(w) && <input type="checkbox" checked={sel.includes(w.id)} onChange={() => toggleSel(w.id)} aria-label="选择" />}</td>
                 <td><b>{w.name || w.id}</b><span className="sub-line">{w.os} · {w.cpus} 核 · {(w.gpus || []).map(g => g.name).join('/') || '无独显'}</span></td>
                 <td><St s={w.online ? (w.paused ? 'stopped' : 'running') : 'failed'}>{w.online ? (w.paused ? '暂停' : '在线') : '离线'}</St>{w.parked_sec ? <Tag tone="off">停派 {w.parked_sec}s</Tag> : null}</td>
                 <td style={{ minWidth: 110 }}><Bar pct={loadPct} /><span className="sub-line">{w.active}/{w.slots} · {loadPct}%</span></td>
@@ -83,7 +84,7 @@ export default function AdminNodes() {
                 <td>{rel}<span className="sub-line">✓{w.ok} ✗{w.bad}</span></td>
                 <td className="num">{f2(w.price)}</td>
                 <td>{w.mine ? <Tag tone="mine">平台自营</Tag> : <Tag>第三方</Tag>}</td>
-                <td onClick={e => e.stopPropagation()}>{w.mine && <Btn ghost tiny onClick={() => pauseNode(w.id, !w.paused)}>{w.paused ? '恢复' : '暂停'}</Btn>}</td>
+                <td onClick={e => e.stopPropagation()}>{canControl(w) && <Btn ghost tiny onClick={() => pauseNode(w.id, !w.paused)}>{w.paused ? '恢复' : '暂停'}</Btn>}</td>
               </tr>
             )
           }) : <tr><td colSpan={9} className="empty">没有匹配的节点</td></tr>}
@@ -105,7 +106,7 @@ export default function AdminNodes() {
               <div className="hint">编号 <span className="num">{dw.id}</span> · {dw.os} · {dw.cpus} 核 · {dw.mem_mb ? Math.round(dw.mem_mb / 1024) + 'GB' : ''}</div>
               <div className="hint">GPU：{(dw.gpus || []).map(g => g.name + ' ' + g.mem_mb + 'MB').join('、') || '无独显'}</div>
               <div className="hint">运行时：{(dw.runtimes || []).map(r => r.name).join('、') || '—'} · 编码：{(dw.encoders || []).join('、') || '—'}</div>
-              {dw.mine ? (
+              {canControl(dw) ? (
                 <>
                   <div className="divider" />
                   <div className="sec">调拨控制 <small>platform only</small></div>
