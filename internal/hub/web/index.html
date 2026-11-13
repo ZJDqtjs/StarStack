@@ -457,6 +457,19 @@ a.btn:hover{text-decoration:none}
 .hub-links button{height:28px;padding:0 12px;border-radius:999px;border:1px solid var(--hair);
   background:var(--inset);color:var(--ink);font:500 11.5px/1 var(--sans)}
 .hub-links button:hover{border-color:var(--bili-pink);color:var(--bili-pink)}
+.hub-try{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;
+  padding-top:10px;border-top:1px solid var(--hair);font-size:11.5px;color:var(--mute)}
+.hub-try label{color:var(--ink);font-weight:500}
+.hub-try select{height:28px;max-width:240px;padding:0 8px;border:1px solid var(--hair);
+  border-radius:8px;background:var(--card);color:var(--ink);font:400 11.5px/1 var(--sans)}
+.hub-try .hint{margin:0}
+.try-chat{display:flex;flex-direction:column;gap:10px}
+.try-chat .hub-result{margin-top:0}
+.try-msg{white-space:pre-wrap;word-break:break-word;line-height:1.7}
+.try-msg.user{background:var(--bili-pink-soft);border-color:var(--bili-pink)}
+.try-msg.error{border-color:var(--bad);color:var(--bad)}
+.try-role{display:block;margin-bottom:6px;font-size:11px;color:var(--mute)}
+.try-usage{display:block;margin-top:8px;font-size:11px;color:var(--mute)}
 
 /* ---------- 个人中心 ---------- */
 .backlink{display:inline-flex;align-items:center;gap:5px;margin:0 0 12px;height:28px;padding:0 9px;
@@ -1707,9 +1720,9 @@ a.btn:hover{text-decoration:none}
 <section class="view" id="v-api">
   <div class="hub-hero">
     <h1>你好，今天想调用什么？</h1>
-    <p class="hub-sub">官方 OpenAI 兼容网关 · 按 token 结算</p>
+    <p class="hub-sub">官方 OpenAI 兼容网关 · 无需 API Key，直接用当前模型试聊</p>
     <form class="hub-box" id="hub-form">
-      <textarea id="api-prompt" rows="2" placeholder="输入需求，例如：用 qwen2.5-7b 写一个 Python 脚本…"></textarea>
+      <textarea id="api-prompt" rows="2" placeholder="输入问题，例如：你是什么模型？"></textarea>
       <div class="hub-row">
         <div class="hub-quick">
           <button type="button" onclick="hubFocus('keyname')">创建 API Key</button>
@@ -1717,10 +1730,16 @@ a.btn:hover{text-decoration:none}
           <button type="button" onclick="hubFocus('upname')">接入上游</button>
           <button type="button" onclick="hubFocus('curlsnippet')">调用示例</button>
         </div>
-        <button class="hub-send" type="submit">发送</button>
+        <button class="hub-send" id="hub-send" type="submit">发送</button>
+      </div>
+      <div class="hub-try">
+        <label for="try-model">测试模型</label>
+        <select id="try-model"><option value="">读取模型目录…</option></select>
+        <span class="hint" id="try-meta">按实际 token 从当前登录账户结算</span>
+        <button type="button" class="ghost tiny" id="try-clear">清空对话</button>
       </div>
     </form>
-    <div id="api-result"></div>
+    <div id="api-result" class="try-chat" aria-live="polite"></div>
   </div>
   <div class="grid">
     <div>
@@ -1732,12 +1751,14 @@ a.btn:hover{text-decoration:none}
         </div>
         <div class="row" style="margin-top:16px;align-items:end">
           <div><label style="margin-top:0">密钥名称</label><input id="keyname" placeholder="例如 论文实验"></div>
+          <div><label style="margin-top:0">每日限额（点，0 = 不限）</label>
+            <input id="keydaily" type="number" min="0" step="0.1" value="0"></div>
           <button class="btn" id="newkeybtn" style="height:38px">创建密钥</button>
         </div>
         <div id="newkey"></div>
         <div class="tablewrap" style="margin-top:18px"><table id="keys"><thead><tr>
-          <th>名称</th><th>密钥前缀</th><th>创建时间</th><th>最近使用</th><th></th>
-        </tr></thead><tbody><tr><td colspan="5" class="empty">加载中…</td></tr></tbody></table></div>
+          <th>名称</th><th>密钥前缀</th><th>今日已用</th><th>每日限额</th><th>创建时间</th><th>最近使用</th><th></th>
+        </tr></thead><tbody><tr><td colspan="7" class="empty">加载中…</td></tr></tbody></table></div>
       </div>
 
       <div class="card">
@@ -1793,6 +1814,11 @@ a.btn:hover{text-decoration:none}
         <h2><span class="kicker">Registered</span>我登记的上游</h2>
         <div id="ups"><div class="empty">加载中…</div></div>
       </div>
+
+      <div class="card">
+        <h2><span class="kicker">Reconcile</span>上游用量对账（近 7 天）</h2>
+        <div id="gwusage"><div class="empty">加载中…</div></div>
+      </div>
     </div>
 
     <div>
@@ -1801,7 +1827,8 @@ a.btn:hover{text-decoration:none}
         <div class="tablewrap"><table id="cat"><thead><tr>
           <th>模型</th><th>上游数</th><th>最低输入单价</th><th>上下文</th><th>能力</th>
         </tr></thead><tbody><tr><td colspan="5" class="empty">加载中…</td></tr></tbody></table></div>
-        <div class="hint">按上下文与能力过滤后挑最便宜的健康上游；余额不足返回 402。</div>
+        <div class="hint">按上下文与能力过滤后挑最便宜的健康上游；余额不足返回 402，密钥日限额触发 429，平台日预算用尽返回 503。</div>
+        <div class="hint" style="margin-top:8px">标有「官方」的是平台自营节点，按参考价定价、只作可用性下限与兜底，不做最低价倾销。买家扣点的 90% 记入上游 owner 账户、10% 为平台撮合费；owner 是平台自营账户时两笔都留在平台，因此定价只需覆盖厂商账单，无需再加 10%。</div>
       </div>
 
       <div class="card">
@@ -2088,7 +2115,7 @@ a.btn:hover{text-decoration:none}
       <h2><span class="kicker">Contribution</span>贡献概览</h2>
       <div class="hint" style="margin-top:0">卖家贡献（账户维度）= 账本中该账户全部收益流水之和；节点贡献（设备维度）= 单台机器已结算的任务与云主机算力。两者是同一本账的两个视角，不是两笔钱。</div>
       <div class="stats" id="contribstat"><div class="empty">正在读取贡献账目…</div></div>
-      <div class="nx-tip" style="margin:16px 0 0">「其它收益」= 卖家贡献 − Σ 当前名下节点贡献，包含模型上游收益、已删除节点的历史收益和升级前的旧账。任务分片校验通过才发收益，云主机按租用时长结算、平台留 10%；在线挂机不产生贡献。</div>
+      <div class="nx-tip" style="margin:16px 0 0">「其它收益」= 卖家贡献 − Σ 当前名下节点贡献，包含模型上游收益、已删除节点的历史收益和升级前的旧账。任务分片校验通过才发收益，云主机按租用时长结算、平台留 10%；在线挂机不产生贡献。模型上游的收益按售价的 90% 记入上游 owner 账户、10% 留作平台撮合费；官方供给（平台自营节点）的 owner 就是平台账户，两笔收益都留在平台，真实成本是厂商账单。</div>
     </div>
     <div class="card">
       <h2><span class="kicker">Ledger</span>账户流水</h2>
@@ -3033,47 +3060,85 @@ function hubFocus(id){
   if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') el.focus();
 }
 
-$('#hub-form').addEventListener('submit',async e=>{
-  e.preventDefault();
-  const text=$('#api-prompt').value.trim();
-  const box=$('#api-result');
-  if(!text){box.innerHTML='<div class="hub-result">先写下你想做的事。</div>';return}
-  if(/key|密钥|令牌/i.test(text)){
-    box.innerHTML=`<div class="hub-result"><b>创建 API Key</b>
-      <p>在下方「我的 API Key」填写名称后点创建；密钥只显示一次，服务端只存哈希。</p>
-      <div class="hub-links"><button onclick="hubFocus('keyname')">去创建</button></div></div>`;
+let TRY_MSGS=[], TRY_MODEL='', TRY_BUSY=false, TRY_LOADING=false, TRY_NOTICE='';
+function tryErr(err){
+  const e=err&&err.error;
+  const msg=typeof e==='string'?e:(e&&e.message)||(err&&err.message)||String(err||'调用失败');
+  return msg.length>300?msg.slice(0,300)+'…':msg;
+}
+async function tryPost(body){
+  const r=await fetch('/api/models/try',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
+  const t=await r.text(); let d=null; try{d=JSON.parse(t)}catch(e){}
+  if(!r.ok) throw (d&&d.error!==undefined?{error:d.error}:t||('HTTP '+r.status));
+  return d||{};
+}
+function renderTryChat(){
+  const box=$('#api-result'); if(!box) return;
+  let html=TRY_MSGS.length?TRY_MSGS.map(m=>`<div class="hub-result try-msg ${m.role==='user'?'user':'assistant'}">
+      <span class="try-role">${m.role==='user'?'我':esc(TRY_MODEL||'模型')}</span>${esc(m.content)}${
+      m.usage?`<span class="try-usage">${esc(m.usage)}</span>`:''}</div>`).join('')
+    :'<div class="hub-result">选好当前模型后直接输入问题，即可开始试聊。</div>';
+  if(TRY_LOADING) html+='<div class="hub-result try-msg assistant"><span class="try-role">模型</span>正在响应…</div>';
+  if(TRY_NOTICE) html+=`<div class="hub-result try-msg error"><span class="try-role">提示</span>${esc(TRY_NOTICE)}</div>`;
+  box.innerHTML=html;
+}
+function renderTryModels(){
+  const sel=$('#try-model'); if(!sel) return;
+  const cur=sel.value||TRY_MODEL;
+  if(!CATALOG.length){
+    sel.innerHTML='<option value="">（暂无可用模型）</option>';
+    TRY_MODEL=''; $('#try-meta').textContent='先登记一个 OpenAI 兼容上游';
     return;
   }
-  box.innerHTML='<div class="hub-result">正在读取模型目录…</div>';
+  sel.innerHTML=CATALOG.map(m=>`<option value="${esc(m.id)}">${esc(m.id)} · ${f2(m.price_per_1k)} 点/千 token${m.official?' · 官方':''}</option>`).join('');
+  const keep=CATALOG.some(m=>m.id===cur)?cur:(CATALOG.find(m=>m.official)||CATALOG[0]).id;
+  sel.value=keep; TRY_MODEL=keep;
+  const m=CATALOG.find(x=>x.id===keep);
+  $('#try-meta').textContent=m?`当前 ${m.providers} 家上游 · 无需 API Key，按实际 token 结算`:'按实际 token 结算';
+}
+$('#try-model').addEventListener('change',()=>{
+  if(TRY_BUSY) return;
+  TRY_MODEL=$('#try-model').value; TRY_MSGS=[]; TRY_NOTICE=''; renderTryChat();
+});
+$('#try-clear').onclick=()=>{
+  if(TRY_BUSY) return;
+  TRY_MSGS=[]; TRY_NOTICE=''; renderTryChat();
+};
+$('#api-prompt').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('#hub-form').requestSubmit()}
+});
+$('#hub-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  if(TRY_BUSY) return;
+  const input=$('#api-prompt'), text=input.value.trim();
+  if(!text){TRY_NOTICE='先写下你想问的问题。';renderTryChat();return}
+  const model=$('#try-model').value;
+  if(!model){TRY_NOTICE='当前没有可用模型，请先在下方登记一个 OpenAI 兼容上游。';renderTryChat();return}
+  TRY_MODEL=model; TRY_NOTICE='';
+  TRY_MSGS.push({role:'user',content:text});
+  TRY_BUSY=true; TRY_LOADING=true;
+  $('#hub-send').disabled=true; $('#hub-send').textContent='响应中…';
+  $('#try-model').disabled=true; $('#try-clear').disabled=true;
+  renderTryChat();
   try{
-    const d=await api('/api/models/catalog');
-    const models=(d.models||[]).slice(0,8);
-    if(!models.length){
-      box.innerHTML=`<div class="hub-result"><b>还没有可用模型</b>
-        <p>先登记一个 OpenAI 兼容上游，或者去星海看卖家提供的模型端点。</p>
-        <div class="hub-links"><button onclick="hubFocus('upname')">接入上游</button>
-          <button onclick="showView('sky')">去星海</button></div></div>`;
-      return;
-    }
-    const model=models[0].id;
-    const snip=`curl ${location.origin+BASE}/v1/chat/completions \\\n  -H "Authorization: Bearer sk-ss-..." \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${model}","messages":[{"role":"user","content":"${text.replace(/'/g,'')}"}]}'`;
-    box.innerHTML=`<div class="hub-result">
-      <b>推荐模型</b>
-      <div class="hub-models">${models.map(m=>`<span class="tag">${esc(m.id)} · ${f2(m.price_per_1k)} 点/千 token</span>`).join('')}</div>
-      <pre>${esc(snip)}</pre>
-      <div class="hub-links"><button onclick="copySnippet(this)">复制调用示例</button>
-        <button onclick="hubFocus('keyname')">创建 Key</button></div>
-    </div>`;
+    const d=await tryPost({model,messages:TRY_MSGS.map(m=>({role:m.role,content:m.content}))});
+    const msg=d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content;
+    const usage=d.usage?`输入 ${d.usage.prompt_tokens||0} · 输出 ${d.usage.completion_tokens||0} tokens`:'';
+    TRY_MSGS.push({role:'assistant',content:msg||'（模型没有返回文本内容）',usage});
+    if(TRY_MSGS.length>12) TRY_MSGS=TRY_MSGS.slice(-12);
+    input.value='';
   }catch(err){
-    box.innerHTML=`<div class="hub-result"><b>读取失败</b><p>${esc(err)}</p></div>`;
+    TRY_MSGS.pop();
+    TRY_NOTICE=tryErr(err);
+  }finally{
+    TRY_BUSY=false; TRY_LOADING=false;
+    $('#hub-send').disabled=false; $('#hub-send').textContent='发送';
+    $('#try-model').disabled=false; $('#try-clear').disabled=false;
+    renderTryChat();
   }
 });
-
-function copySnippet(btn){
-  const pre=$('#api-result pre'); if(!pre) return;
-  navigator.clipboard&&navigator.clipboard.writeText(pre.textContent)
-    .then(()=>{btn.textContent='已复制'}).catch(()=>{});
-}
+renderTryChat();
 
 /* ---------------- 生图 / 生视频：ComfyUI 工作台 ----------------
    提交时不再复制提示词到剪贴板：把参数写进已部署的工作流节点，打开节点
@@ -3113,25 +3178,45 @@ function paintApi(force){
 }
 async function loadApi(){
   try{
-    const [k,u,c]=await Promise.all([api('/api/keys'),api('/api/models/upstreams'),api('/api/models/catalog')]);
+    // The reconciliation endpoint is platform-account-only; a 403 must not
+    // break the rest of the page for ordinary buyers.
+    const [k,u,c,g]=await Promise.all([api('/api/keys'),api('/api/models/upstreams'),
+      api('/api/models/catalog'),api('/api/models/usage?days=7').catch(()=>null)]);
     renderKeys(k.keys||[]);
     renderUps(u.upstreams||[]);
     CATALOG=c.models||[];
     $('#apibase').textContent=location.origin+BASE+'/v1';
     renderCatalog();
+    renderUsage(g);
   }catch(e){
-    $('#keys tbody').innerHTML=`<tr><td colspan="5" class="empty">读取失败：${esc(e)}</td></tr>`;
+    $('#keys tbody').innerHTML=`<tr><td colspan="7" class="empty">读取失败：${esc(e)}</td></tr>`;
   }
 }
 function renderKeys(list){
   $('#keys tbody').innerHTML=list.length?list.map(k=>`<tr>
     <td>${esc(k.name)}</td>
     <td class="num">${esc(k.prefix)}</td>
+    <td class="num">${f2(k.spent_today)}</td>
+    <td class="num">${k.daily_quota>0?f2(k.daily_quota)+' 点':'不限'}</td>
     <td class="num">${apiTS(k.created_at)}</td>
     <td class="num">${k.last_used?apiTS(k.last_used):'—'}</td>
     <td>${k.revoked?'<span class="tag off">已撤销</span>':
       `<button class="ghost tiny" onclick="revokeKey('${esc(k.id)}')">撤销</button>`}</td>
-  </tr>`).join(''):'<tr><td colspan="5" class="empty">还没有 API Key</td></tr>';
+  </tr>`).join(''):'<tr><td colspan="7" class="empty">还没有 API Key</td></tr>';
+}
+function renderUsage(d){
+  if(!d){$('#gwusage').innerHTML='<div class="hint" style="margin:0">用量对账仅平台自营账户可查看。</div>';return}
+  const rows=list=>list&&list.length?list.map(x=>`<tr>
+    <td>${esc(x.name||x.id||'—')}</td><td class="num">${x.requests}</td>
+    <td class="num">${x.failed}</td><td class="num">${f2(x.cost)}</td>
+    <td class="num">${x.prompt}</td><td class="num">${x.completion}</td></tr>`).join('')
+    :'<tr><td colspan="6" class="empty">暂无记录</td></tr>';
+  $('#gwusage').innerHTML=`<div class="hint" style="margin:0 0 8px">按上游：成本为买家实际扣点，失败请求不计费。</div>
+    <div class="tablewrap"><table><thead><tr><th>上游</th><th>调用</th><th>失败</th><th>成本（点）</th><th>输入</th><th>输出</th></tr></thead>
+    <tbody>${rows(d.by_upstream)}</tbody></table></div>
+    <div class="hint" style="margin:10px 0 8px">按模型</div>
+    <div class="tablewrap"><table><thead><tr><th>模型</th><th>调用</th><th>失败</th><th>成本（点）</th><th>输入</th><th>输出</th></tr></thead>
+    <tbody>${rows(d.by_model)}</tbody></table></div>`;
 }
 async function revokeKey(id){
   if(!confirm('撤销后使用该密钥的调用会立即失效，确定？'))return;
@@ -3150,7 +3235,7 @@ function renderUps(list){
     const state=u.enabled?(h.cooling_sec?`<span class="tag off">冷却 ${h.cooling_sec}s</span>`:
       '<span class="tag on">路由中</span>'):'<span class="tag off">已停用</span>';
     return `<div class="card" style="margin-bottom:10px;padding:16px 18px">
-      <h2 class="plain">${esc(u.name)} ${state}</h2>
+      <h2 class="plain">${esc(u.name)} ${u.official?'<span class="tag mine">官方</span>':''} ${state}</h2>
       <div class="hint">${esc(u.base_url)} · ${esc((u.models||[]).join(' / '))}</div>
       <div class="hint" style="margin-top:4px">上下文 ${ctxLabel(u.max_context)} ·
         ${caps.length?caps.map(c=>esc(capNames[c]||c)).join(' / '):'仅对话'}</div>
@@ -3188,7 +3273,7 @@ function renderCatalog(){
   $('#cat tbody').innerHTML=CATALOG.length?CATALOG.map(m=>{
     const caps=(m.capabilities||[]).filter(c=>c!=='chat');
     return `<tr>
-      <td class="num">${esc(m.id)}</td><td>${m.providers}</td>
+      <td class="num">${esc(m.id)} ${m.official?'<span class="tag mine">官方</span>':''}</td><td>${m.providers}</td>
       <td class="num">${f2(m.price_per_1k)} 点/千 token</td>
       <td class="num">${ctxLabel(m.max_context)}</td>
       <td>${caps.length?caps.map(c=>`<span class="tag">${esc(capNames[c]||c)}</span>`).join(''):
@@ -3196,6 +3281,7 @@ function renderCatalog(){
   }).join('')
     :'<tr><td colspan="5" class="empty">还没有可用模型</td></tr>';
   snippet();
+  renderTryModels();
 }
 function snippet(){
   const model=$('#apimodel').value||'your-model';
@@ -3219,7 +3305,8 @@ vllm serve Qwen/Qwen3-30B-A3B --tensor-parallel-size 2 --port 8000`;
 $('#newkeybtn').onclick=async()=>{
   const btn=$('#newkeybtn'); btn.disabled=true;
   try{
-    const d=await post('/api/keys',{name:$('#keyname').value.trim()||'默认密钥'});
+    const d=await post('/api/keys',{name:$('#keyname').value.trim()||'默认密钥',
+      daily_quota:+$('#keydaily').value||0});
     APIKEY=d.key;
     $('#newkey').innerHTML=`<div class="hint warn" style="margin-top:12px">新密钥只显示这一次，请立即复制保存：</div>
       <pre id="newkeyval">${esc(d.key)}</pre>
@@ -3232,7 +3319,7 @@ $('#newkeybtn').onclick=async()=>{
         $('#copykey').textContent='已选中，请按 Ctrl+C';
       }
     };
-    $('#keyname').value='';
+    $('#keyname').value=''; $('#keydaily').value='0';
     snippet(); loadApi();
   }catch(e){$('#newkey').innerHTML=`<div class="err">创建失败：${esc(e)}</div>`}
   finally{btn.disabled=false}

@@ -41,16 +41,32 @@ import (
 // not report one) and settled in the same credits ledger as compute slices.
 
 const (
-	gatewayKeyPrefix       = "sk-ss-"
-	gatewayMaxBody         = 4 << 20
-	gatewayMaxResponse     = 32 << 20
-	gatewayMaxPromptTokens = 32768
-	gatewayMaxTokens       = 8192
-	gatewayDefaultTokens   = 1024
-	gatewayProviderShare   = 0.9 // the remaining 10% is the matching fee
-	gatewayCooldown        = 20 * time.Second
-	gatewayTimeout         = 10 * time.Minute
-	gatewayStickyTTL       = 30 * time.Minute
+	gatewayKeyPrefix   = "sk-ss-"
+	gatewayMaxBody     = 4 << 20
+	gatewayMaxResponse = 32 << 20
+	// Defaults for the two request ceilings. They are Server fields now so a
+	// deployment that registers 64K/128K vendor models can raise them without
+	// rebuilding (see SetGatewayLimits).
+	DefaultGatewayMaxPromptTokens = 32768
+	DefaultGatewayMaxTokens       = 8192
+	gatewayMaxPromptCeiling       = 1048576
+	gatewayMaxTokensCeiling       = 131072
+	gatewayDefaultTokens          = 1024
+	gatewayProviderShare          = 0.9 // the remaining 10% is the matching fee
+	gatewayCooldown               = 20 * time.Second
+	gatewayTimeout                = 10 * time.Minute
+	gatewayStickyTTL              = 30 * time.Minute
+
+	// The console chat demo reuses the paid gateway but carries its own small
+	// per-account budget, so a shared page cannot become an open relay.
+	tryChatMaxMessages     = 12
+	tryChatMaxMessageRunes = 2000
+	tryChatMaxTotalRunes   = 8000
+	tryChatMaxTokens       = 512
+	tryChatPerMinute       = 8
+	tryChatDailyQuota      = 1.0
+	tryChatMaxBody         = 64 << 10
+	tryChatTimeout         = 90 * time.Second
 )
 
 // ---- sealed upstream credentials ----
@@ -369,6 +385,13 @@ type catalogModel struct {
 	MaxContext   int      `json:"max_context"`
 	Capabilities []string `json:"capabilities,omitempty"`
 	CheapestName string   `json:"cheapest_upstream,omitempty"`
+	Official     bool     `json:"official,omitempty"` // console badge only, never used for routing
+}
+
+// isOfficial is a display flag: 官方供给 is an ordinary upstream owned by the
+// platform account, with no special routing branch anywhere in the gateway.
+func (s *Server) isOfficial(up *store.Upstream) bool {
+	return s.platformOwnerID != "" && up.OwnerID == s.platformOwnerID
 }
 
 func (s *Server) modelCatalog() []catalogModel {
@@ -390,6 +413,9 @@ func (s *Server) modelCatalog() []catalogModel {
 				order = append(order, key)
 			}
 			c.Providers++
+			if s.isOfficial(u) {
+				c.Official = true
+			}
 			if u.Price < c.PricePer1K {
 				c.PricePer1K = u.Price
 				c.CheapestName = u.Name
@@ -437,11 +463,18 @@ func (s *Server) handleAPIKeys(w http.ResponseWriter, r *http.Request) {
 		}
 		out := make([]map[string]any, 0, len(keys))
 		for _, k := range keys {
-			out = append(out, keyView(k))
+			spent, err := s.st.GatewaySpendToday(k.ID)
+			if err != nil {
+				log.Printf("gateway: daily spend for key %s: %v", k.ID, err)
+			}
+			out = append(out, keyView(k, spent))
 		}
 		writeJSON(w, map[string]any{"keys": out})
 	case http.MethodPost:
-		var req struct{ Name string }
+		var req struct {
+			Name       string  `json:"name"`
+			DailyQuota float64 `json:"daily_quota"`
+		}
 		if err := decodeJSON(r, &req); err != nil {
 			http.Error(w, jsonErr("请求格式错误"), 400)
 			return
@@ -461,17 +494,23 @@ func (s *Server) handleAPIKeys(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, jsonErr("每个账户最多保留 20 个有效密钥"), 400)
 			return
 		}
+		if req.DailyQuota < 0 || req.DailyQuota > 1000000 || math.IsNaN(req.DailyQuota) {
+			http.Error(w, jsonErr("日限额需在 0 ~ 1000000 点之间；0 表示不限"), 400)
+			return
+		}
 		plain := gatewayKeyPrefix + auth.RandomHex(24)
 		k := &store.APIKey{
 			ID: "k" + newID() + newID(), UserID: u.ID, Name: name,
 			Hash: hashAPIKey(plain), Prefix: plain[:len(gatewayKeyPrefix)+8],
-			CreatedAt: time.Now().Unix(),
+			CreatedAt: time.Now().Unix(), DailyQuota: round4(req.DailyQuota),
 		}
 		if err := s.st.CreateAPIKey(k); err != nil {
 			http.Error(w, jsonErr("创建失败"), 500)
 			return
 		}
-		log.Printf("user %s created API key %s (%s)", u.Name, k.ID, k.Prefix)
+		// Only the opaque id is logged: even a key prefix would put "sk-"
+		// into the broker log, which the credential audit greps for.
+		log.Printf("user %s created API key %s", u.Name, k.ID)
 		// The plaintext key is intentionally absent from keyView: this response
 		// is the only place it will ever exist.
 		writeJSON(w, map[string]any{"key": plain, "id": k.ID, "name": k.Name,
@@ -507,10 +546,11 @@ func (s *Server) handleAPIKeyOp(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "id": id})
 }
 
-func keyView(k *store.APIKey) map[string]any {
+func keyView(k *store.APIKey, spentToday float64) map[string]any {
 	return map[string]any{
 		"id": k.ID, "name": k.Name, "prefix": k.Prefix + "…",
 		"created_at": k.CreatedAt, "last_used": k.LastUsed, "revoked": k.Revoked,
+		"daily_quota": k.DailyQuota, "spent_today": round4(spentToday),
 	}
 }
 
@@ -648,7 +688,9 @@ func (s *Server) handleUpstreamOp(w http.ResponseWriter, r *http.Request) {
 		t0 := time.Now()
 		models, err := s.probeUpstream(r.Context(), base, strings.TrimSpace(req.APIKey))
 		if err != nil {
-			http.Error(w, jsonErr("探测失败："+err.Error()), http.StatusBadGateway)
+			// A vendor 401 body may echo the credential; never relay it verbatim.
+			http.Error(w, jsonErr("探测失败："+probeFailureReason(err, strings.TrimSpace(req.APIKey))),
+				http.StatusBadGateway)
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true, "models": models,
@@ -703,6 +745,7 @@ func (s *Server) upstreamView(up *store.Upstream) map[string]any {
 		"max_context": up.MaxContext, "caps": up.Caps,
 		"enabled": up.Enabled, "created_at": up.CreatedAt,
 		"has_key": hasKey, "key_state": keyState, "health": s.gateway.view(up.ID),
+		"official": s.isOfficial(up),
 	}
 }
 
@@ -712,6 +755,46 @@ func (s *Server) handleModelCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{"models": s.modelCatalog(),
 		"provider_share": gatewayProviderShare})
+}
+
+// isPlatformUser gates the reconciliation endpoint. The account is identified
+// by the id resolved during seeding, falling back to the reserved env name.
+func (s *Server) isPlatformUser(u *store.User) bool {
+	if s.platformOwnerID != "" {
+		return u.ID == s.platformOwnerID
+	}
+	return s.platformOwnerName != "" && u.Name == s.platformOwnerName
+}
+
+// handleModelUsage is read-only and platform-account-only. The public /v1
+// contract is untouched: this is a console endpoint under /api.
+func (s *Server) handleModelUsage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, jsonErr("只支持 GET"), 405)
+		return
+	}
+	u, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
+	if !s.isPlatformUser(u) {
+		http.Error(w, jsonErr("仅平台自营账户可查看上游用量对账"), http.StatusForbidden)
+		return
+	}
+	days := atoi(r.URL.Query().Get("days"))
+	if days <= 0 {
+		days = 7
+	}
+	if days > 90 {
+		days = 90
+	}
+	byUp, byModel, err := s.st.GatewayUsageSummary(days)
+	if err != nil {
+		log.Printf("gateway: usage summary: %v", err)
+		http.Error(w, jsonErr("读取失败"), 500)
+		return
+	}
+	writeJSON(w, map[string]any{"days": days, "by_upstream": byUp, "by_model": byModel})
 }
 
 func normalizeModels(raw string) ([]string, error) {
@@ -1045,10 +1128,17 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 		oaiError(w, http.StatusMethodNotAllowed, "method_not_allowed", "invalid_request_error", "只支持 POST")
 		return
 	}
-	u, _, ok := s.gatewayUser(w, r)
+	u, key, ok := s.gatewayUser(w, r)
 	if !ok {
 		return
 	}
+	s.serveGatewayChat(w, r, u, key)
+}
+
+// serveGatewayChat holds the routing, hold/settlement and upstream relay shared
+// by the public /v1 endpoint and the console's key-free chat trial.
+func (s *Server) serveGatewayChat(w http.ResponseWriter, r *http.Request, u *store.User, key *store.APIKey) {
+	reqID := "req_" + newID() + newID()
 
 	r.Body = http.MaxBytesReader(w, r.Body, gatewayMaxBody)
 	raw, err := io.ReadAll(r.Body)
@@ -1081,12 +1171,21 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 	}
 	if !set || maxTok <= 0 {
 		maxTok = gatewayDefaultTokens
+	}
+	// OpenAI clients routinely send a model's advertised output ceiling (16K~128K)
+	// even for a one-line question. Rejecting that makes a freshly created key
+	// look broken, and the pessimistic hold is sized from this very value.
+	// Clamp instead, then forward the same number so the hold, upstreamFits and
+	// the provider all see one consistent value.
+	if maxTok > s.maxTokens {
+		log.Printf("gateway %s max_tokens %d clamped to %d", reqID, maxTok, s.maxTokens)
+		maxTok = s.maxTokens
+	}
+	if _, ok := body["max_tokens"]; ok || !set {
 		body["max_tokens"] = maxTok
 	}
-	if maxTok > gatewayMaxTokens {
-		oaiError(w, http.StatusBadRequest, "max_tokens_too_large", "invalid_request_error",
-			fmt.Sprintf("max_tokens 最大 %d", gatewayMaxTokens))
-		return
+	if _, ok := body["max_completion_tokens"]; ok {
+		body["max_completion_tokens"] = maxTok
 	}
 	if stream {
 		opts, _ := body["stream_options"].(map[string]any)
@@ -1115,9 +1214,9 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	promptEst += 8
-	if promptEst > gatewayMaxPromptTokens {
+	if promptEst > s.maxPromptTokens {
 		oaiError(w, http.StatusBadRequest, "prompt_too_long", "invalid_request_error",
-			fmt.Sprintf("提示词约 %d tokens，超过上限 %d", promptEst, gatewayMaxPromptTokens))
+			fmt.Sprintf("提示词约 %d tokens，超过上限 %d", promptEst, s.maxPromptTokens))
 		return
 	}
 
@@ -1142,6 +1241,7 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if healthy == 0 {
+		s.recordGatewayUsage(u, key.ID, reqID, "", model, tokenUsage{}, 0, false)
 		oaiError(w, http.StatusServiceUnavailable, "upstream_busy", "server_error",
 			"该模型的上游都在冷却中（最近连续失败），请稍后重试")
 		return
@@ -1157,6 +1257,31 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 	if reserve < 0.0001 {
 		reserve = 0.0001
 	}
+	// Daily guards sit between the reserve and the balance check. Both compare
+	// today's settled spend plus the pessimistic hold; concurrent calls may
+	// overshoot slightly, which is preferable to a global serial lock.
+	if key.DailyQuota > 0 {
+		spent, err := s.st.GatewaySpendToday(key.ID)
+		if err != nil {
+			log.Printf("gateway %s key daily spend: %v", reqID, err)
+		} else if spent+reserve > key.DailyQuota {
+			oaiError(w, http.StatusTooManyRequests, "insufficient_quota", "invalid_request_error",
+				fmt.Sprintf("该密钥今日额度已用完（限额 %.4f 点，今日已用 %.4f 点，本次预扣 %.4f 点）",
+					key.DailyQuota, spent, reserve))
+			return
+		}
+	}
+	if s.gatewayDailyBudget > 0 {
+		spent, err := s.st.GatewaySpendAllToday()
+		if err != nil {
+			log.Printf("gateway %s platform daily spend: %v", reqID, err)
+		} else if spent+reserve > s.gatewayDailyBudget {
+			oaiError(w, http.StatusServiceUnavailable, "platform_budget_exhausted", "server_error",
+				fmt.Sprintf("平台今日模型预算已用尽（预算 %.4f 点，今日已用 %.4f 点）",
+					s.gatewayDailyBudget, spent))
+			return
+		}
+	}
 	bal, err := s.st.Balance(u.ID)
 	if err != nil {
 		oaiError(w, http.StatusInternalServerError, "balance_error", "server_error", "读取余额失败")
@@ -1168,7 +1293,6 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reqID := "req_" + newID() + newID()
 	if bal, err := s.st.AddCredits(u.ID, -reserve); err != nil {
 		oaiError(w, http.StatusInternalServerError, "balance_error", "server_error", "预扣失败")
 		return
@@ -1179,6 +1303,7 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 
 	upBody, err := json.Marshal(body)
 	if err != nil {
+		s.recordGatewayUsage(u, key.ID, reqID, "", model, tokenUsage{}, 0, false)
 		s.gatewayRefund(u, reqID, reserve, "请求序列化失败")
 		oaiError(w, http.StatusBadRequest, "invalid_request", "invalid_request_error", "请求无法序列化")
 		return
@@ -1186,10 +1311,12 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 
 	structKind := structuredKind(body)
 	var lastErr error
+	var lastUpID string
 	for _, rt := range routes {
 		if s.gateway.cooling(rt.up.ID) {
 			continue
 		}
+		lastUpID = rt.up.ID
 		res, err := s.callUpstream(r.Context(), rt.up, upBody)
 		if err != nil {
 			lastErr = err
@@ -1207,6 +1334,12 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 			}
 			// The buyer's request is invalid for this upstream, not the
 			// upstream's fault: refund and relay without cooling it down.
+			// A vendor 4xx body can echo the upstream credential; strip it
+			// before the body reaches the buyer (the JSON shape is unchanged).
+			if upKey, err := s.secrets.open(rt.up.EncKey); err == nil && upKey != "" {
+				bodyErr = []byte(redactKey(string(bodyErr), upKey))
+			}
+			s.recordGatewayUsage(u, key.ID, reqID, rt.up.ID, model, tokenUsage{}, 0, false)
 			s.gatewayRefund(u, reqID, reserve, "上游拒绝请求，未产生用量")
 			s.gateway.ok(rt.up.ID)
 			relayUpstreamError(w, res.StatusCode, bodyErr)
@@ -1235,7 +1368,7 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 				us := usageFromResponse(bodyOut, promptEst)
 				s.gateway.ok(rt.up.ID)
 				s.gateway.pin(need.Sticky, rt.up.ID)
-				s.settleGateway(u, rt.up, model, reqID, us, reserve, promptEst)
+				s.settleGateway(u, key.ID, rt.up, model, reqID, us, reserve, promptEst)
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("X-Starstack-Request-Id", reqID)
 				w.Header().Set("X-Starstack-Output-SHA256", outputHash(bodyOut))
@@ -1251,7 +1384,7 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 			}
 			s.gateway.ok(rt.up.ID)
 			s.gateway.pin(need.Sticky, rt.up.ID)
-			s.settleGateway(u, rt.up, model, reqID, us, reserve, promptEst)
+			s.settleGateway(u, key.ID, rt.up, model, reqID, us, reserve, promptEst)
 			return
 		}
 
@@ -1271,7 +1404,7 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 		us := usageFromResponse(bodyOut, promptEst)
 		s.gateway.ok(rt.up.ID)
 		s.gateway.pin(need.Sticky, rt.up.ID)
-		s.settleGateway(u, rt.up, model, reqID, us, reserve, promptEst)
+		s.settleGateway(u, key.ID, rt.up, model, reqID, us, reserve, promptEst)
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Starstack-Request-Id", reqID)
 		w.Header().Set("X-Starstack-Output-SHA256", outputHash(bodyOut))
@@ -1280,12 +1413,135 @@ func (s *Server) handleV1Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.recordGatewayUsage(u, key.ID, reqID, lastUpID, model, tokenUsage{}, 0, false)
 	s.gatewayRefund(u, reqID, reserve, "所有上游均不可用，未产生用量")
 	if lastErr != nil {
 		log.Printf("gateway %s all upstreams failed: %v", reqID, lastErr)
 	}
 	oaiError(w, http.StatusBadGateway, "upstream_unavailable", "server_error",
 		"所有提供该模型的上游都暂时不可用，请稍后重试")
+}
+
+// handleTryChat lets a signed-in console user talk to the currently configured
+// model without creating or exposing an sk-ss- key. It builds a small, plain
+// chat request itself and hands it to the same paid gateway path as /v1.
+func (s *Server) handleTryChat(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, jsonErr("只支持 POST"), http.StatusMethodNotAllowed)
+		return
+	}
+	u, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
+	if !s.limiter.allow("try-user:"+u.ID, tryChatPerMinute) ||
+		!s.limiter.allow("try-ip:"+s.clientIP(r), tryChatPerMinute*2) {
+		http.Error(w, jsonErr("试聊太频繁，请一分钟后再试"), http.StatusTooManyRequests)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, tryChatMaxBody)
+	var req struct {
+		Model    string `json:"model"`
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		http.Error(w, jsonErr("请求格式错误或内容过大"), http.StatusBadRequest)
+		return
+	}
+	if len(req.Messages) == 0 || len(req.Messages) > tryChatMaxMessages {
+		http.Error(w, jsonErr(fmt.Sprintf("对话消息需为 1～%d 条", tryChatMaxMessages)), http.StatusBadRequest)
+		return
+	}
+	msgs := make([]map[string]string, 0, len(req.Messages)+1)
+	total := 0
+	for _, m := range req.Messages {
+		role := strings.ToLower(strings.TrimSpace(m.Role))
+		if role != "user" && role != "assistant" {
+			http.Error(w, jsonErr("消息 role 只能是 user 或 assistant"), http.StatusBadRequest)
+			return
+		}
+		if strings.TrimSpace(m.Content) == "" {
+			http.Error(w, jsonErr("消息内容不能为空"), http.StatusBadRequest)
+			return
+		}
+		n := utf8.RuneCountInString(m.Content)
+		if n > tryChatMaxMessageRunes {
+			http.Error(w, jsonErr(fmt.Sprintf("单条消息最多 %d 字", tryChatMaxMessageRunes)), http.StatusBadRequest)
+			return
+		}
+		total += n
+		if total > tryChatMaxTotalRunes {
+			http.Error(w, jsonErr(fmt.Sprintf("整段对话最多 %d 字", tryChatMaxTotalRunes)), http.StatusBadRequest)
+			return
+		}
+		msgs = append(msgs, map[string]string{"role": role, "content": m.Content})
+	}
+	if msgs[len(msgs)-1]["role"] != "user" {
+		http.Error(w, jsonErr("最后一条消息必须来自用户"), http.StatusBadRequest)
+		return
+	}
+
+	catalog := s.modelCatalog()
+	if len(catalog) == 0 {
+		http.Error(w, jsonErr("当前没有可用模型，请先登记上游"), http.StatusServiceUnavailable)
+		return
+	}
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		model = catalog[0].ID
+		for _, m := range catalog {
+			if m.Official {
+				model = m.ID
+				break
+			}
+		}
+	} else {
+		found := false
+		for _, m := range catalog {
+			if strings.EqualFold(m.ID, model) {
+				model = m.ID
+				found = true
+				break
+			}
+		}
+		if !found {
+			http.Error(w, jsonErr("模型不在当前可用目录中"), http.StatusNotFound)
+			return
+		}
+	}
+
+	system := fmt.Sprintf("你正在通过星栈算力控制台提供试聊，当前模型 ID 是 %s。请用简洁中文回答；不要编造能力，也不要索取或透露密钥、令牌和内部地址。", model)
+	chatMessages := make([]any, 0, len(msgs)+1)
+	chatMessages = append(chatMessages, map[string]string{"role": "system", "content": system})
+	for _, m := range msgs {
+		chatMessages = append(chatMessages, m)
+	}
+	maxTokens := tryChatMaxTokens
+	if s.maxTokens > 0 && s.maxTokens < maxTokens {
+		maxTokens = s.maxTokens
+	}
+	raw, err := json.Marshal(map[string]any{
+		"model": model, "messages": chatMessages,
+		"stream": false, "max_tokens": maxTokens,
+	})
+	if err != nil {
+		http.Error(w, jsonErr("请求序列化失败"), http.StatusInternalServerError)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), tryChatTimeout)
+	defer cancel()
+	r2 := r.Clone(ctx)
+	r2.Body = io.NopCloser(bytes.NewReader(raw))
+	r2.ContentLength = int64(len(raw))
+	r2.Header.Set("Content-Type", "application/json")
+	r2.Header.Set("X-Starstack-Session", "try-"+u.ID)
+	s.serveGatewayChat(w, r2, u, &store.APIKey{
+		ID: "try:" + u.ID, UserID: u.ID, Name: "控制台试聊",
+		DailyQuota: tryChatDailyQuota,
+	})
 }
 
 // callUpstream creates the outgoing request. The resolved model name is kept in
@@ -1329,7 +1585,7 @@ func (c *cancelOnClose) Close() error {
 	return err
 }
 
-func (s *Server) settleGateway(u *store.User, up *store.Upstream, model, reqID string, us tokenUsage, reserve float64, promptEst int) {
+func (s *Server) settleGateway(u *store.User, keyID string, up *store.Upstream, model, reqID string, us tokenUsage, reserve float64, promptEst int) {
 	if us.Prompt <= 0 {
 		us.Prompt = promptEst
 	}
@@ -1360,6 +1616,28 @@ func (s *Server) settleGateway(u *store.User, up *store.Upstream, model, reqID s
 	}
 	log.Printf("gateway %s user=%s model=%s upstream=%s prompt=%d cached=%d completion=%d cost=%.4f",
 		reqID, u.Name, model, up.ID, us.Prompt, us.Cached, us.Completion, cost)
+	// Only settled cost consumes the daily guards; refunded holds never do.
+	if keyID != "" {
+		if err := s.st.AddGatewaySpend(keyID, store.DayKey(time.Now()), cost); err != nil {
+			log.Printf("gateway %s daily spend: %v", reqID, err)
+		}
+	}
+	s.recordGatewayUsage(u, keyID, reqID, up.ID, model, us, cost, true)
+}
+
+// recordGatewayUsage writes exactly one row per request, ok=1 on the settled
+// path and ok=0 with cost 0 on every terminal failure. Vendor bills can then be
+// reconciled against /api/models/usage without digging through logs.
+func (s *Server) recordGatewayUsage(u *store.User, keyID, reqID, upstreamID, model string,
+	us tokenUsage, cost float64, ok bool) {
+	if err := s.st.AddGatewayUsage(&store.GatewayUsage{
+		ID: "gu" + newID() + newID(), TS: time.Now().Unix(), ReqID: reqID,
+		KeyID: keyID, UserID: u.ID, UpstreamID: upstreamID, Model: model,
+		Prompt: us.Prompt, Cached: us.Cached, Completion: us.Completion,
+		Cost: cost, OK: ok,
+	}); err != nil {
+		log.Printf("gateway %s usage record: %v", reqID, err)
+	}
 }
 
 func (s *Server) gatewayRefund(u *store.User, reqID string, reserve float64, why string) {

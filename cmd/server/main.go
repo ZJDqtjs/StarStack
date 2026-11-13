@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -139,6 +140,14 @@ func main() {
 		*addr, *data, *base, map[bool]string{true: "public", false: "demo"}[pol.Public])
 
 	srv := hub.NewServer(*data, *base, st, pol)
+	// Gateway ceilings, the daily platform budget and the self-supply seed all
+	// come from the service environment. None of them can abort startup.
+	srv.SetPlatformAccount(os.Getenv("STARSTACK_PLATFORM_USER"))
+	srv.SetGatewayLimits(
+		envInt("STARSTACK_GATEWAY_MAX_PROMPT", hub.DefaultGatewayMaxPromptTokens),
+		envInt("STARSTACK_GATEWAY_MAX_TOKENS", hub.DefaultGatewayMaxTokens))
+	srv.SetGatewayDailyBudget(envFloat("STARSTACK_GATEWAY_DAILY_BUDGET", 0))
+	srv.SeedPlatformUpstreams()
 	srv.SetNodeBinDir(*nodeBin)
 	srv.SetComfyHubURL(*comfyhub)
 	if *comfyhub == "" {
@@ -171,4 +180,32 @@ func main() {
 	if err := hs.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+// envInt/envFloat keep an unset env completely silent (defaults match the
+// historical behaviour) and log only when a configured value is unparseable.
+func envInt(name string, def int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return def
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		log.Printf("%s 不是有效整数，使用默认值 %d", name, def)
+		return def
+	}
+	return n
+}
+
+func envFloat(name string, def float64) float64 {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		log.Printf("%s 不是有效数字，使用默认值 %g", name, def)
+		return def
+	}
+	return v
 }

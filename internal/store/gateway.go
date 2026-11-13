@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 // ---- API keys ----
@@ -17,20 +18,23 @@ type APIKey struct {
 	CreatedAt        int64
 	LastUsed         int64
 	Revoked          bool
+	DailyQuota       float64 // 0 = unlimited, in points per broker-local day
 }
 
+const apiKeyCols = `id,user_id,name,hash,prefix,created_at,last_used,revoked,daily_quota`
+
 func (s *Store) CreateAPIKey(k *APIKey) error {
-	_, err := s.db.Exec(`INSERT INTO api_keys(id,user_id,name,hash,prefix,created_at) VALUES(?,?,?,?,?,?)`,
-		k.ID, k.UserID, k.Name, k.Hash, k.Prefix, k.CreatedAt)
+	_, err := s.db.Exec(`INSERT INTO api_keys(`+apiKeyCols+`) VALUES(?,?,?,?,?,?,?,?,?)`,
+		k.ID, k.UserID, k.Name, k.Hash, k.Prefix, k.CreatedAt, 0, b2i(k.Revoked), k.DailyQuota)
 	return err
 }
 
 func (s *Store) APIKeyByHash(hash string) (*APIKey, error) {
 	k := &APIKey{}
 	var revoked int
-	err := s.db.QueryRow(`SELECT id,user_id,name,hash,prefix,created_at,last_used,revoked
-		FROM api_keys WHERE hash=?`, hash).
-		Scan(&k.ID, &k.UserID, &k.Name, &k.Hash, &k.Prefix, &k.CreatedAt, &k.LastUsed, &revoked)
+	err := s.db.QueryRow(`SELECT `+apiKeyCols+` FROM api_keys WHERE hash=?`, hash).
+		Scan(&k.ID, &k.UserID, &k.Name, &k.Hash, &k.Prefix, &k.CreatedAt, &k.LastUsed, &revoked,
+			&k.DailyQuota)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -39,7 +43,7 @@ func (s *Store) APIKeyByHash(hash string) (*APIKey, error) {
 }
 
 func (s *Store) APIKeysByUser(userID string) ([]*APIKey, error) {
-	rows, err := s.db.Query(`SELECT id,user_id,name,hash,prefix,created_at,last_used,revoked
+	rows, err := s.db.Query(`SELECT `+apiKeyCols+`
 		FROM api_keys WHERE user_id=? ORDER BY created_at DESC`, userID)
 	if err != nil {
 		return nil, err
@@ -50,7 +54,7 @@ func (s *Store) APIKeysByUser(userID string) ([]*APIKey, error) {
 		k := &APIKey{}
 		var revoked int
 		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.Hash, &k.Prefix,
-			&k.CreatedAt, &k.LastUsed, &revoked); err != nil {
+			&k.CreatedAt, &k.LastUsed, &revoked, &k.DailyQuota); err != nil {
 			return nil, err
 		}
 		k.Revoked = revoked != 0
@@ -192,4 +196,111 @@ func (s *Store) SetUpstreamEnabled(id, ownerID string, enabled bool) (bool, erro
 	}
 	n, err := res.RowsAffected()
 	return n > 0, err
+}
+
+// ---- daily spend guards ----
+
+// DayKey is the broker-local calendar day used as the spend bucket. Hub and
+// store both go through it so a test writing "yesterday" is unambiguous.
+func DayKey(t time.Time) string { return t.Format("2006-01-02") }
+
+// AddGatewaySpend records the actual settled cost of one call against its key.
+// The reserve is intentionally not counted: only settled cost should consume a
+// daily quota, and refunds never reach this function.
+func (s *Store) AddGatewaySpend(keyID, day string, credits float64) error {
+	_, err := s.db.Exec(`INSERT INTO gateway_spend(key_id,day,credits,requests) VALUES(?,?,?,1)
+		ON CONFLICT(key_id,day) DO UPDATE SET credits=credits+excluded.credits,
+		requests=requests+1`, keyID, day, credits)
+	return err
+}
+
+func (s *Store) GatewaySpendToday(keyID string) (float64, error) {
+	var spent float64
+	err := s.db.QueryRow(`SELECT COALESCE(SUM(credits),0) FROM gateway_spend
+		WHERE key_id=? AND day=?`, keyID, DayKey(time.Now())).Scan(&spent)
+	return spent, err
+}
+
+func (s *Store) GatewaySpendAllToday() (float64, error) {
+	var spent float64
+	err := s.db.QueryRow(`SELECT COALESCE(SUM(credits),0) FROM gateway_spend
+		WHERE day=?`, DayKey(time.Now())).Scan(&spent)
+	return spent, err
+}
+
+// ---- usage reconciliation ----
+
+type GatewayUsage struct {
+	ID, ReqID, KeyID, UserID, UpstreamID, Model string
+	TS                                          int64
+	Prompt, Cached, Completion                  int
+	Cost                                        float64
+	OK                                          bool
+}
+
+func (s *Store) AddGatewayUsage(e *GatewayUsage) error {
+	_, err := s.db.Exec(`INSERT INTO gateway_usage(id,ts,req_id,key_id,user_id,upstream_id,
+		model,prompt,cached,completion,cost,ok) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+		e.ID, e.TS, e.ReqID, e.KeyID, e.UserID, e.UpstreamID, e.Model,
+		e.Prompt, e.Cached, e.Completion, e.Cost, b2i(e.OK))
+	return err
+}
+
+// UsageAgg is one line of the reconciliation view: requests, failures, points
+// charged and tokens delivered, grouped by upstream or by model.
+type UsageAgg struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Requests   int     `json:"requests"`
+	Failed     int     `json:"failed"`
+	Cost       float64 `json:"cost"`
+	Prompt     int64   `json:"prompt"`
+	Completion int64   `json:"completion"`
+}
+
+func (s *Store) GatewayUsageSummary(days int) (byUpstream, byModel []UsageAgg, err error) {
+	if days <= 0 {
+		days = 7
+	}
+	if days > 90 {
+		days = 90
+	}
+	since := time.Now().AddDate(0, 0, -days).Unix()
+	byUpstream, err = s.queryUsageAgg(`SELECT g.upstream_id, COALESCE(u.name,'') ,
+			COUNT(*), COALESCE(SUM(CASE WHEN g.ok=0 THEN 1 ELSE 0 END),0),
+			COALESCE(SUM(g.cost),0), COALESCE(SUM(g.prompt),0), COALESCE(SUM(g.completion),0)
+		FROM gateway_usage g LEFT JOIN upstreams u ON u.id=g.upstream_id
+		WHERE g.ts>=? GROUP BY g.upstream_id, u.name ORDER BY COUNT(*) DESC`, since)
+	if err != nil {
+		return nil, nil, err
+	}
+	byModel, err = s.queryUsageAgg(`SELECT g.model, '' , COUNT(*),
+			COALESCE(SUM(CASE WHEN g.ok=0 THEN 1 ELSE 0 END),0),
+			COALESCE(SUM(g.cost),0), COALESCE(SUM(g.prompt),0), COALESCE(SUM(g.completion),0)
+		FROM gateway_usage g WHERE g.ts>=? GROUP BY g.model ORDER BY COUNT(*) DESC`, since)
+	return byUpstream, byModel, err
+}
+
+func (s *Store) queryUsageAgg(q string, args ...any) ([]UsageAgg, error) {
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UsageAgg{}
+	for rows.Next() {
+		var a UsageAgg
+		if err := rows.Scan(&a.ID, &a.Name, &a.Requests, &a.Failed,
+			&a.Cost, &a.Prompt, &a.Completion); err != nil {
+			return nil, err
+		}
+		if a.Name == "" {
+			a.Name = a.ID
+		}
+		if a.Name == "" {
+			a.Name = "未知上游"
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }
