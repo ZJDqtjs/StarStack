@@ -16,11 +16,16 @@ import Jobs from './views/Jobs.jsx'
 import Wallet from './views/Wallet.jsx'
 import Forum from './views/Forum.jsx'
 import Settings from './views/Settings.jsx'
+import AdminOverview from './views/admin/Overview.jsx'
+import AdminNodes from './views/admin/Nodes.jsx'
+import AdminPool from './views/admin/Pool.jsx'
+import AdminAlloc from './views/admin/Alloc.jsx'
 
 export const ROUTES = {
   home: '总览', image: '生图', video: '生视频', render: '渲染', build: '任务编排',
   api: '模型 API', market: '服务市场', sell: '我的发布', messages: '消息', nodes: '我的节点',
   pool: '算力市场', jobs: '我的任务', wallet: '钱包账单', forum: '论坛', settings: '设置',
+  admin: '管理总览', 'admin-nodes': '节点监控', 'admin-pool': 'API 池部署', 'admin-alloc': '算力调拨',
 }
 const NAV = [
   { label: null, items: [['home', '总览', 'home']] },
@@ -30,6 +35,7 @@ const NAV = [
   { label: '社区 · Community', items: [['forum', '论坛', 'forum']] },
   { label: '账户 · Account', items: [['jobs', '我的任务', 'jobs'], ['wallet', '钱包账单', 'wallet'], ['settings', '设置', 'settings']] },
 ]
+const ADMIN_NAV = { label: '管理 · Admin', items: [['admin', '管理总览', 'trend'], ['admin-nodes', '节点监控', 'nodes'], ['admin-pool', 'API 池部署', 'api'], ['admin-alloc', '算力调拨', 'settings']] }
 function parseHash() {
   const h = location.hash.replace(/^#\/?/, '')
   const [v, q] = h.split('?')
@@ -67,8 +73,20 @@ function View({ view, tab }) {
     case 'wallet': return <Wallet />
     case 'forum': return <Forum />
     case 'settings': return <Settings />
+    case 'admin': return <AdminOverview />
+    case 'admin-nodes': return <AdminNodes />
+    case 'admin-pool': return <AdminPool />
+    case 'admin-alloc': return <AdminAlloc />
     default: return <Home />
   }
+}
+function NoAdmin() {
+  return (
+    <div className="card" style={{ maxWidth: 560, margin: '40px auto', textAlign: 'center' }}>
+      <h2 style={{ justifyContent: 'center' }}>需要平台账户</h2>
+      <div className="hint" style={{ marginTop: 0 }}>管理控制面板仅对平台自营账户开放（用量对账端点返回 200 判定）。当前账户无管理权限。</div>
+    </div>
+  )
 }
 
 export default function App() {
@@ -96,7 +114,7 @@ export default function App() {
         </div>
         <div className="side-scroll">
           <nav id="nav" aria-label="主导航">
-            {NAV.map((g, gi) => (
+            {(app.isPlatform ? [...NAV, ADMIN_NAV] : NAV).map((g, gi) => (
               <div className="nav-group" key={gi}>
                 {g.label && <span className="nav-group-label">{g.label}</span>}
                 {g.items.map(([v, label, icon]) => (
@@ -134,7 +152,7 @@ export default function App() {
           </div>
         </div>
         <div className="view on" key={view + (tab || '')}>
-          {signed ? <View view={view} tab={tab} /> : <Auth />}
+          {signed ? (view.startsWith('admin') && !app.isPlatform ? <NoAdmin /> : <View view={view} tab={tab} />) : <Auth />}
         </div>
       </main>
     </div>

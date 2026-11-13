@@ -20,6 +20,7 @@ export function AppProvider({ children }) {
   const [advanced, setAdv] = useState(false)
   const [target, setTarget] = useState(null)
   const [prefill, setPrefill] = useState(null)
+  const [isPlatform, setIsPlatform] = useState(false)
   const [toasts, setToasts] = useState([])
   const [dialog, setDialog] = useState(null)
   const [theme, setThemeState] = useState(() => document.documentElement.dataset.theme || 'light')
@@ -74,6 +75,8 @@ export function AppProvider({ children }) {
     loadContrib()
     const cv = setInterval(loadContrib, 5000)
     api('/api/me/settings').then(s => { if (!stop) setAdv(!!s.advanced) }).catch(() => {})
+    // 平台账户判定：用量对账端点仅平台账户返回 200
+    api('/api/models/usage?days=7').then(() => { if (!stop) setIsPlatform(true) }).catch(() => { if (!stop) setIsPlatform(false) })
     return () => { stop = true; clearInterval(iv); clearInterval(cv) }
   }, [signedIn])
 
@@ -96,9 +99,9 @@ export function AppProvider({ children }) {
   }, [])
 
   const value = useMemo(() => ({
-    ready, signedIn, me, policy, workers, jobs, contrib, advanced, target, setTarget, prefill, setPrefill,
+    ready, signedIn, me, policy, workers, jobs, contrib, advanced, target, setTarget, prefill, setPrefill, isPlatform,
     toasts, toast, confirm, prompt, theme, setTheme, login, logout, setAdvanced,
-  }), [ready, signedIn, me, policy, workers, jobs, contrib, advanced, target, prefill, toasts, theme,
+  }), [ready, signedIn, me, policy, workers, jobs, contrib, advanced, target, prefill, isPlatform, toasts, theme,
     toast, confirm, prompt, setTheme, login, logout, setAdvanced])
 
   return (
