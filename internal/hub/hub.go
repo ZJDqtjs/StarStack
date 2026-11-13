@@ -2077,73 +2077,85 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
+	var payload map[string]any
 	if u == nil {
 		// On a public broker this response is a map of every machine's hardware,
 		// price and reputation, so it is not something an anonymous visitor gets.
 		// The console only calls it after login.
-		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, map[string]any{"signed_in": false, "me": meView(nil),
-			"workers": []any{}, "jobs": []any{}, "now": time.Now().Unix(),
-			"policy": s.policyView()})
-		return
-	}
-	s.mu.Lock()
-	ws := make([]map[string]any, 0, len(s.workers))
-	for _, wd := range s.workers {
-		mine := u != nil && wd.OwnerID == u.ID
-		view := map[string]any{
-			"id": wd.ID, "name": wd.Name, "os": wd.OS, "arch": wd.Arch, "cpus": wd.CPUs,
-			"mem_mb": wd.MemMB, "gpus": wd.GPUs, "encoders": wd.Encoders,
-			"runtimes": wd.Runtimes, "slots": wd.Slots, "active": s.activeLocked(wd),
-			"speed": wd.Speed, "ok": wd.OK, "bad": wd.Bad, "online": wd.online(),
-			"since": time.Since(wd.seen).Seconds(), "price": wd.Price, "mine": mine,
-			"paused": wd.Paused,
-			// who a node belongs to is private; whether it belongs to anyone at all
-			// is what tells the console to keep it out of the 待认领 list
-			"claimed": wd.OwnerID != "",
-			// hypervisor capability is shown to everyone (it is what the VM market
-			// is selling); the interface addresses only to their owner
-			"vm": wd.VM,
+		payload = map[string]any{"signed_in": false, "me": meView(nil),
+			"workers": []any{}, "jobs": []any{}, "policy": s.policyView()}
+	} else {
+		s.mu.Lock()
+		ws := make([]map[string]any, 0, len(s.workers))
+		for _, wd := range s.workers {
+			mine := wd.OwnerID == u.ID
+			view := map[string]any{
+				"id": wd.ID, "name": wd.Name, "os": wd.OS, "arch": wd.Arch, "cpus": wd.CPUs,
+				"mem_mb": wd.MemMB, "gpus": wd.GPUs, "encoders": wd.Encoders,
+				"runtimes": wd.Runtimes, "slots": wd.Slots, "active": s.activeLocked(wd),
+				"speed": wd.Speed, "ok": wd.OK, "bad": wd.Bad, "online": wd.online(),
+				"since": time.Since(wd.seen).Seconds(), "price": wd.Price, "mine": mine,
+				"paused": wd.Paused,
+				// who a node belongs to is private; whether it belongs to anyone at all
+				// is what tells the console to keep it out of the 待认领 list
+				"claimed": wd.OwnerID != "",
+				// hypervisor capability is shown to everyone (it is what the VM market
+				// is selling); the interface addresses only to their owner
+				"vm": wd.VM,
+			}
+			if wd.cooling() {
+				view["parked_sec"] = int(time.Until(wd.CoolUntil).Seconds()) + 1
+			}
+			// a machine's hostname, address and earnings identify its owner; only
+			// the owner's own console gets to see them
+			if mine {
+				view["hostname"] = wd.Hostname
+				view["address"] = wd.Address
+				view["ipv6"] = wd.IPv6
+				view["disk_free_mb"] = wd.DiskFree
+				view["device_id"] = wd.DeviceID
+				view["earned"] = wd.Earned
+				view["seconds_billed"] = wd.Billed
+				view["earned_task"] = wd.EarnedTask
+				view["earned_vm"] = wd.EarnedVM
+				view["billed_task_sec"] = wd.BilledTaskSec
+				view["billed_vm_sec"] = wd.BilledVMSec
+			}
+			ws = append(ws, view)
 		}
-		if wd.cooling() {
-			view["parked_sec"] = int(time.Until(wd.CoolUntil).Seconds()) + 1
-		}
-		// a machine's hostname, address and earnings identify its owner; only
-		// the owner's own console gets to see them
-		if mine {
-			view["hostname"] = wd.Hostname
-			view["address"] = wd.Address
-			view["ipv6"] = wd.IPv6
-			view["disk_free_mb"] = wd.DiskFree
-			view["device_id"] = wd.DeviceID
-			view["earned"] = wd.Earned
-			view["seconds_billed"] = wd.Billed
-			view["earned_task"] = wd.EarnedTask
-			view["earned_vm"] = wd.EarnedVM
-			view["billed_task_sec"] = wd.BilledTaskSec
-			view["billed_vm_sec"] = wd.BilledVMSec
-		}
-		ws = append(ws, view)
-	}
-	// tasks are private: other users' filenames and progress are not part of
-	// the marketplace view
-	jobs := make([]map[string]any, 0, len(s.order))
-	if u != nil {
+		// tasks are private: other users' filenames and progress are not part of
+		// the marketplace view
+		jobs := make([]map[string]any, 0, len(s.order))
 		for _, j := range s.jobsOrdered() {
 			if j.OwnerID == u.ID {
 				jobs = append(jobs, j.Snapshot())
 			}
 		}
+		s.mu.Unlock()
+		payload = map[string]any{
+			"workers": ws, "jobs": jobs,
+			"signed_in": true,
+			"me":        meView(u),
+			"policy":    s.policyView(),
+			"server":    map[string]any{"go_os": runtime.GOOS, "go_arch": runtime.GOARCH},
+		}
 	}
-	s.mu.Unlock()
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{
-		"workers": ws, "jobs": jobs, "now": time.Now().Unix(),
-		"signed_in": u != nil,
-		"me":        meView(u),
-		"policy":    s.policyView(),
-		"server":    map[string]any{"go_os": runtime.GOOS, "go_arch": runtime.GOARCH},
-	})
+	// no-store would stop the browser from keeping any validator at all, so a
+	// conditional poll could never happen. private + no-cache keeps a local copy
+	// but forces revalidation every time; Vary isolates sessions and proxies.
+	w.Header().Set("Cache-Control", "private, no-cache")
+	w.Header().Set("Vary", "Cookie")
+	if tag := stateETag(u, payload); tag != "" {
+		w.Header().Set("ETag", tag)
+		if etagMatches(r.Header.Get("If-None-Match"), tag) {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+	// "now" is deliberately outside the validator: it changes every second and
+	// would make every conditional request a miss.
+	payload["now"] = time.Now().Unix()
+	writeJSON(w, payload)
 }
 
 func meView(u *store.User) map[string]any {

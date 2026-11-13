@@ -278,7 +278,18 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := s.st.JobsByOwner(u.ID)
+	p := parseListPage(r, 200, 200)
+	var (
+		rows  []*store.JobRow
+		total int
+		err   error
+	)
+	if p.Enabled {
+		rows, total, err = s.st.JobsByOwnerPage(u.ID, p.Limit, p.Offset)
+	} else {
+		rows, err = s.st.JobsByOwner(u.ID)
+		total = len(rows)
+	}
 	if err != nil {
 		http.Error(w, jsonErr("读取失败"), 500)
 		return
@@ -293,7 +304,7 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, jobFromRow(row).Snapshot())
 	}
-	writeJSON(w, map[string]any{"jobs": out, "credits": u.Credits})
+	writePaged(w, p, map[string]any{"jobs": out, "credits": u.Credits}, total)
 }
 
 // handleEstimate answers "what will this cost and can the pool do it" before a
@@ -599,15 +610,7 @@ func (s *Server) handleLedger(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	limit := 100
-	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 && v <= 500 {
-		limit = v
-	}
-	spend, err := s.st.LedgerForUser(u.ID, limit)
-	if err != nil {
-		http.Error(w, jsonErr("读取失败"), 500)
-		return
-	}
+	p := parseListPage(r, 100, 500)
 	s.mu.Lock()
 	var mine []string
 	for _, wd := range s.workers {
@@ -623,14 +626,39 @@ func (s *Server) handleLedger(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	earn, err := s.st.LedgerForNodes(mine, limit)
+	var (
+		spend, earn           []*store.Entry
+		totalSpend, totalEarn int
+		err                   error
+	)
+	if p.Enabled {
+		spend, totalSpend, err = s.st.LedgerForUserPage(u.ID, p.Limit, p.Offset)
+	} else {
+		spend, err = s.st.LedgerForUser(u.ID, p.Limit)
+	}
 	if err != nil {
 		http.Error(w, jsonErr("读取失败"), 500)
 		return
 	}
-	writeJSON(w, map[string]any{
+	if p.Enabled {
+		earn, totalEarn, err = s.st.LedgerForNodesPage(mine, p.Limit, p.Offset)
+	} else {
+		earn, err = s.st.LedgerForNodes(mine, p.Limit)
+	}
+	if err != nil {
+		http.Error(w, jsonErr("读取失败"), 500)
+		return
+	}
+	payload := map[string]any{
 		"spend": spend, "earn": earn, "balance": round4(u.Credits), "nodes": len(mine),
-	})
+	}
+	if p.Enabled {
+		payload["total_spend"] = totalSpend
+		payload["total_earn"] = totalEarn
+		payload["offset"] = p.Offset
+		payload["limit"] = p.Limit
+	}
+	writeJSON(w, payload)
 }
 
 // ---- billing ----
