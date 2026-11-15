@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>星栈算力 StarStack — 把闲置机器变成可交易的算力</title>
 <meta name="description" content="星栈算力是一个闲置算力共享交易平台：Broker 按关键帧把视频切片，派发给 NAT 后的算力节点并行转码，回传产物做 SHA-256 校验后无损拼接，并按实测墙钟与单机基线给出真实加速比。">
-<meta name="theme-color" content="#070b14">
+<meta name="theme-color" content="#f6f8fd">
 <meta property="og:type" content="website">
 <meta property="og:title" content="星栈算力 StarStack">
 <meta property="og:description" content="闲置算力共享交易平台 · 切片调度 / 哈希校验 / 按量结算 / 容错重派">
@@ -59,6 +59,11 @@
     </div>
 
     <aside class="hero-panel" aria-label="最新实测结果">
+      <div class="panel-banner">
+        <strong>你好，欢迎来到星栈算力</strong>
+        <span>闲置机器接进来，按真实用量计费、按秒结算</span>
+        <a href="#demo">看它跑一遍 <span aria-hidden="true">→</span></a>
+      </div>
       <div class="panel-head">
         <span>实测 · 第一轮调度链路</span>
         <span class="panel-tag">60s 1080p → 720p</span>
@@ -106,13 +111,13 @@
             <desc id="flow-desc">源视频经关键帧切片后派发给三个算力节点，节点转码回传，Broker 做 SHA-256 校验与无损合并，最后按量结算。</desc>
             <defs>
               <linearGradient id="gSeg" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stop-color="#5eead4"/><stop offset="100%" stop-color="#818cf8"/>
+                <stop offset="0%" stop-color="#4f6bff"/><stop offset="100%" stop-color="#8b5cf6"/>
               </linearGradient>
               <linearGradient id="gBar" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stop-color="#4fd1c5"/><stop offset="100%" stop-color="#a78bfa"/>
+                <stop offset="0%" stop-color="#5a6bff"/><stop offset="100%" stop-color="#8b5cf6"/>
               </linearGradient>
               <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M0 0 L10 5 L0 10 z" fill="#334155"/>
+                <path d="M0 0 L10 5 L0 10 z" fill="#b9c5dd"/>
               </marker>
               <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
                 <feGaussianBlur stdDeviation="5" result="b"/>
@@ -153,7 +158,7 @@
               <text class="card-title" x="42" y="180">input.mp4</text>
               <text class="card-sub" x="42" y="202">60.0s · 1080p</text>
               <rect class="film" x="42" y="218" width="116" height="34" rx="6"/>
-              <g id="film-frames" fill="#5eead4" opacity=".55">
+              <g id="film-frames" fill="#5a6bff" opacity=".55">
                 <rect x="50" y="226" width="14" height="18" rx="2"/>
                 <rect x="70" y="226" width="14" height="18" rx="2"/>
                 <rect x="90" y="226" width="14" height="18" rx="2"/>
