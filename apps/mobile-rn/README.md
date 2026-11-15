@@ -54,36 +54,37 @@ npx expo run:android                      # 需要本机 JDK 17 + Android SDK
 
 登录后可改服务器地址；本地联调填 `http://<局域网IP>:8787`。
 
-## 节点启动流程（注意这里绕了一道弯）
+## 节点启动流程
 
 `/api/worker/hello` 认的是 `X-Launch-Code` / `X-Agent-Token` / `X-Node-Secret`，
 **不认用户 session token**。所以 App 的启动顺序是：
 
-1. 用户已登录（session token）→ `POST /api/nodes/launch` 换一次性启动码
+1. 用户已登录（session token）→ `POST /api/nodes/launch`（`os=android, arch=arm64`）换一次性启动码
 2. 把 `code` 和 `node_id` 交给原生 Service
 3. 原生侧 `hello` 带 `X-Launch-Code`，拿到 `secret` 后缓存，后续用 `X-Node-Secret`
 
-`launchNode` 里 `os`/`arch` 暂时传 `windows/amd64`：Broker 的 `/launch/<code>/<os>/<arch>`
-目前只认 `windows|linux|darwin`，但 `admitAgent` 只校验启动码本身、不比对平台，
-而 hello 上报的仍是真实的 `android/arm64`。等 Broker 放开 android 后改回即可。
+Broker 侧已登记 android 平台：`mintLaunch` 不会再把它改回 windows。
+`/launch/<code>/android/arm64` 不提供下载脚本（返回一句提示），因为节点逻辑就在 App 里。
 
 ## v0 的能力边界（别当成已经完成）
 
 - **只接 `transcode`**：Blender / 时间线 / 云主机 / 编译打包在手机上不现实，收到会直接回报失败原因。
 - **只做无重编码切分**（stream copy）：保证分片参数与源片一致，先把协议链路跑通。
   真正的参数改写（按 `Claim.vcodec/height/q` 用 MediaCodec 重编码）还没接。
-- **产物是 mp4，Broker 目前按 mkv 合并**：`MediaMuxer` 只支持 mp4/webm，没有 mkv。
-  两条出路：接 ffmpeg-kit 输出 mkv，或让 Broker 对 android 分片做一次重封装。
+- **产物是 mp4**：`MediaMuxer` 只支持 mp4/webm，没有 mkv。Broker 合并前会用 `-c copy`
+  把非 mkv 分片重封装成 mkv 再 concat（`ffx.RemuxMKV`），重封装失败才退回整片重编码。
+  真正按 `Claim.vcodec/height/q` 改写参数仍然需要 MediaCodec 重编码或 ffmpeg-kit。
 - **前台 Service 常驻通知**是系统要求，不能去掉。建议插电 + Wi-Fi 时运行，注意热降频与耗电。
 
-## Broker 侧待改（跑通之后再做）
+## Broker 侧改动（已在本分支落地）
 
 | 位置 | 改动 |
 |---|---|
-| `internal/hub/launch.go` | `launchPath` 与 OS 校验放开 `android`；分发物从裸二进制换成 APK 说明 |
-| `internal/ffx/ffx.go` | 编码器探测加 `h264_mediacodec` 等映射；`hardwareEncoderFamily` 放行移动硬编 |
-| `internal/hub/policy.go` / 调度 | `Req.Arch` 支持 `android/arm64`；只给移动节点派转码分片 |
-| 合并逻辑 | 允许 mp4 分片，或在合并前重封装成统一容器 |
+| `internal/hub/launch.go` | `launchOS` / `launchPath` 登记 `android`；脚本端点对 android 返回明确提示 |
+| `internal/hub/hub.go` `canEncode` | Android 的 `h264_mediacodec` / `hevc_mediacodec` 可承接同家族任务；**桌面节点仍精确匹配** |
+| `internal/hub/hub.go` `merge` | 非 mkv 分片先 `ffx.RemuxMKV` 统一容器，`concat` 失败再 `ConcatEncode` 兜底 |
+| `internal/ffx/ffx.go` | 新增 `RemuxMKV`（`-c copy` 重封装，不动编码帧） |
+| `internal/hub/android_node_test.go` | 回归测试：只有移动端能跨编码器家族，桌面不能互相顶替 |
 
 ## 与现有 `apps/mobile` 的关系
 

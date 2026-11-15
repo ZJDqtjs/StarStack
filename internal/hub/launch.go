@@ -70,6 +70,10 @@ var launchOS = map[string]string{
 	"windows": "starstack-worker-windows-%s.exe",
 	"linux":   "starstack-worker-linux-%s",
 	"darwin":  "starstack-worker-darwin-%s",
+	// Android 没有可下载的裸二进制：节点能力由 App 内置的 Kotlin 前台 Service 上报，
+	// 启动码只用于给 /api/worker/hello 换节点凭证。登记平台名是为了让
+	// mintLaunch 接受 os=android，而不是把它悄悄改回 windows。
+	"android": "starstack-worker-android-%s",
 }
 
 var launchArch = map[string]bool{"amd64": true, "arm64": true}
@@ -310,7 +314,7 @@ func (s *Server) handleLaunchMint(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-var launchPath = regexp.MustCompile(`^/launch/([0-9a-f]{16,64})/(windows|linux|darwin)/(amd64|arm64)$`)
+var launchPath = regexp.MustCompile(`^/launch/([0-9a-f]{16,64})/(windows|linux|darwin|android)/(amd64|arm64)$`)
 
 // handleLaunchScript renders the launcher for a live ticket. The code in the URL
 // is the whole capability — it is single-use, minutes-old and bound to one node
@@ -336,6 +340,11 @@ func (s *Server) handleLaunchScript(w http.ResponseWriter, r *http.Request) {
 	if t.OS != m[2] || t.Arch != m[3] {
 		// the ticket was minted for a different platform than the button clicked
 		http.Error(w, "这份脚本和生成的平台不一致", http.StatusBadRequest)
+		return
+	}
+	if t.OS == "android" {
+		// Android 节点跑在 App 里，没有可下载的启动脚本；启动码只给 hello 用。
+		http.Error(w, "Android 节点请在 App 内点「开始贡献算力」，不需要下载脚本", http.StatusBadRequest)
 		return
 	}
 	if r.URL.Query().Get("format") == "bundle" {

@@ -50,15 +50,12 @@ export default function Overview({ me, refreshMe }: { me: any; refreshMe: () => 
       if (st.running) {
         await nodeService.stop()
       } else {
-        // os/arch 暂填 windows/amd64：Broker 的 /launch/<code>/<os>/<arch> 目前只认
-        // windows|linux|darwin，但 admitAgent 只校验启动码本身，不比对平台。
-        // hello 里上报的仍是真实的 android/arm64，等 Broker 放开 android 后改回。
         const mint = await api.launchNode({
           price: 0.8,
           slots: 1,
           name: 'android-node',
-          os: 'windows',
-          arch: 'amd64',
+          os: 'android',
+          arch: 'arm64',
         })
         if (!mint?.code || !mint?.node_id) throw new Error('平台没有返回启动码，检查该账户是否允许接入节点')
         await nodeService.start(mem.base, String(mint.code), String(mint.node_id), 1, 0.8)
