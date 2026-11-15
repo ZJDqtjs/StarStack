@@ -4,6 +4,16 @@ export const points = (v) => f2(v) + ' 点'
 
 export const ts = (sec) => (sec ? new Date(sec * 1000).toLocaleString('zh-CN', { hour12: false }) : '—')
 
+// 相对时间：agent 历史会话列表用（与 web-react api.js 的 relTime 行为一致）。
+export function relTime(t) {
+  const d = Date.now() - t * 1000
+  if (d < 60000) return '刚刚'
+  if (d < 3600000) return Math.floor(d / 60000) + ' 分钟前'
+  if (d < 86400000) return Math.floor(d / 3600000) + ' 小时前'
+  if (d < 7 * 86400000) return Math.floor(d / 86400000) + ' 天前'
+  return ts(t).slice(0, 10)
+}
+
 export const hms = (sec) => {
   const s = Math.max(0, Math.floor(sec || 0))
   const p = (n) => String(n).padStart(2, '0')

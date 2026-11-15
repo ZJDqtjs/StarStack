@@ -3,22 +3,36 @@
 同一套后端接口的两个客户端：
 
 - `mobile/` — React + Vite + Capacitor 的安卓 App，覆盖控制台全部 9 个视图。
-- `miniapp/` — 原生微信小程序，覆盖需求方的 5 个页面 + 登录。
+- `miniapp/` — 原生微信小程序，覆盖需求方的 5 个页面 + 登录 + 星舷助手。
 - `harmony/` — HarmonyOS NEXT（API 12+）ArkTS 壳，Web 组件加载同一份 React 构建产物。
-- `shared/` — 两个客户端共用的接口客户端、类型约定、状态文案与格式化函数。
+- `desktop/` — WPF + WebView2 桌面端，内嵌同一份 React 构建产物，带本机运行节点的消息桥。
+- `shared/` — 两个客户端共用的接口客户端、类型约定、状态文案、格式化函数与 Agent 意图引擎。
 
 后端已支持 `Authorization: Bearer <session token>`（登录响应里新增 `token` 字段）与 `/api/*` 的 CORS 预检，浏览器 Cookie 会话保持原样。
+
+## 与 web 端（web-react / 内嵌控制台）的同步基线
+
+多端与星舷控制台保持同一功能契约（`feature/admin-console` 起）：
+
+- **模型 API = 四 Tab**：试聊（Agent 聊天）/ 密钥与模型（含每日限额与今日已用）/ 上游接入 / 用量对账（仅平台账户 200，普通账户降级提示）。
+- **Agent 聊天**：意图规则三端同源——`shared/agent.js` 与 `web-react/src/agent.js`、`internal/hub/web/assets/agent.js` 逐条对齐（改规则三处必须同步，跨端以 `shared/agent.js` 为准）。识别不了的输入回落 `POST /api/models/try`，上下文裁剪同后端限制（12 条 / 单条 2000 字 / 合计 8000 字 / 末条 user）。
+- **历史对话**：`localStorage['ss-agent-chats-v1']`（小程序为 `wx.setStorageSync` 同名键）与数据结构 `{v,activeId,sessions[{id,title,model,msgs,createdAt,updatedAt}]}` 与两版网页控制台完全一致；上限 50 会话 / 200 消息，配额溢出按更新时间丢弃最旧会话。
+- **轮询节奏**：登录态 `/api/state` 每 1s + `/api/contribution` 每 5s（与 web store 一致；`ETag/304` 由浏览器/WebView 透明命中，无需前端改动）。
+- **分页与搜索**：`shared/api.js` 的 `ledger/jobs/forumPosts/offers/conversations` 支持**可选** `limit/offset/q` 参数（不传时响应与旧契约完全一致）；视图当前仍走默认全量，需要大数据量列表时按端接入。
+- 刻意不做（小程序遥控器定位）：生图/生视频 ComfyUI 工作台、服务挂牌发布与买卖会话、云电脑、节点一键接入；移动端 Agent 命中这些意图时给出诚实的降级提示卡片。
 
 ## 目录
 
 ```
 apps/
-  shared/            api.js / constants.js / format.js（ESM，两端共用）
-  mobile/src/        React 页面：Auth, Submit, Jobs, Market, Vm, Nodes, ApiView, Bill, Forum, Me
+  shared/            api.js / constants.js / format.js / agent.js（ESM，两端共用）
+  mobile/src/        React 页面：Auth, Submit, Jobs, Market, Vm, Nodes, ApiView(+AgentChat), Bill, Forum, Me
   mobile/dist/       构建产物，被打进 APK 的本地资源
   miniapp/           原生小程序；utils/core.js 由 shared/ 打包生成
   android/           Capacitor 生成的安卓工程
-  scripts/           verify-miniapp.cjs（Node 侧校验小程序）
+  harmony/           ArkTS 壳，rawfile/web 内嵌同一份 dist
+  desktop/           WPF + WebView2，csproj 编译期把 dist 嵌入 exe
+  scripts/           verify-miniapp.cjs（Node 侧校验小程序）、sync-harmony.cjs（同步鸿蒙产物）
 ```
 
 ## 安卓
@@ -37,6 +51,10 @@ npx cap sync android
 # 打 debug APK（需要 JDK 17 与 Android SDK）
 cd android && ./gradlew assembleDebug
 # 产物：android/app/build/outputs/apk/debug/app-debug.apk
+
+# 或者一键：./android/apk.ps1（Windows）/ ./android/apk.sh（Linux/macOS）
+# 两个脚本现在都会先 npm run build + npx cap sync android 再跑 gradle，
+# 杜绝把上一次残留的旧 assets 打进 APK；无 npm 的纯构建节点退回用仓库产物并打印提示。
 ```
 
 装到设备/模拟器：
@@ -66,21 +84,23 @@ adb shell am start -n com.starstack.compute/.MainActivity
 | 市场 | 按编码能力聚合 + 在线节点（只读） |
 | 账单 | 流水、节点收益、自助充值（部署允许时） |
 | 我的 | 余额、我的节点（只读）、高级选项、服务器地址、退出 |
+| 助手 | 星舷 Agent 聊天（「我的」页进入）：一句话查任务/余额/节点、充值、创建密钥、跳转任意页；识别不了回落模型对话；历史与网页端同一存储结构 |
 
-刻意不做：云电脑（无 WebRTC/键鼠）、模型上游登记（长表单）、论坛（多图/视频）、节点改价与一键接入（需要下载并运行本机脚本）。
+刻意不做：云电脑（无 WebRTC/键鼠）、模型上游登记（长表单）、论坛（多图/视频）、节点改价与一键接入（需要下载并运行本机脚本）、生图/生视频工作台（ComfyUI，命中时助手会明确告知去网页端）。
 
 正式版上线前必须：域名备案 + HTTPS + 在微信后台配置 request 合法域名；`http://20.24.210.119:8787` 只能用于开发与体验版。
 
-`utils/core.js` 是 `shared/` 的 CommonJS 打包产物，改完 `shared/` 后重新生成：
+`utils/core.js` 是 `shared/` 的 CommonJS 打包产物，改完 `shared/` 后重新生成；
+`harmony/.../rawfile/web` 是入库的 React 构建产物，改完 `mobile/` 后要同步。一条命令全做：
 
 ```bash
-npm run sync:core
+npm run sync:all     # = vite build + sync:core + sync:harmony
 ```
 
 ## 校验
 
 ```bash
-# 页面注册、WXML 表达式、模块加载，并用 Node 模拟 wx.* 跑通登录/估算/上传/账单
+# 页面注册（8 页四件套齐全）、WXML 表达式、模块加载，并用 Node 模拟 wx.* 跑通登录/估算/上传/账单
 STARSTACK_SAMPLE=/path/to/sample.mp4 STARSTACK_BROKER=http://127.0.0.1:8787 \
   node scripts/verify-miniapp.cjs
 

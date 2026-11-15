@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "dev:admin": "vite --config vite.admin.config.js",
+    "build:admin": "vite build --config vite.admin.config.js",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -23,6 +23,11 @@
     <view class="btn ghost" style="margin-top:24rpx" bindtap="logout">退出登录</view>
   </view>
 
+  <view class="card" bindtap="openAgent">
+    <view class="card-head"><text class="kicker">Agent</text><text>星舷助手</text></view>
+    <view class="hint" style="margin-top:4rpx">一句话直达任务、余额、节点与市场；识别不了的输入自动回落模型对话，历史与网页端同一份存储结构。</view>
+  </view>
+
   <view class="card">
     <view class="card-head"><text class="kicker">Setting</text><text>界面</text></view>
     <view style="display:flex;align-items:center;justify-content:space-between;gap:16rpx">

@@ -40,6 +40,19 @@ if (-not (Test-Path (Join-Path $sdk 'platforms\android-34'))) {
 }
 if (-not (Test-Path (Join-Path $sdk 'platforms\android-34'))) { Write-Host '[ERROR] SDK platform 34 missing'; exit 4 }
 
+# Fresh web assets first: gradle packs app/src/main/assets/public, which only
+# exists correctly after `npm run build` + `cap sync android`. Skipping these
+# steps ships whatever the last sync left behind.
+$apps = Split-Path -Parent $root
+Write-Host '[build] npm run build + cap sync android'
+Push-Location $apps
+try {
+  npm run build
+  if ($LASTEXITCODE -ne 0) { Write-Host '[ERROR] web build failed'; exit 3 }
+  npx cap sync android
+  if ($LASTEXITCODE -ne 0) { Write-Host '[ERROR] cap sync failed'; exit 3 }
+} finally { Pop-Location }
+
 Write-Host '[build] gradle assembleDebug'
 $android = Join-Path $root 'android'
 # stop stale gradle daemons left by a timed-out job so they cannot hold locks

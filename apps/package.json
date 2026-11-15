@@ -6,6 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "sync:core": "esbuild shared/index.js --bundle --format=cjs --platform=neutral --target=es2017 --outfile=miniapp/utils/core.js",
+    "sync:harmony": "node scripts/sync-harmony.cjs",
+    "sync:all": "npm run build && npm run sync:core && npm run sync:harmony",
     "typecheck": "tsc --noEmit",
     "verify:miniapp": "node scripts/verify-miniapp.cjs",
     "cap:sync": "cap sync android",

@@ -1,0 +1,82 @@
+<view class="agent-page">
+  <view class="agent-top">
+    <view class="agent-top-title">
+      <text class="agent-title">星舷助手</text>
+      <text class="agent-sub">{{msgs.length}} 条消息{{modelLabel ? ' · ' + modelLabel : ''}}</text>
+    </view>
+    <view class="agent-top-btns">
+      <button class="btn ghost tiny" bindtap="toggleHist">历史 {{hist.length}}</button>
+      <button class="btn ghost tiny" bindtap="newChat">新对话</button>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{showHist}}">
+    <view class="btnrow">
+      <button class="btn tiny" bindtap="newChat">新建对话</button>
+    </view>
+    <view wx:if="{{!hist.length}}" class="empty">还没有历史对话</view>
+    <view
+      wx:for="{{hist}}"
+      wx:key="id"
+      class="hist-row {{item.on ? 'on' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="switchChat"
+    >
+      <view class="grow">
+        <view class="hist-title">{{item.title}}</view>
+        <view class="hint">{{item.last}}</view>
+      </view>
+      <text class="hint">{{item.time}}</text>
+      <button class="btn ghost tiny" data-id="{{item.id}}" catchtap="deleteChat">删除</button>
+    </view>
+    <view class="hint">对话记录保存在本机；与网页端同用一份历史存储。</view>
+  </view>
+
+  <scroll-view class="agent-msgs" scroll-y scroll-into-view="{{scrollInto}}" scroll-with-animation wx:if="{{msgs.length}}">
+    <block wx:for="{{msgs}}" wx:key="key">
+      <view wx:if="{{item.kind !== 'agent'}}" id="m-{{item.key}}" class="bubble {{item.kind}}">
+        <text class="who">{{item.who}}</text>
+        <text user-select>{{item.content}}</text>
+        <text wx:if="{{item.usage}}" class="usage">{{item.usage}}</text>
+      </view>
+      <view wx:if="{{item.kind === 'agent'}}" id="a-{{item.key}}" class="agent-card">
+        <view class="grow">
+          <text class="agent-card-title">{{item.title}}</text>
+          <view class="agent-card-detail">{{item.detail}}</view>
+          <view wx:if="{{item.detail2}}" class="agent-card-quote">{{item.detail2}}</view>
+          <view wx:if="{{item.secret}}" class="agent-card-secret" data-s="{{item.secret}}" bindtap="copySecret">{{item.secret}}（点击复制）</view>
+        </view>
+        <button wx:if="{{item.view}}" class="btn ghost tiny" data-view="{{item.view}}" bindtap="openView">打开</button>
+      </view>
+    </block>
+    <view wx:if="{{busy}}" class="bubble"><text class="who">星舷助手</text><text>正在执行…</text></view>
+  </scroll-view>
+
+  <view class="agent-hero" wx:if="{{!msgs.length && !booting}}">
+    <text class="eyebrow">Starstack Agent</text>
+    <text class="hero-h">一句话，直达你想做的事</text>
+    <text class="hero-p">输入自然语言指令：查任务、查余额、充值、创建密钥、打开任意页面；识别不了时自动回落模型对话。</text>
+    <view class="chips">
+      <button wx:for="{{suggest}}" wx:key="index" class="chip" data-t="{{item}}" bindtap="onSuggest">{{item}}</button>
+    </view>
+  </view>
+
+  <view class="agent-composer">
+    <textarea
+      class="agent-input"
+      value="{{input}}"
+      maxlength="2000"
+      auto-height
+      placeholder="一句话下达指令，例如：查看我的任务 / 充值 100 点"
+      bindinput="onInput"
+      confirm-type="send"
+    />
+    <view class="agent-composer-row">
+      <picker class="agent-model" range="{{modelNames}}" value="{{modelIdx}}" bindchange="onModel">
+        <view class="agent-model-label">{{modelLabel || '（无可用模型）'}}</view>
+      </picker>
+      <button class="btn ghost tiny" bindtap="clearChat" disabled="{{!msgs.length}}">清空</button>
+      <button class="btn send" bindtap="onSend" disabled="{{busy || !input}}">{{busy ? '执行中…' : '发送'}}</button>
+    </view>
+  </view>
+</view>

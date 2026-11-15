@@ -26,10 +26,12 @@ React 控制台（与桌面/安卓同一份构建产物），API 仍走 broker �
 
 ```bash
 cd apps
-npm run build
-rm -rf harmony/entry/src/main/resources/rawfile/web
-cp -r mobile/dist harmony/entry/src/main/resources/rawfile/web
+npm run sync:harmony    # = vite 产物 mobile/dist -> rawfile/web（统一 LF + 引用校验）
 ```
+
+> `sync:harmony` 会先检查 `mobile/dist` 是否存在，没有就先 `npm run build`。
+> rawfile 是入库文件、`index.html` 引用带内容 hash 的资源名，手工拷贝容易漏同步，
+> 不要再手动 `cp -r`。
 
 ## 测试建议（按方便程度）
 

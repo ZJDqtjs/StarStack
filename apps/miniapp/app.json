@@ -6,7 +6,8 @@
     "pages/market/index",
     "pages/bill/index",
     "pages/me/index",
-    "pages/commlog/index"
+    "pages/commlog/index",
+    "pages/agent/index"
   ],
   "window": {
     "navigationBarTitleText": "星栈算力",

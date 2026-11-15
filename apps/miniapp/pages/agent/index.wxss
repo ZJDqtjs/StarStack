@@ -1,0 +1,146 @@
+/* 星舷助手：消息上滚 + 输入沉底，视觉与 App/Web 端 agent 聊天对齐。 */
+.agent-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  padding: 16rpx 24rpx 0;
+}
+.agent-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding-bottom: 14rpx;
+  border-bottom: 2rpx solid var(--hair, #e7ebf5);
+}
+.agent-top-title { display: flex; flex-direction: column; min-width: 0; }
+.agent-title { font-size: 30rpx; font-weight: 600; color: var(--ink, #141b33); }
+.agent-sub { font-size: 22rpx; color: var(--mute, #8b96b1); }
+.agent-top-btns { display: flex; gap: 12rpx; flex: 0 0 auto; }
+
+.agent-msgs { flex: 1; min-height: 0; padding: 16rpx 0; }
+.bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  max-width: 86%;
+  margin: 0 0 18rpx;
+  padding: 18rpx 24rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 2rpx solid var(--hair, #e7ebf5);
+  font-size: 26rpx;
+  line-height: 1.6;
+  color: var(--body, #4d5876);
+  word-break: break-all;
+}
+.bubble .who { font-size: 20rpx; color: var(--mute, #8b96b1); }
+.bubble .usage { font-size: 20rpx; color: var(--mute, #8b96b1); }
+.bubble.me { align-self: flex-end; background: rgba(90, 107, 255, 0.12); border-color: transparent; color: var(--ink, #141b33); }
+.bubble.bad { border-color: #e0444f; color: #e0444f; background: rgba(224, 68, 79, 0.1); }
+
+.agent-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  padding: 20rpx 24rpx;
+  margin: 0 0 18rpx;
+  border: 2rpx solid var(--hair, #e7ebf5);
+  border-radius: 20rpx;
+  background: #ffffff;
+}
+.agent-card .grow { flex: 1; min-width: 0; }
+.agent-card-title { font-size: 26rpx; font-weight: 600; color: var(--ink, #141b33); }
+.agent-card-detail { font-size: 24rpx; color: var(--body, #4d5876); line-height: 1.6; margin-top: 4rpx; }
+.agent-card-quote {
+  margin-top: 8rpx;
+  padding: 8rpx 14rpx;
+  border-radius: 10rpx;
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+  font-size: 24rpx;
+  word-break: break-all;
+}
+.agent-card-secret {
+  margin-top: 8rpx;
+  padding: 10rpx 14rpx;
+  border-radius: 10rpx;
+  background: rgba(217, 130, 11, 0.12);
+  color: #d9820b;
+  font-size: 22rpx;
+  word-break: break-all;
+}
+
+.agent-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14rpx;
+  text-align: center;
+  padding: 0 20rpx;
+}
+.agent-hero .eyebrow { font-size: 20rpx; letter-spacing: 4rpx; color: var(--link, #5a6bff); }
+.hero-h { font-size: 34rpx; font-weight: 700; color: var(--ink, #141b33); }
+.hero-p { font-size: 24rpx; color: var(--mute, #8b96b1); line-height: 1.7; }
+.chips { display: flex; flex-wrap: wrap; gap: 12rpx; justify-content: center; }
+.chip {
+  padding: 10rpx 22rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+  border: 2rpx solid var(--hair, #e7ebf5);
+  font-size: 22rpx;
+  color: var(--body, #4d5876);
+  line-height: 1.4;
+}
+
+.agent-composer {
+  border-top: 2rpx solid var(--hair, #e7ebf5);
+  padding: 16rpx 0 calc(env(safe-area-inset-bottom) + 20rpx);
+  background: transparent;
+}
+.agent-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 88rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 16rpx;
+  border: 2rpx solid var(--hair2, #d7deef);
+  background: #ffffff;
+  font-size: 26rpx;
+  color: var(--ink, #141b33);
+}
+.agent-composer-row { display: flex; align-items: center; gap: 12rpx; margin-top: 12rpx; }
+.agent-model { flex: 1; min-width: 0; }
+.agent-model-label {
+  padding: 10rpx 18rpx;
+  border-radius: 12rpx;
+  border: 2rpx solid var(--hair2, #d7deef);
+  background: #ffffff;
+  font-size: 22rpx;
+  color: var(--body, #4d5876);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.agent-composer-row .send { flex: 0 0 auto; }
+
+.hist-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx 8rpx;
+  border-bottom: 2rpx solid var(--hair, #e7ebf5);
+}
+.hist-row.on { background: rgba(90, 107, 255, 0.06); border-radius: 12rpx; }
+.hist-row .grow { flex: 1; min-width: 0; }
+.hist-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--ink, #141b33);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

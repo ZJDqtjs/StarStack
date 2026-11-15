@@ -63,6 +63,18 @@ if [ ! -d "$SDK/platforms/android-34" ]; then
   exit 4
 fi
 
+# ---- web assets ----
+# Gradle packs app/src/main/assets/public, which is only correct after
+# `npm run build` + `cap sync android`. On machines without npm (bare build
+# nodes) keep whatever the repo/CI already synced and say so.
+APPS_DIR="$(dirname "$ROOT")"
+if command -v npm >/dev/null 2>&1 && [ -f "$APPS_DIR/package.json" ]; then
+  echo "[build] npm run build + cap sync android"
+  ( cd "$APPS_DIR" && npm run build && npx cap sync android )
+else
+  echo "[build] npm unavailable: reusing the checked-out mobile/dist and synced assets"
+fi
+
 # ---- build ----
 echo "[build] gradle assembleDebug"
 chmod +x "$PROJ/gradlew"
