@@ -1,0 +1,249 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release 标签，例如 v0.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ── 1. Go：六平台节点 + Linux Broker ──────────────────────────
+  build-go:
+    name: Go 六平台节点 + Broker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: 发布前门禁
+        run: |
+          go vet ./...
+          go test ./... -count=1
+      - name: 交叉编译
+        run: |
+          set -euo pipefail
+          mkdir -p dist/dl
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" \
+            -o dist/dl/starstack-server-linux-amd64 ./cmd/server
+          for t in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64; do
+            os=${t%/*}; arch=${t#*/}
+            ext=""; [ "$os" = "windows" ] && ext=".exe"
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags="-s -w" \
+              -o "dist/dl/starstack-worker-${os}-${arch}${ext}" ./cmd/worker
+          done
+          ls -lh dist/dl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-go
+          path: dist/dl/*
+          if-no-files-found: error
+
+  # ── 2. Web 控制台产物：桌面端与安卓共用同一份 React 构建 ────────
+  build-web:
+    name: Web 控制台产物
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/package-lock.json
+      - name: npm ci + vite build
+        run: |
+          npm ci --prefix apps
+          npm run build --prefix apps
+          test -f apps/mobile/dist/index.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/mobile/dist/
+          if-no-files-found: error
+
+  # ── 3. Windows 桌面：自包含单文件 exe ──────────────────────────
+  # WPF + WebView2 只能在 Windows 上构建；csproj 把 apps/mobile/dist 内嵌进 exe。
+  build-desktop:
+    name: Windows 桌面单文件 exe
+    needs: build-web
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/mobile/dist
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: dotnet publish（自包含单文件）
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/dl | Out-Null
+          dotnet publish apps/desktop/StarStack.Desktop.csproj -c Release -r win-x64 `
+            --self-contained true -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false `
+            -o dist-desktop
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet publish 失败' }
+          Copy-Item dist-desktop/StarStack.Desktop.exe dist/dl/StarStack.Desktop.exe
+          Get-Item dist/dl/StarStack.Desktop.exe | Select-Object Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-desktop
+          path: dist/dl/*
+          if-no-files-found: warn
+
+  # ── 4. Android：Capacitor debug APK ────────────────────────────
+  # apk.sh 会在缺 JDK 17 / Android SDK 时自动装到 apps/android/out。
+  build-android:
+    name: Android APK
+    needs: build-web
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/package-lock.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: apps/mobile/dist
+      - name: 同步 Web 资源进 Capacitor 工程
+        working-directory: apps
+        run: |
+          npm ci
+          npx cap sync android
+      - name: gradle assembleDebug
+        run: |
+          # 仓库里 gradlew 的 git mode 是 100644，Linux 检出后没有执行位；
+          # apk.sh 开头用 [ -x gradlew ] 判断工程位置，必须先补上执行位。
+          chmod +x apps/android/gradlew
+          bash apps/android/apk.sh
+          test -f apps/android/out/StarStack.apk
+          mkdir -p dist/dl
+          cp apps/android/out/StarStack.apk dist/dl/StarStack.apk
+          ls -lh dist/dl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-android
+          path: dist/dl/*
+          if-no-files-found: warn
+
+  # ── 5. 小程序 / 鸿蒙源码包 ────────────────────────────────────
+  # 小程序没有可安装文件（appid 是 touristappid 测试号）；鸿蒙 HAP 需要
+  # DevEco Studio 5.x + 华为账号签名，CI 里构建不出来。因此发布源码包。
+  build-sources:
+    name: 小程序 / 鸿蒙源码包
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 打包源码
+        run: |
+          set -euo pipefail
+          mkdir -p dist/dl
+          (cd apps && zip -qr ../dist/dl/starstack-miniapp-source.zip miniapp \
+            -x '*/node_modules/*' '*.log')
+          (cd apps && zip -qr ../dist/dl/starstack-harmony-source.zip harmony \
+            -x '*/oh_modules/*' '*/node_modules/*' '*/build/*' '*.log')
+          ls -lh dist/dl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-sources
+          path: dist/dl/*
+          if-no-files-found: error
+
+  # ── 6. 汇总发布 ───────────────────────────────────────────────
+  # 重工具链的两个 job 允许失败；只有 Go 门禁失败才阻断发布。
+  # 缺哪端资产，页面会把它标成「该版本未包含」，不会给出死链。
+  publish:
+    name: 汇总发布 GitHub Release
+    needs: [build-go, build-desktop, build-android, build-sources]
+    if: ${{ always() && needs.build-go.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: assets-*
+          path: dist/dl
+          merge-multiple: true
+      - name: 生成统一校验和
+        run: |
+          set -euo pipefail
+          cd dist/dl
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt' -printf '%f\n' \
+            | sort | xargs -r sha256sum > SHA256SUMS.txt
+          echo "== 本版资产 =="
+          ls -lh
+      - name: 解析标签
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: StarStack ${{ steps.meta.outputs.tag }}
+          files: dist/dl/*
+          generate_release_notes: true
+          body: |
+            由 `.github/workflows/release.yml` 自动构建：Go 六平台节点 + Linux Broker、
+            Windows 桌面单文件 exe、Android APK、微信小程序与 HarmonyOS 源码包。
+
+            - `SHA256SUMS.txt` 覆盖本版全部文件，用 `sha256sum -c SHA256SUMS.txt` 校验。
+            - 微信小程序包是**源码**，用微信开发者工具「导入项目」打开（`touristappid` 为测试号）。
+            - HarmonyOS 包是**源码**，需 DevEco Studio 5.x（API 12+）+ 华为账号自动签名。
+            - Windows 桌面 / Android 依赖 .NET 8 与 Android SDK 工具链；若本版缺少对应文件，
+              说明该构建步骤失败，构建方式见 `apps/README.md`。欢迎页会把缺失资产标为「该版本未包含」。
+
+            完整说明：https://home.starstack.run/
+
+  deploy-home:
+    name: 刷新欢迎页（下载区读取新 Release）
+    needs: publish
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 检查 Cloudflare 密钥
+        id: guard
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::未配置 Cloudflare 密钥，跳过欢迎页刷新；页面会在访客侧直接读取新 Release，不影响下载。"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: wrangler deploy
+        if: steps.guard.outputs.ready == 'true'
+        working-directory: home
+        run: npx --yes wrangler@latest deploy

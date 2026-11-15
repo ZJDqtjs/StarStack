@@ -1,0 +1,18 @@
+// home.starstack.run — 纯静态欢迎页。
+// 没有 main 入口：不会执行 Worker 脚本，静态资源请求免费且不计入 Workers 每日请求配额。
+// 官方文档：https://developers.cloudflare.com/workers/static-assets/
+//
+// 自定义域是一次性绑定，不放进配置里，CI 就只需要 Workers Scripts:Edit 权限，
+// 不必额外申请 Zone / DNS 写权限。绑定方式见 README.md。
+// 若确实希望每次部署都由 Wrangler 管理域名，且 Token 具备 Zone:Read + DNS:Edit，
+// 可追加： "routes": [ { "pattern": "home.starstack.run", "custom_domain": true } ]
+{
+  "name": "starstack-home",
+  "compatibility_date": "2026-11-15",
+  "assets": {
+    "directory": "./public"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
