@@ -1,13 +1,27 @@
 import React, { useEffect, useState } from 'react'
 import { useApp } from '../store.jsx'
 import { nav } from '../App.jsx'
-import { Card, Stat, Tag } from '../ui.jsx'
-import { api, f2 } from '../api.js'
+import { Btn, Card, Stat, Tag } from '../ui.jsx'
+import { api, f2, getBroker, setBroker, BROKER } from '../api.js'
+import { BUILD, BUILD_LABEL } from '../build.js'
 
 export default function Settings() {
   const { me, workers, jobs, advanced, setAdvanced, toast } = useApp()
   const [vmCount, setVmCount] = useState(0)
+  const [brokerIn, setBrokerIn] = useState(getBroker())
+  // exe 里不能把前端切到绝对地址：同源反代由 WPF 主进程负责，前端只管通知它换目标。
+  const inWebView2 = typeof window !== 'undefined' && !!window.chrome?.webview
   useEffect(() => { api('/api/vm/instances').then(d => setVmCount((d.instances || []).length)).catch(() => {}) }, [])
+  const saveBroker = () => {
+    const v = brokerIn.trim().replace(/\/+$/, '')
+    if (inWebView2) {
+      try { window.chrome.webview.postMessage({ kind: 'broker', base: v }) } catch (e) {}
+      setBroker('') // 前端继续走同源，由主进程反代
+    } else {
+      setBroker(v)
+    }
+    location.reload()
+  }
   const toggle = async e => {
     const on = e.target.checked
     try { await setAdvanced(on); toast(on ? '高级选项已开启' : '已回到简洁模式', 'ok') } catch (err) { toast(String(err), 'bad', '保存失败') }
@@ -37,6 +51,36 @@ export default function Settings() {
       </Card>
       <Card kicker="Security" title="安全说明">
         <div className="hint" style={{ marginTop: 0 }}>口令以 PBKDF2-HMAC-SHA256（20 万次迭代 + 随机盐）存储，服务端不保存明文；会话为 HttpOnly Cookie，有效期 30 天。API Key 只在创建时显示一次，服务端只保存 SHA-256 哈希；模型上游密钥用本地 gateway.key 加密后入库。</div>
+      </Card>
+      <Card kicker="Connection" title="服务器地址">
+        <div className="hint" style={{ marginTop: 0 }}>
+          当前生效：<b>{BROKER || '同源（跟随当前页面地址）'}</b>
+          {inWebView2
+            ? ' · 桌面端由主进程同源反代，这里只改反代目标，浏览器侧不产生跨域请求。'
+            : ' · 留空表示跟随当前页面地址（线上部署或反代子路径都适用）。'}
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <input
+            className="in"
+            style={{ flex: 1, minWidth: 220 }}
+            value={brokerIn}
+            onChange={e => setBrokerIn(e.target.value)}
+            placeholder="https://starstack.run"
+          />
+          <Btn variant="ghost" tiny onClick={saveBroker}>保存并重载</Btn>
+        </div>
+        <div className="hint" style={{ marginTop: 8 }}>
+          鸿蒙端（rawfile 内嵌）没有同源后端，必须填绝对地址；安卓节点端在登录页单独设置。
+        </div>
+      </Card>
+      <Card kicker="Build" title="关于构建">
+        <div className="hint" style={{ marginTop: 0 }}>
+          当前网页版本：<b>{BUILD_LABEL}</b>（{BUILD.pkg}）。
+        </div>
+        <div className="hint" style={{ marginTop: 8 }}>
+          桌面 exe / Android APK / 鸿蒙壳内嵌的是构建期快照。打开它们「我的 → About」对比这串戳：
+          戳更旧，说明壳里的网页没有跟上这次发布，需要重新构建发版，而不是以为它自动同步了。
+        </div>
       </Card>
     </div>
   )

@@ -1,7 +1,13 @@
 # 星栈算力 · 鸿蒙端（HarmonyOS NEXT）
 
 `entry` 是一个 ArkTS 壳：`Web` 组件加载 `entry/src/main/resources/rawfile/web/` 里内嵌的
-React 控制台（与桌面/安卓同一份构建产物），API 仍走 broker 的 HTTP + Bearer + CORS。
+React 控制台，API 走 broker 的 HTTP + Bearer。
+
+> **当前定位：只做买方。** 内嵌的是 `web-react/dist`（与桌面 exe 同源，都是唯一 UI 源）。
+> 套壳方案**当不了算力节点** —— WebView 页面切到后台会被系统挂起，长轮询与解码都跑不住，
+> 安卓那边正是因此才把节点逻辑放进 Kotlin 前台 Service。
+> 要让鸿蒙贡献算力，需另写 ArkTS 原生节点（`backgroundTaskManager` 长时任务 + 原生解码），
+> 与 RN 的 Kotlin 实现是**两套代码、同一套 Broker 契约**。
 
 ## 环境要求
 
@@ -22,16 +28,21 @@ React 控制台（与桌面/安卓同一份构建产物），API 仍走 broker �
 
 ## 更新内嵌 UI
 
-界面与桌面/安卓共用 `apps/mobile`：
+界面与桌面 exe 同源，都取 `web-react` 的构建产物：
 
 ```bash
-cd apps
-npm run sync:harmony    # = vite 产物 mobile/dist -> rawfile/web（统一 LF + 引用校验）
+cd web-react && npm run build      # 产物 web-react/dist（带 build.json 构建戳）
+cd ../apps && npm run sync:harmony # = web-react/dist -> rawfile/web（统一 LF + 引用校验）
 ```
 
-> `sync:harmony` 会先检查 `mobile/dist` 是否存在，没有就先 `npm run build`。
 > rawfile 是入库文件、`index.html` 引用带内容 hash 的资源名，手工拷贝容易漏同步，
-> 不要再手动 `cp -r`。
+> 不要再手动 `cp -r`。同步后 `rawfile/web/build.json` 里应能看到本次的 commit。
+
+### 鸿蒙端的接口地址
+
+rawfile 里的页面没有同源后端，`location.protocol` 是 `resource:`/`file:`，
+所以 `web-react/src/api.js` 会回落到默认 Broker（`https://starstack.run`）；
+用户可在「设置 → 服务器地址」改成别的地址，写入 localStorage 后重载生效。
 
 ## 测试建议（按方便程度）
 

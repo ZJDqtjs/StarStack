@@ -105,6 +105,7 @@ class NodeRunner(
       val height = claim.optInt("height", 0)
       val q = claim.optInt("q", 28)
       val vcodec = claim.optString("vcodec", "libx264")
+      val encodeStart = System.currentTimeMillis()
 
       // 优先走 MediaCodec 硬编（真正按 height/codec 改写参数）。
       // 硬编不可用（老设备、不支持的 profile）时退回 stream copy：
@@ -126,9 +127,15 @@ class NodeRunner(
         )
       }
 
-      api.report(nodeId, secret, segId, "uploading", 80)
-      onPhase("uploading", mapOf("segId" to segId, "pct" to 80))
-      withContext(Dispatchers.IO) { api.upload(segId, nodeId, out) }
+      val wallSec = (System.currentTimeMillis() - encodeStart) / 1000.0
+      api.report(nodeId, secret, segId, "uploading", 90)
+      onPhase("uploading", mapOf("segId" to segId, "pct" to 90))
+
+      val (sha, bytes) = withContext(Dispatchers.IO) { api.upload(segId, nodeId, out) }
+      // 与 cmd/worker 的 finish() 对齐：upload 只是落盘，必须再发 done，
+      // Broker 才会校验哈希、结算这一片并推进任务。
+      val speed = if (wallSec > 0) dur / wallSec else 0.0
+      api.done(nodeId, secret, segId, sha, bytes, wallSec, speed)
 
       served += 1
       onPhase("polling", mapOf("served" to served, "segId" to "", "pct" to 100))

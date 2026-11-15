@@ -58,6 +58,27 @@ jobs:
       - name: 站点与下载清单一致性
         run: node home/scripts/verify-site.cjs
 
+  # 多端控制台同步检查。
+  # 桌面 exe / Android APK / 鸿蒙壳内嵌的是构建期快照，web 更新了它们不会自动跟上。
+  # 这个 job 保证：两端 vite 都注入构建戳、桌面端门禁没被绕过、mobile 的每个视图
+  # 在 web-react 里有对应路由。建议在仓库分支保护里把它设为 required check。
+  console:
+    name: 多端控制台同步检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 视图清单与构建戳契约
+        run: node scripts/verify-console-sync.cjs
+      - name: web-react 产物必须带构建戳（exe 与鸿蒙内嵌的就是它）
+        run: |
+          npm ci --prefix web-react
+          npm run build --prefix web-react
+          node -e "const s=require('./web-react/dist/build.json'); if(!s.sha||!s.time) throw new Error('web-react 产物缺构建戳'); console.log('web-react 戳:', s.sha, s.time)"
+          test -f web-react/dist/index.html
+
   deploy-home:
     name: 部署欢迎页到 Cloudflare Workers
     needs: [go, site]

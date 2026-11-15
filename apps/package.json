@@ -5,11 +5,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:web": "npm --prefix ../web-react run build",
     "sync:core": "esbuild shared/index.js --bundle --format=cjs --platform=neutral --target=es2017 --outfile=miniapp/utils/core.js",
     "sync:harmony": "node scripts/sync-harmony.cjs",
-    "sync:all": "npm run build && npm run sync:core && npm run sync:harmony",
+    "sync:all": "npm run build:web && npm run build && npm run sync:core && npm run sync:harmony",
     "typecheck": "tsc --noEmit",
     "verify:miniapp": "node scripts/verify-miniapp.cjs",
+    "verify:sync": "node ../scripts/verify-console-sync.cjs",
     "cap:sync": "cap sync android",
     "cap:open": "cap open android",
     "apk": "npm run build && cap sync android && cd android && ./gradlew assembleDebug"

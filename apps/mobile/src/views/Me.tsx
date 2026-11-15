@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { readBase, writeBase } from '../api'
 import { useApp } from '../ctx'
 import { Btn, Card, Field } from '../ui'
+import { BUILD, BUILD_LABEL } from '../build'
 import { f2 } from '../../../shared/index.js'
 
 export default function Me() {
@@ -83,7 +84,11 @@ export default function Me() {
 
       <Card kicker="About" title="星栈算力">
         <div className="hint">
-          移动端 v1.0 · React + Capacitor。调度与交易中间层，不自研分布式运行时；积分租约、分片调度与计量结算服务端完成。
+          移动端 · React + Capacitor。调度与交易中间层，不自研分布式运行时；积分租约、分片调度与计量结算服务端完成。
+        </div>
+        <div className="hint" style={{ marginTop: 8 }}>
+          内嵌网页版本：<b>{BUILD_LABEL}</b>（{BUILD.pkg}）—— 与网页端「设置 → 关于构建」对比，戳不一致说明这枚
+          exe / APK 内嵌的还是旧快照，需要重新发版。
         </div>
       </Card>
     </div>

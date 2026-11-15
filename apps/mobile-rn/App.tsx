@@ -4,11 +4,15 @@ import { StatusBar } from 'expo-status-bar'
 import { api } from './src/api'
 import { loadSession } from './src/session'
 import Auth from './src/screens/Auth'
+import Bill from './src/screens/Bill'
+import Jobs from './src/screens/Jobs'
 import Nodes from './src/screens/Nodes'
 import Overview from './src/screens/Overview'
+import Submit from './src/screens/Submit'
 import { C } from './src/theme'
 
-type Tab = 'overview' | 'nodes'
+// overview / nodes 是卖方主线（常驻算力），jobs / submit / bill 是买方保底（L0 四项）。
+type Tab = 'overview' | 'jobs' | 'submit' | 'bill' | 'nodes'
 
 export default function App() {
   const [booting, setBooting] = useState(true)
@@ -77,12 +81,21 @@ export default function App() {
       <View style={{ flex: 1 }}>
         {tab === 'overview' ? (
           <Overview me={me} refreshMe={() => void refresh().catch(() => {})} />
+        ) : tab === 'jobs' ? (
+          <Jobs />
+        ) : tab === 'submit' ? (
+          <Submit />
+        ) : tab === 'bill' ? (
+          <Bill me={me} />
         ) : (
           <Nodes workers={workers} contribution={contribution} onRefresh={refresh} />
         )}
       </View>
       <View style={s.tabbar}>
         <TabBtn label="总览" active={tab === 'overview'} onPress={() => setTab('overview')} />
+        <TabBtn label="任务" active={tab === 'jobs'} onPress={() => setTab('jobs')} />
+        <TabBtn label="提交" active={tab === 'submit'} onPress={() => setTab('submit')} />
+        <TabBtn label="账单" active={tab === 'bill'} onPress={() => setTab('bill')} />
         <TabBtn label="节点" active={tab === 'nodes'} onPress={() => setTab('nodes')} />
       </View>
     </View>

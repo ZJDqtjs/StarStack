@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, post } from './api.js'
+import { api, post, setToken } from './api.js'
 
 const Ctx = createContext(null)
 export { Ctx as AppCtx }
@@ -85,11 +85,15 @@ export function AppProvider({ children }) {
     const payload = { name, password }
     if (mode === 'reg') payload.invite = invite
     const m = await post('/api/auth/' + (mode === 'reg' ? 'register' : 'login'), payload)
+    // 后端同时下发 HttpOnly Cookie 和 token：Cookie 供线上同源使用，
+    // token 供 exe 反代 / 鸿蒙绝对地址这类跨 origin 场景使用（Cookie 的 Domain 搬不过去）。
+    if (m && m.token) setToken(m.token)
     setMe(m); setSignedIn(true)
     return m
   }, [])
   const logout = useCallback(async () => {
     try { await post('/api/auth/logout', {}) } catch (e) {}
+    setToken('')
     setSignedIn(false); setMe(null); setWorkers([]); setJobs([]); setContrib(null)
     location.hash = ''
   }, [])

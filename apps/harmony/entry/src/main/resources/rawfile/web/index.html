@@ -1,15 +1,26 @@
 <!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-    <meta name="theme-color" content="#3d4bd8" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%235a6bff'/%3E%3Ctext x='16' y='22' font-family='sans-serif' font-size='16' font-weight='600' fill='%23fff' text-anchor='middle'%3E%E6%98%9F%3C/text%3E%3C/svg%3E" />
-    <title>星栈算力</title>
-    <script type="module" crossorigin src="./assets/index-BSw06vrK.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-ccXa-aF7.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>星栈算力 · React 控制台</title>
+<link rel="stylesheet" href="./assets/comfy.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235b6cff'/%3E%3Cpath d='M16 6l2.6 6.4L25 15l-6.4 2.6L16 24l-2.6-6.4L7 15l6.4-2.6z' fill='%23fff'/%3E%3C/svg%3E">
+<script>
+(function(){
+  try{
+    var t=localStorage.getItem('ss-theme');
+    if(t!=='light'&&t!=='dark')
+      t=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+    document.documentElement.dataset.theme=t;
+  }catch(e){document.documentElement.dataset.theme='light'}
+})();
+</script>
+  <script type="module" crossorigin src="./assets/index-DPLpaXVo.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-D56GQgBP.css">
+</head>
+<body>
+<div id="root"></div>
+</body>
 </html>

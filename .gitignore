@@ -39,6 +39,11 @@ apps/android/app/build/
 apps/android/local.properties
 apps/android/.idea/
 apps/android/capacitor-cordova-android-plugins/build/
+# WPF 的中间产物：dotnet build 会生成 x64/Debug 的 obj，进库只会让 diff 变噪音
+apps/desktop/obj/
+
+# 本地起一个临时 Broker 做联调时留下的库与密钥
+tmp-broker/
 
 #私密
 api.json

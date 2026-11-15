@@ -28,8 +28,8 @@
   var ASSETS = [
     { group: 'desktop', os: 'desktop', osLabel: 'Windows 桌面', arch: 'x64', file: 'StarStack.Desktop.exe', kind: '安装包', client: true,
       desc: '自包含单文件，双击即用', note: '无需 .NET 运行时' },
-    { group: 'android', os: 'android', osLabel: 'Android', arch: '通用', file: 'StarStack.apk', kind: '安装包', client: true,
-      desc: 'Capacitor debug 包', note: '需允许「未知来源」' },
+    { group: 'android', os: 'android', osLabel: 'Android', arch: '通用', file: 'StarStack-RN.apk', kind: '安装包', client: true,
+      desc: 'RN 原生端：买方控制台 + 常驻算力节点', note: '需允许「未知来源」' },
     { group: 'miniapp', os: 'miniapp', osLabel: '微信小程序', arch: '源码', file: 'starstack-miniapp-source.zip', kind: '源码包', client: true,
       desc: '微信开发者工具导入', note: '测试号 touristappid' },
     { group: 'harmony', os: 'harmony', osLabel: 'HarmonyOS NEXT', arch: '源码', file: 'starstack-harmony-source.zip', kind: '源码包', client: true,

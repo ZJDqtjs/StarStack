@@ -95,7 +95,8 @@ class NodeApi(private val base: String) {
     }
   }
 
-  fun upload(segId: String, nodeId: String, file: File): Boolean {
+  /** 回传产物。Broker 会重算 SHA-256 并在响应里给出它自己的哈希，用于后续 done 回报。 */
+  fun upload(segId: String, nodeId: String, file: File): Pair<String, Long> {
     val part = MultipartBody.Builder()
       .setType(MultipartBody.FORM)
       .addFormDataPart("file", file.name, file.asRequestBody("application/octet-stream".toMediaType()))
@@ -105,11 +106,44 @@ class NodeApi(private val base: String) {
       .post(part)
       .build()
     http.newCall(request).execute().use { res ->
+      val text = res.body?.string().orEmpty()
       if (!res.isSuccessful) {
-        val text = res.body?.string().orEmpty()
         throw IllegalStateException("回传产物失败 ${res.code}: ${text.take(240)}")
       }
-      return true
+      val jo = runCatching { JSONObject(text) }.getOrNull()
+      val sha = jo?.optString("sha").orEmpty()
+      val bytes = jo?.optLong("bytes", file.length()) ?: file.length()
+      return sha to bytes
     }
+  }
+
+  /**
+   * 分片完成回报。只 upload 不 done 的话，Broker 只落了盘、不会结算，
+   * 分片会一直停在 uploading 直到租约超时被回收重派 —— 这是 cmd/worker 里
+   * finish() 的第三步，别漏。
+   */
+  fun done(
+    nodeId: String,
+    nodeSecret: String,
+    segId: String,
+    sha: String,
+    bytes: Long,
+    wallSec: Double,
+    speed: Double
+  ) {
+    val body = JSONObject().apply {
+      put("worker", nodeId)
+      put("seg", segId)
+      put("state", "done")
+      put("sha", sha)
+      put("bytes", bytes)
+      put("wall", wallSec)
+      put("speed", speed)
+    }
+    val builder = Request.Builder()
+      .url(url("/api/report"))
+      .post(body.toString().toRequestBody(jsonMedia))
+    if (nodeSecret.isNotEmpty()) builder.header("X-Node-Secret", nodeSecret)
+    http.newCall(builder.build()).execute().use { }
   }
 }

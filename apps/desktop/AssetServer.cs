@@ -44,6 +44,17 @@ public sealed class AssetServer : IAsyncDisposable
 
     public int Port { get; private set; }
 
+    /// <summary>
+    /// Reads an embedded asset as UTF-8 text. The About dialog uses it to show
+    /// which web build this exe actually carries — the embedded console is a
+    /// build-time snapshot, so "which commit is inside" is otherwise invisible.
+    /// </summary>
+    public string? ReadText(string path)
+    {
+        var key = path.TrimStart('/');
+        return _assets.TryGetValue(key, out var body) ? Encoding.UTF8.GetString(body) : null;
+    }
+
     public int Start()
     {
         var assembly = Assembly.GetExecutingAssembly();

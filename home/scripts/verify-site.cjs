@@ -39,7 +39,9 @@ const platforms = [
 ];
 const clientAssets = [
   'StarStack.Desktop.exe',
-  'StarStack.apk',
+  // 安卓包名用 RN 版本：Capacitor 那套（旧 StarStack.apk）已废弃停发，
+  // 见 .github/workflows/release.yml 第 4 节。
+  'StarStack-RN.apk',
   'starstack-miniapp-source.zip',
   'starstack-harmony-source.zip'
 ];
@@ -61,15 +63,20 @@ for (const name of listedSet) {
 }
 
 // release.yml 必须真的构建这些产物
+//
+// 注意：Android 包（StarStack-RN.apk）不再由 CI 产出 —— 手机端已切到
+// apps/mobile-rn（RN + Kotlin 前台服务），需要 Expo prebuild + Android SDK
+// 本地构建。清单里仍保留它的下载位，但不要求 release.yml 构建它。
+const builtClientAssets = clientAssets.filter((n) => n !== 'StarStack-RN.apk');
 for (const [os, arch] of platforms) {
   if (!releaseYml.includes(`${os}/${arch}`)) warn(`release.yml 缺少编译目标 ${os}/${arch}`);
 }
 for (const token of [
   'starstack-worker-${os}-${arch}${ext}',
   'starstack-server-linux-amd64',
-  ...clientAssets,
+  ...builtClientAssets,
   '> SHA256SUMS.txt',
-  'assets-go', 'assets-desktop', 'assets-android', 'assets-sources',
+  'web-react-dist', 'assets-desktop', 'assets-sources',
   'dist/dl/*'
 ]) {
   if (!releaseYml.includes(token)) warn(`release.yml 缺少预期片段：${token}`);

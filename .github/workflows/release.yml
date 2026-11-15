@@ -52,8 +52,11 @@ jobs:
           if-no-files-found: error
 
   # ── 2. Web 控制台产物：桌面端与安卓共用同一份 React 构建 ────────
+  # ── 2. Web 控制台产物：桌面端内嵌的就是这一份 ──────────────────
+  # 曾经构建的是 apps/mobile（Capacitor 时代，已废弃）。现在唯一 UI 源是 web-react，
+  # 桌面 exe 与鸿蒙 rawfile 都从它的 dist 取。
   build-web:
-    name: Web 控制台产物
+    name: Web 控制台产物（web-react）
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,20 +64,21 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: apps/package-lock.json
+          cache-dependency-path: web-react/package-lock.json
       - name: npm ci + vite build
         run: |
-          npm ci --prefix apps
-          npm run build --prefix apps
-          test -f apps/mobile/dist/index.html
+          npm ci --prefix web-react
+          npm run build --prefix web-react
+          test -f web-react/dist/index.html
+          test -f web-react/dist/build.json
       - uses: actions/upload-artifact@v4
         with:
-          name: web-dist
-          path: apps/mobile/dist/
+          name: web-react-dist
+          path: web-react/dist/
           if-no-files-found: error
 
   # ── 3. Windows 桌面：自包含单文件 exe ──────────────────────────
-  # WPF + WebView2 只能在 Windows 上构建；csproj 把 apps/mobile/dist 内嵌进 exe。
+  # WPF + WebView2 只能在 Windows 上构建；csproj 把 web-react/dist 内嵌进 exe。
   build-desktop:
     name: Windows 桌面单文件 exe
     needs: build-web
@@ -85,11 +89,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: web-dist
-          path: apps/mobile/dist
+          name: web-react-dist
+          path: web-react/dist
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+      # exe 内嵌的是 web-react-dist 这一份快照。artifact 缺构建戳说明拿到的不是本次
+      # 构建产物，宁可不发版，也不要把上一版的网页封进"新" exe。
+      - name: 校验内嵌网页带构建戳
+        shell: pwsh
+        run: |
+          $stamp = 'web-react/dist/build.json'
+          if (-not (Test-Path $stamp)) { throw "web-react-dist 缺少 $stamp，拒绝打包旧网页" }
+          Get-Content $stamp
       - name: dotnet publish（自包含单文件）
         shell: pwsh
         run: |
@@ -108,45 +120,11 @@ jobs:
           path: dist/dl/*
           if-no-files-found: warn
 
-  # ── 4. Android：Capacitor debug APK ────────────────────────────
-  # apk.sh 会在缺 JDK 17 / Android SDK 时自动装到 apps/android/out。
-  build-android:
-    name: Android APK
-    needs: build-web
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: apps/package-lock.json
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: apps/mobile/dist
-      - name: 同步 Web 资源进 Capacitor 工程
-        working-directory: apps
-        run: |
-          npm ci
-          npx cap sync android
-      - name: gradle assembleDebug
-        run: |
-          # 仓库里 gradlew 的 git mode 是 100644，Linux 检出后没有执行位；
-          # apk.sh 开头用 [ -x gradlew ] 判断工程位置，必须先补上执行位。
-          chmod +x apps/android/gradlew
-          bash apps/android/apk.sh
-          test -f apps/android/out/StarStack.apk
-          mkdir -p dist/dl
-          cp apps/android/out/StarStack.apk dist/dl/StarStack.apk
-          ls -lh dist/dl
-      - uses: actions/upload-artifact@v4
-        with:
-          name: assets-android
-          path: dist/dl/*
-          if-no-files-found: warn
+  # ── 4. Android：已停发 Capacitor APK ──────────────────────────
+  # 手机端唯一形态是 apps/mobile-rn（RN + Kotlin 前台 Service，同时是算力节点）。
+  # 原来的 Capacitor 包（apps/android）已废弃：界面来自 apps/mobile，与 RN 包同名同图标，
+  # 两个包一起发出去只会让人下错。RN 的 APK 目前由本地 `npx expo run:android` 产出，
+  # 需要进 CI 时再单独加 job（Expo prebuild + Android SDK，构建时间约 15-25 分钟）。
 
   # ── 5. 小程序 / 鸿蒙源码包 ────────────────────────────────────
   # 小程序没有可安装文件（appid 是 touristappid 测试号）；鸿蒙 HAP 需要
@@ -176,7 +154,7 @@ jobs:
   # 缺哪端资产，页面会把它标成「该版本未包含」，不会给出死链。
   publish:
     name: 汇总发布 GitHub Release
-    needs: [build-go, build-desktop, build-android, build-sources]
+    needs: [build-go, build-desktop, build-sources]
     if: ${{ always() && needs.build-go.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -212,13 +190,16 @@ jobs:
           generate_release_notes: true
           body: |
             由 `.github/workflows/release.yml` 自动构建：Go 六平台节点 + Linux Broker、
-            Windows 桌面单文件 exe、Android APK、微信小程序与 HarmonyOS 源码包。
+            Windows 桌面单文件 exe、微信小程序与 HarmonyOS 源码包。
 
             - `SHA256SUMS.txt` 覆盖本版全部文件，用 `sha256sum -c SHA256SUMS.txt` 校验。
             - 微信小程序包是**源码**，用微信开发者工具「导入项目」打开（`touristappid` 为测试号）。
             - HarmonyOS 包是**源码**，需 DevEco Studio 5.x（API 12+）+ 华为账号自动签名。
-            - Windows 桌面 / Android 依赖 .NET 8 与 Android SDK 工具链；若本版缺少对应文件，
-              说明该构建步骤失败，构建方式见 `apps/README.md`。欢迎页会把缺失资产标为「该版本未包含」。
+            - **Android 包（`StarStack-RN.apk`）暂不在 CI 产出**：手机端已切到 RN + Kotlin 前台服务
+              （`apps/mobile-rn`），需要 Android SDK 与 Expo prebuild，用
+              `cd apps/mobile-rn && npx expo run:android` 本地构建。旧的 Capacitor 包已停止发布。
+            - Windows 桌面依赖 .NET 8；若本版缺少对应文件，说明该构建步骤失败，
+              构建方式见 `apps/README.md`。欢迎页会把缺失资产标为「该版本未包含」。
 
             完整说明：https://home.starstack.run/
 

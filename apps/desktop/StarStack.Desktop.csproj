@@ -17,12 +17,23 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
   </ItemGroup>
 
-  <!-- The broker console build (apps/mobile/dist) ships inside the exe, so the
-       installed app never depends on a remote web page being reachable. -->
+  <!-- 全功能控制台（web-react/dist）随 exe 一起发布，安装后不依赖远程网页可达。
+       注意：这里曾经内嵌 apps/mobile/dist —— 那是 Capacitor 时代已废弃的界面，
+       继续用它会让 exe 永远落后于 web-react。 -->
   <ItemGroup>
-    <EmbeddedResource Include="..\mobile\dist\**\*">
+    <EmbeddedResource Include="..\..\web-react\dist\**\*">
       <LogicalName>web/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
+
+  <!-- 内嵌的是构建期快照：产物里没有 build.json（= 没走当前 vite 配置构建，
+       通常是几天前遗留的 dist）就直接失败，别把旧网页静默打进 exe。
+       构建方式：cd web-react && npm run build -->
+  <Target Name="EnsureWebBuildStamp" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('..\..\web-react\dist\index.html')"
+           Text="内嵌网页产物缺失：请先在 web-react/ 执行 npm run build。" />
+    <Error Condition="!Exists('..\..\web-react\dist\build.json')"
+           Text="内嵌网页产物没有构建戳（build.json）：这是旧产物，请重新 npm run build 后再打包，否则 exe 里的界面会比 web 端落后且无法追溯。" />
+  </Target>
 
 </Project>

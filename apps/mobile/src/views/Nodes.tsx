@@ -14,6 +14,17 @@ const guessArch = () => (/arm|aarch64/.test(ua) ? 'arm64' : 'amd64')
 const desktopHost: any = typeof window !== 'undefined' ? (window as any).chrome?.webview : null
 const isDesktop = !!desktopHost
 
+// 设备系统标签：windows_x64 / linux_arm64 / darwin_x64 …
+const sysTag = (w: any): string => {
+  const raw = String(w?.os || '').toLowerCase()
+  const [osPart, archPart] = raw.split('/')
+  const os = (osPart || '').trim()
+  let arch = String(w?.arch || archPart || '').toLowerCase().trim()
+  if (arch === 'amd64' || arch === 'x86_64' || arch === 'x64') arch = 'x64'
+  else if (arch === 'arm64' || arch === 'aarch64') arch = 'arm64'
+  return [os, arch].filter(Boolean).join('_') || '未知系统'
+}
+
 export default function Nodes() {
   const { api, workers, policy, showToast } = useApp()
   const [f, setF] = useState({ name: '', price: '0.80', slots: '2', os: guessOS(), arch: guessArch() })
@@ -320,7 +331,8 @@ export default function Nodes() {
                 <Tag tone={w.online ? 'ok' : 'bad'}>{w.online ? '在线' : '离线'}</Tag>
                 {w.paused && <Tag tone="warn">已暂停</Tag>}
                 {dup[w.id] && <Tag tone="warn">同设备重复节点，建议删除</Tag>}
-                {!w.device_id && <Tag tone="warn">旧版节点（无设备指纹）</Tag>}
+                <Tag>{sysTag(w)}</Tag>
+                {!w.device_id && <Tag tone="warn">未采集设备指纹</Tag>}
               </h3>
               <Stats
                 items={[
@@ -367,7 +379,7 @@ export default function Nodes() {
                 </Btn>
               </div>
               <div className="hint mono" style={{ marginTop: 8 }}>
-                编号 {w.id} · 设备 {w.device_id || '（旧版节点未采集）'}
+                编号 {w.id} · 设备 {w.device_id || '（未采集设备指纹）'}
               </div>
             </div>
           ))

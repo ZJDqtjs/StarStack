@@ -1,6 +1,43 @@
 // API 层：与原生版/后端契约完全一致。BASE 兼容反代子路径。
-export const BASE = (location.pathname.match(/^(\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*)\/[^/]*$/) || ['', ''])[1]
-export const href = u => (typeof u === 'string' && u.startsWith('/') ? BASE + u : u)
+//
+// 三种运行环境，取址逻辑不同，这里一次处理掉：
+//   1. 线上（starstack.run 或反代子路径）：同源相对路径，BASE 从 pathname 推断；
+//   2. 桌面 exe：WebView 加载 127.0.0.1:<port>，同源请求由 WPF 主进程反代到 Broker，
+//      前端保持相对路径即可（既不用管 CORS，也不用管 Cookie 的 Domain）；
+//   3. 鸿蒙 rawfile / file://：没有同源后端，必须用绝对地址。
+// 用户在「设置 → 服务器地址」指定的地址优先级最高（写入 localStorage 后重载生效）。
+const DEFAULT_BROKER = 'https://starstack.run'
+const PATH_BASE = (location.pathname.match(/^(\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*)\/[^/]*$/) || ['', ''])[1]
+
+function safeGet(k) {
+  try { return localStorage.getItem(k) || '' } catch (e) { return '' }
+}
+function safeSet(k, v) {
+  try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k) } catch (e) {}
+}
+
+/** 用户手工指定的 Broker 根地址；空字符串表示走同源。 */
+export function getBroker() {
+  return safeGet('ss-broker')
+}
+export function setBroker(v) {
+  const clean = String(v || '').trim().replace(/\/+$/, '')
+  safeSet('ss-broker', clean)
+  return clean
+}
+
+/** 当前生效的绝对地址（空 = 同源）。 */
+export const BROKER = getBroker() || (/(^file:|^resource:|^ms-appx:)/.test(location.protocol) ? DEFAULT_BROKER : '')
+export const BASE = BROKER ? '' : PATH_BASE
+export const href = u => (typeof u === 'string' && u.startsWith('/') ? BROKER + BASE + u : u)
+
+/** Bearer 令牌：跨 origin（exe 反代 / 鸿蒙绝对地址）时不再依赖 Cookie。 */
+export function getToken() {
+  return safeGet('ss-token')
+}
+export function setToken(v) {
+  safeSet('ss-token', v)
+}
 
 // 独立管理控制台模式：携带 admin token，并把 /api/* 重写到 /api/admin/*（独立认证面）。
 let adminToken = null
@@ -10,7 +47,7 @@ function adminUrl(u) {
   const full = href(u)
   if (!adminToken) return full
   const prefix = BASE + '/api/'
-  if (full.startsWith(prefix)) return BASE + '/api/admin/' + full.slice(prefix.length)
+  if (full.startsWith(prefix)) return BROKER + BASE + '/api/admin/' + full.slice(prefix.length)
   return full
 }
 
@@ -18,6 +55,10 @@ export async function api(u, o) {
   const opts = o || {}
   const headers = new Headers(opts.headers || {})
   if (adminToken) headers.set('Authorization', 'Bearer ' + adminToken)
+  else if (!headers.has('Authorization')) {
+    const t = getToken()
+    if (t) headers.set('Authorization', 'Bearer ' + t)
+  }
   const r = await fetch(adminUrl(u), { ...opts, headers })
   const t = await r.text()
   let d = null

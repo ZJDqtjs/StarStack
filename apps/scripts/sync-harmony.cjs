@@ -1,14 +1,17 @@
 #!/usr/bin/env node
-// 同步鸿蒙内嵌 Web 产物：apps/mobile/dist -> apps/harmony/entry/src/main/resources/rawfile/web
-// 与桌面端（csproj 编译期嵌入）、安卓端（cap sync）不同，鸿蒙 rawfile 是入库文件，
-// 每次 npm run build 之后必须重跑本脚本，否则 HAP 里带的是旧控制台。
+// 同步鸿蒙内嵌 Web 产物：web-react/dist -> apps/harmony/entry/src/main/resources/rawfile/web
+// 源曾经是 apps/mobile/dist（Capacitor 时代），那套已废弃；现在与桌面 exe 同源，
+// 都取 web-react 的构建产物。鸿蒙是 ArkWeb 套壳、只做买方（原生节点另议），
+// 所以壳里必须是最新的买方控制台。
+// 与桌面端（csproj 编译期嵌入）不同，鸿蒙 rawfile 是入库文件，每次 web-react
+// 重新构建后必须重跑本脚本，否则 HAP 里带的是旧控制台。
 // 统一写成 LF：rawfile 曾因 CRLF 检出与 dist 产生纯换行差异，比对全是噪音。
 // 最后校验 index.html 引用的每个资源确实存在于目录中（Index.ets 写死 web/index.html，
 // 而 assets 文件名带内容 hash，构建后名字会变）。
 const fs = require('fs');
 const path = require('path');
 
-const SRC = path.join(__dirname, '..', 'mobile', 'dist');
+const SRC = path.join(__dirname, '..', '..', 'web-react', 'dist');
 const DST = path.join(__dirname, '..', 'harmony', 'entry', 'src', 'main', 'resources', 'rawfile', 'web');
 
 function copyTree(src, dst) {
