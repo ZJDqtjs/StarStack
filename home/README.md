@@ -55,16 +55,17 @@ cd home
 CLOUDFLARE_API_TOKEN=xxx CLOUDFLARE_ACCOUNT_ID=xxx npx --yes wrangler@latest deploy
 ```
 
-## 一次性配置（当前进度）
+## 一次性配置（已全部完成）
 
-> **2026-11-15 已完成：** Worker `starstack-home` 已部署（`https://starstack-home.3528137639.workers.dev`），
-> `home.starstack.run` custom domain 已绑定且 `curl -I` 返回 200，
-> `CLOUDFLARE_ACCOUNT_ID` 已写入仓库 Secrets，两个 workflow 已在 GitHub 上跑通（CI 全绿）。
-> **唯一剩余步骤：补 `CLOUDFLARE_API_TOKEN`。** 补上后 push 到 `main` 就会自动部署。
+> **2026-11-15 全链路打通：** Worker `starstack-home` 已部署，`home.starstack.run` 已绑定且返回 200；
+> `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID` 都已写入仓库 Secrets；
+> GitHub Actions 的 `push main` 和 `workflow_dispatch` 均实测成功执行 `wrangler deploy`
+> （日志出现 `Uploaded starstack-home`）。
+> 现在改完页面文案 push 到 `main` 就会自动上线，不用本地 wrangler，也不用手点 Dashboard。
 
-### 1. 补一个长期 API Token
+### 1. GitHub Secrets（已配置，此处留档）
 
-到 <https://dash.cloudflare.com/profile/api-tokens> → Create Token，用 **Edit Cloudflare Workers** 模板：
+Token 在 <https://dash.cloudflare.com/profile/api-tokens> 用 **Edit Cloudflare Workers** 模板创建：
 
 | 权限 | 用途 |
 |---|---|
@@ -72,10 +73,9 @@ CLOUDFLARE_API_TOKEN=xxx CLOUDFLARE_ACCOUNT_ID=xxx npx --yes wrangler@latest dep
 | `Account / Account Settings / Read` | 模板自带 |
 | `Zone / Workers Routes / Edit` 或 `DNS / Edit` | 仅当要让 Wrangler 自己管理 custom domain 才需要；当前配置不需要 |
 
-写入仓库 Secrets（或用 `gh secret set CLOUDFLARE_API_TOKEN --repo ZJDqtjs/StarStack`）：
+需要复核或换 token 时，一条命令把部署、域名、Secrets 全部重跑一遍：
 
 ```bash
-# 已配置好本机凭据时，一条命令把部署、域名、Secrets 全部复核一遍：
 CLOUDFLARE_API_TOKEN=xxx bash home/scripts/setup-cloudflare.sh
 ```
 
@@ -83,9 +83,10 @@ CLOUDFLARE_API_TOKEN=xxx bash home/scripts/setup-cloudflare.sh
 且 `POST /user/tokens` 与账户级 token 端点对 OAuth 会话都返回 403，派生不出长期 token。
 写进去的表现是"今天能部署，一小时后开始报 401"。
 
-两个 Secret 没配齐时，CI 的部署步骤会**跳过并给出 warning**，Go 测试和站点校验照常跑，
-不会把仓库刷成一片红。`wrangler.jsonc` 里刻意没有写 `routes` / `custom_domain`，
-因此 Token 不需要 Zone / DNS 写权限。
+设计上的降级行为（留档）：两个 Secret 没配齐时，CI 的部署步骤会**跳过并给出 warning**，
+Go 测试和站点校验照常跑，不会把仓库刷成一片红。`wrangler.jsonc` 里刻意没有写
+`routes` / `custom_domain`，因此 Token 不需要 Zone / DNS 写权限；
+实测最小权限模板在 DNS 记录读取上返回 403，脚本会静默兜住，不影响部署与域名（已绑定时幂等跳过）。
 
 ### 2. 自定义域（已完成，此处留档）
 

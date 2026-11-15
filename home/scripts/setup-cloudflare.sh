@@ -52,7 +52,8 @@ ZONE_ID="${CLOUDFLARE_ZONE_ID:-$(cf "$API/zones?name=$ZONE" | json_get result.0.
 echo "zone = $ZONE_ID"
 
 echo "== 4/6 检查是否已存在精确的 CNAME（会挡住 Custom Domain）=="
-EXISTING="$(cf "$API/zones/$ZONE_ID/dns_records?name=$HOSTNAME" | json_get result)" || EXISTING="[]"
+# DNS 读取需要 DNS:Read；最小权限 token 常见 403，静默兜成空数组即可。
+EXISTING="$(cf "$API/zones/$ZONE_ID/dns_records?name=$HOSTNAME" 2>/dev/null | json_get result 2>/dev/null)" || EXISTING="[]"
 if [ "$EXISTING" != "[]" ] && printf '%s' "$EXISTING" | grep -q '"type":"CNAME"'; then
   echo "WARN: $HOSTNAME 已有 CNAME 记录，Custom Domain 无法创建。" >&2
   echo "      请先在 Cloudflare DNS 里删除该精确记录（泛解析 *.starstack.run 不冲突，不用动）。" >&2
@@ -64,19 +65,32 @@ echo "== 5/6 部署 Worker（wrangler）=="
   CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID" \
   npx --yes wrangler@latest deploy ) || fail "wrangler deploy 失败"
 
-echo "== 6/6 绑定自定义域 $HOSTNAME =="
-BODY="$(node -e '
-  console.log(JSON.stringify({
-    hostname: process.argv[1], service: process.argv[2],
-    enabled: true, zone_id: process.argv[3], zone_name: process.argv[4]
-  }));
-' "$HOSTNAME" "$WORKER" "$ZONE_ID" "$ZONE")"
-DOMAIN_RESULT="$(cf -X PUT "$API/accounts/$ACCOUNT_ID/workers/domains" -d "$BODY")" \
-  || fail "绑定自定义域失败（token 缺 Workers Routes/DNS 权限？）"
-if [ "$(printf '%s' "$DOMAIN_RESULT" | json_get success 2>/dev/null || echo false)" != "true" ]; then
-  echo "WARN: 域名绑定返回异常，请到 Dashboard → Workers & Pages → $WORKER → Domains & Routes 手动添加。" >&2
+echo "== 6/6 检查 / 绑定自定义域 $HOSTNAME =="
+# 幂等：已绑定就跳过；token 缺 Workers Routes 权限时只警告，不阻断部署与 Secrets 写入。
+DOMAINS="$(cf "$API/accounts/$ACCOUNT_ID/workers/domains" 2>/dev/null || echo '{"result":[]}')"
+ALREADY="$(printf '%s' "$DOMAINS" | node -e '
+  let s = "";
+  process.stdin.on("data", d => s += d).on("end", () => {
+    const o = JSON.parse(s);
+    const hit = (o.result || []).some(r => r.hostname === process.argv[1] && r.service === process.argv[2]);
+    console.log(hit ? "yes" : "no");
+  });' "$HOSTNAME" "$WORKER")"
+if [ "$ALREADY" = "yes" ]; then
+  echo "已绑定，跳过（幂等）"
 else
-  echo "OK：Cloudflare 会自动创建 DNS 记录并签发证书"
+  BODY="$(node -e '
+    console.log(JSON.stringify({
+      hostname: process.argv[1], service: process.argv[2],
+      enabled: true, zone_id: process.argv[3], zone_name: process.argv[4]
+    }));
+  ' "$HOSTNAME" "$WORKER" "$ZONE_ID" "$ZONE")"
+  DOMAIN_RESULT="$(cf -X PUT "$API/accounts/$ACCOUNT_ID/workers/domains" -d "$BODY" 2>/dev/null)" || DOMAIN_RESULT=""
+  if [ -z "$DOMAIN_RESULT" ] || [ "$(printf '%s' "$DOMAIN_RESULT" | json_get success 2>/dev/null || echo false)" != "true" ]; then
+    echo "WARN: 域名绑定未成功（token 缺 Workers Routes/DNS 写权限？）。" >&2
+    echo "      Worker 已部署；请在 Dashboard → Workers & Pages → $WORKER → Domains & Routes 手动添加 $HOSTNAME。" >&2
+  else
+    echo "OK：Cloudflare 会自动创建 DNS 记录并签发证书"
+  fi
 fi
 
 echo "== 写入 GitHub Secrets（使 push 自动部署）=="
