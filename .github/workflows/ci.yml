@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go 测试与静态检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # 仓库 blob 是 LF，但 Windows 本地 core.autocrlf=true 会检出成 CRLF。
+      # 先剥掉 \r 再比 gofmt，避免把纯行尾差异当成格式错误。
+      - name: gofmt（忽略行尾差异）
+        run: |
+          bad=""
+          for f in $(git ls-files '*.go'); do
+            tr -d '\r' < "$f" > /tmp/ss-gofmt-in.go
+            if [ -n "$(gofmt -d /tmp/ss-gofmt-in.go 2>/dev/null)" ]; then
+              bad="$bad $f"
+            fi
+          done
+          if [ -n "$bad" ]; then
+            echo "以下 Go 文件与 gofmt 不一致：$bad"
+            exit 1
+          fi
+          echo "gofmt 检查通过"
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./... -count=1
+
+  site:
+    name: 欢迎页校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: JS 语法
+        run: node --check home/public/app.js
+      - name: 站点与下载清单一致性
+        run: node home/scripts/verify-site.cjs
+
+  deploy-home:
+    name: 部署欢迎页到 Cloudflare Workers
+    needs: [go, site]
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 检查 Cloudflare 密钥
+        id: guard
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::未配置 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID，跳过部署。配置方式见 home/README.md"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: wrangler deploy
+        if: steps.guard.outputs.ready == 'true'
+        working-directory: home
+        run: npx --yes wrangler@latest deploy

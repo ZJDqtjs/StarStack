@@ -6,8 +6,9 @@ Broker 独立重算 SHA-256 校验、无损合并、按量结算，并与单机�
 - 项目主页 / 演示 / 下载：<https://home.starstack.run/>
 - 源码：<https://github.com/ZJDqtjs/StarStack>
 - 实测日志、验收细节与论文素材：[docs/实测与验收记录.md](docs/实测与验收记录.md)
+- 部署与 CI/CD 说明：[home/README.md](home/README.md)
 
-> 当前分支 `feature/admin-console` 的重点是 **React 星舷控制台 + 独立管理控制台**，见「控制台与客户端」。
+> 仓库另含 **React 星舷控制台 + 独立管理控制台**（`web-react/`），见「控制台与客户端」。
 
 ## 快速开始
 
