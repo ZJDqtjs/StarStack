@@ -21,7 +21,8 @@ func corsWrap(h http.Handler) http.Handler {
 		oh := w.Header()
 		oh.Set("Access-Control-Allow-Origin", "*")
 		oh.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		oh.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept")
+		oh.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, If-None-Match")
+		oh.Set("Access-Control-Expose-Headers", "ETag")
 		oh.Set("Access-Control-Max-Age", "600")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

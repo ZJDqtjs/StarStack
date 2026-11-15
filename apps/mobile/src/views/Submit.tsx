@@ -135,7 +135,7 @@ async function packFolder(files: FileList) {
 }
 
 export default function Submit() {
-  const { api, policy, view, setView, showToast, targetNode, setTargetNode, workers } = useApp()
+  const { api, policy, view, setView, showToast, targetNode, setTargetNode, workers, prefill } = useApp()
   const svc = view === 'build' ? 'build' : 'render'
   const [kind, setKind] = useState('blender')
   const [quality, setQuality] = useState('balanced')
@@ -170,6 +170,14 @@ export default function Submit() {
     setKind((prev) => (svc === 'build' ? 'build' : prev === 'pr' ? 'pr' : 'blender'))
     setMsg('')
   }, [svc])
+
+  // Agent 聊天预填：「转码一个视频」→ transcode，「渲染 blender」→ blender（只消费一次）
+  const prefillRef = useRef<any>(null)
+  useEffect(() => {
+    if (!prefill || prefill.view !== 'render' || prefillRef.current === prefill) return
+    prefillRef.current = prefill
+    if (prefill.kind === 'blender' || prefill.kind === 'transcode') setKind(prefill.kind)
+  }, [prefill])
 
   // 跨类型不携带不兼容素材
   useEffect(() => {

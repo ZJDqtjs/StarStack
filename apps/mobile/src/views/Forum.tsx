@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useApp } from '../ctx'
 import { Btn, Card, Empty, Field, Loader } from '../ui'
 import { ts } from '../../../shared/index.js'
@@ -19,7 +19,7 @@ function Media({ list, api }: any) {
 }
 
 export default function Forum() {
-  const { api, showToast } = useApp()
+  const { api, showToast, prefill } = useApp()
   const [posts, setPosts] = useState<any[] | null>(null)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -45,6 +45,17 @@ export default function Forum() {
     loadPosts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Agent 聊天预填：「发帖 XXX」→ 打开新帖表单并预填标题（只消费一次）
+  const prefillRef = useRef<any>(null)
+  useEffect(() => {
+    if (!prefill || prefill.view !== 'forum' || prefillRef.current === prefill) return
+    prefillRef.current = prefill
+    if (prefill.tpl && prefill.tpl.title) {
+      setTitle(prefill.tpl.title)
+      setShowNew(true)
+    }
+  }, [prefill])
 
   const openPost = async (id: string) => {
     setDetailLoading(true)

@@ -592,3 +592,46 @@ code { font: 500 11.5px var(--mono); background: var(--soft); padding: 1px 5px; 
   .wb-pipe-line { width: 2px; height: 18px; justify-self: center; background: linear-gradient(180deg, var(--brand), #0fb5c9); }
   .wb-pipe-line::after { right: -3px; top: auto; bottom: -1px; transform: rotate(45deg); }
 }
+
+/* ── Agent 聊天（试聊）：与 web-react 同一交互模型——消息上滚、输入沉底、本地历史 ── */
+.view-tabs { margin: 2px 0 14px; }
+.agent-wrap { display: flex; flex-direction: column; min-height: 62vh; }
+.agent-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 0 0 10px; border-bottom: 1px solid var(--hair);
+}
+.agent-head-title { display: flex; flex-direction: column; min-width: 0; }
+.agent-head-title b { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-head-title span { font-size: 11.5px; color: var(--mute); }
+.agent-head-btns { display: flex; gap: 8px; flex: 0 0 auto; }
+.agent-msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px 2px 14px; }
+.bubble {
+  align-self: flex-start; max-width: 92%; padding: 11px 14px; border-radius: 12px;
+  background: var(--inset); border: 1px solid var(--hair); font-size: 13.5px; line-height: 1.65;
+  color: var(--body); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.bubble .who { display: block; margin-bottom: 5px; font-size: 11px; color: var(--mute); }
+.bubble.me { align-self: flex-end; background: var(--link-soft); border-color: transparent; color: var(--ink); }
+.bubble.bad { border-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
+.bubble .usage { display: block; margin-top: 6px; font-size: 11px; color: var(--mute); }
+.agent-card {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px;
+  border: 1px solid var(--hair); border-radius: 12px; background: var(--card); box-shadow: var(--shadow);
+}
+.agent-card-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.agent-card-main b { font-size: 13px; color: var(--ink); }
+.agent-card-main span { font-size: 12.5px; color: var(--body); line-height: 1.6; }
+.agent-card-main code { font-size: 12px; color: var(--vio); background: var(--vio-soft); border-radius: 6px; padding: 3px 7px; overflow-wrap: anywhere; }
+.agent-hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 30px 12px; }
+.agent-hero h2 { font-size: 20px; font-weight: 700; color: var(--ink); letter-spacing: -0.5px; margin: 0; }
+.agent-hero p { margin: 0; max-width: 460px; font-size: 12.5px; color: var(--mute); line-height: 1.7; }
+.chips.sm { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+.agent-composer { flex: 0 0 auto; border-top: 1px solid var(--hair); padding: 12px 2px 10px; background: var(--bg); }
+.agent-composer textarea {
+  width: 100%; border: 1px solid var(--hair2); border-radius: 10px; background: var(--card);
+  padding: 10px 12px; font: inherit; font-size: 13.5px; color: var(--ink); resize: none;
+}
+.agent-composer textarea:focus { outline: none; border-color: var(--link); box-shadow: 0 0 0 3px var(--link-soft); }
+.agent-composer-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.agent-composer-row select { flex: 1; min-width: 0; }
+.agent-hist { display: flex; flex-direction: column; gap: 4px; }

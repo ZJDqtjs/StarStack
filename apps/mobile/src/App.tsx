@@ -58,6 +58,9 @@ export default function App() {
   const [booting, setBooting] = useState(true)
   const [toast, setToast] = useState<{ msg: string; tone?: string } | null>(null)
   const [targetNode, setTargetNode] = useState<any>(null)
+  const [contrib, setContrib] = useState<any>(null)
+  // Agent 聊天跨视图预填（与 web-react store 的 prefill 同形态：{view, tpl, kind}）
+  const [prefill, setPrefill] = useState<any>(null)
   const toastTimer = useRef<any>(null)
 
   const showToast = useCallback((msg: string, tone?: string) => {
@@ -106,6 +109,7 @@ export default function App() {
     if (!signedIn) return
     let alive = true
     let timer: any
+    let contribTimer: any
     const tick = async () => {
       try {
         const st = await api.state()
@@ -124,18 +128,29 @@ export default function App() {
           return
         }
       }
-      timer = setTimeout(tick, 2000)
+      timer = setTimeout(tick, 1000)
+    }
+    const loadContrib = async () => {
+      try {
+        const c = await api.contribution()
+        if (alive) setContrib(c)
+      } catch {
+        /* 贡献概览加载失败不阻断主轮询 */
+      }
+      contribTimer = setTimeout(loadContrib, 5000)
     }
     tick()
+    loadContrib()
     return () => {
       alive = false
       clearTimeout(timer)
+      clearTimeout(contribTimer)
     }
   }, [signedIn, signOut])
 
   const ctx = useMemo(
-    () => ({ api, me, policy, workers, jobs, view, setView, showToast, signOut, setMe, targetNode, setTargetNode }),
-    [me, policy, workers, jobs, view, showToast, signOut, targetNode],
+    () => ({ api, me, policy, workers, jobs, contrib, view, setView, showToast, signOut, setMe, targetNode, setTargetNode, prefill, setPrefill }),
+    [me, policy, workers, jobs, contrib, view, showToast, signOut, targetNode, prefill],
   )
 
   if (booting) {

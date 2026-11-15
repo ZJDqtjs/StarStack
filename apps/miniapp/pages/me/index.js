@@ -58,6 +58,10 @@ Page({
     }
   },
 
+  openAgent() {
+    wx.navigateTo({ url: '/pages/agent/index' })
+  },
+
   openNodeLogs(e) {
     wx.navigateTo({ url: '/pages/commlog/index?type=node&id=' + encodeURIComponent(e.currentTarget.dataset.id) })
   },

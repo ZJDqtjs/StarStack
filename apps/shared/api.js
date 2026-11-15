@@ -17,6 +17,12 @@ const qs = (obj) =>
     .filter(([, v]) => v !== undefined && v !== null && v !== '')
     .map(([k, v]) => `${enc(k)}=${enc(v)}`)
     .join('&')
+// 列表端点的可选查询串（分页 limit/offset/cursor、服务端搜索 q）。
+// 不传参数时返回空串，请求与旧契约完全一致。
+const qsSuffix = (obj) => {
+  const s = qs(obj || {})
+  return s ? '?' + s : ''
+}
 
 /**
  * @param {object} opts
@@ -72,7 +78,8 @@ export function createApi({ baseUrl, getToken, request, upload }) {
     state: () => get('/api/state'),
 
     // jobs
-    jobs: () => get('/api/jobs'),
+    // jobs 支持可选分页（limit/offset）；不传参数时与旧契约完全一致。
+    jobs: (opts) => get('/api/jobs' + qsSuffix(opts)),
     estimate: ({ duration, kind, vcodec, req }) => get('/api/estimate?' + qs({ duration, kind, vcodec, req: JSON.stringify(req || {}) })),
     submitTranscode: (form) => uploadTo('/api/jobs', form),
     submitRender: (form) => uploadTo('/api/jobs/render', form),
@@ -82,15 +89,20 @@ export function createApi({ baseUrl, getToken, request, upload }) {
     nodeLogs: (id) => get('/api/nodes/' + enc(id) + '/logs'),
 
     // billing
-    ledger: () => get('/api/ledger'),
+    // ledger 支持可选分页（limit/offset）；不传参数时与旧契约完全一致。
+    ledger: (opts) => get('/api/ledger' + qsSuffix(opts)),
     recharge: (amount) => post('/api/me/recharge', { amount }),
     settings: () => get('/api/me/settings'),
     saveSettings: (advanced) => put('/api/me/settings', { advanced }),
 
     // model gateway
     keys: () => get('/api/keys'),
-    createKey: (name) => post('/api/keys', { name }),
+    createKey: (name, dailyQuota) => post('/api/keys', { name, daily_quota: Number(dailyQuota) || 0 }),
     revokeKey: (id) => del('/api/keys/' + enc(id)),
+    // 免密钥试聊（agent 聊天的模型回落通道）：最多 12 条 / 单条 2000 字 / 合计 8000 字，末条必须是 user。
+    tryChat: (model, messages) => post('/api/models/try', { model, messages }),
+    // 用量对账仅平台自营账户返回 200，普通账户 403（调用方按降级处理）。
+    usage: (days) => get('/api/models/usage?days=' + enc(days || 7)),
     catalog: () => get('/api/models/catalog'),
     upstreams: () => get('/api/models/upstreams'),
     addUpstream: (body) => post('/api/models/upstreams', body),
@@ -108,6 +120,22 @@ export function createApi({ baseUrl, getToken, request, upload }) {
     deleteNode: (id) => del('/api/nodes/' + enc(id)),
     contribution: () => get('/api/contribution'),
 
+    // service offers (服务挂牌：市场 / 发布 / 买卖会话)
+    // 支持可选查询参数：category、q（服务端搜索）、limit/offset（分页）；不传时与旧契约一致。
+    offers: (opts) => get('/api/offers' + qsSuffix(opts)),
+    offer: (id) => get('/api/offers/' + enc(id)),
+    createOffer: (form) => uploadTo('/api/offers', form),
+    delOffer: (id) => del('/api/offers/' + enc(id)),
+    offerMediaUrl: (id) => url('/api/offers/media/' + enc(id)),
+    useOffer: (id) => post('/api/offers/' + enc(id) + '/use', {}),
+    startConversation: (id) => post('/api/offers/' + enc(id) + '/conversation', {}),
+    conversations: (opts) => get('/api/offers/conversations' + qsSuffix(opts)),
+    conversation: (cid, opts) => get('/api/offers/conversations/' + enc(cid) + qsSuffix(opts)),
+    sendMessage: (cid, body) => post('/api/offers/conversations/' + enc(cid), { body }),
+
+    // ComfyUI 工作台状态（不可达时 404/失败，调用方降级为离线）
+    comfyStatus: () => get('/api/comfy/status'),
+
     // IPv6 cloud hosts
     vmOffers: () => get('/api/vm/offers'),
     vmInstances: () => get('/api/vm/instances'),
@@ -119,7 +147,8 @@ export function createApi({ baseUrl, getToken, request, upload }) {
     vmExtend: (id, hours) => post('/api/vm/instances/' + enc(id) + '/extend', { hours }),
 
     // community board
-    forumPosts: () => get('/api/forum/posts'),
+    // forumPosts 支持可选分页/搜索（limit/offset/q）；不传时与旧契约一致。
+    forumPosts: (opts) => get('/api/forum/posts' + qsSuffix(opts)),
     forumPost: (id) => get('/api/forum/posts/' + enc(id)),
     createPost: (form) => uploadTo('/api/forum/posts', form),
     comment: (id, form) => uploadTo('/api/forum/posts/' + enc(id) + '/comments', form),

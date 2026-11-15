@@ -38,6 +38,19 @@ export function Tag({ tone = '', children }: any) {
   return <span className={'tag' + (tone ? ' ' + tone : '')}>{children}</span>
 }
 
+// 视图内标签条（与 App 顶栏 .tabs 同一视觉），用于模型 API 的四 Tab。
+export function Tabs({ items, active, onChange }: { items: { key: string; label: string }[]; active: string; onChange: (k: string) => void }) {
+  return (
+    <nav className="tabs view-tabs">
+      {items.map((t) => (
+        <button key={t.key} className={active === t.key ? 'on' : ''} onClick={() => onChange(t.key)}>
+          {t.label}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
 export function Stats({ items }: { items: { v: any; k: string; hl?: boolean }[] }) {
   return (
     <div className="stats">

@@ -69,7 +69,18 @@ func (s *Server) handleOffers(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, jsonErr("未知的版块"), 400)
 			return
 		}
-		list, err := s.st.ServiceOffers(cat, 100)
+		p := parseListPage(r, 100, 200)
+		var (
+			list  []*store.ServiceOffer
+			total int
+			err   error
+		)
+		if p.Enabled {
+			list, total, err = s.st.ServiceOffersPage(cat, listQuery(r), p.Limit, p.Offset)
+		} else {
+			list, err = s.st.ServiceOffers(cat, 100)
+			total = len(list)
+		}
 		if err != nil {
 			s.deny(w, 500, "读取出价失败", "offers list", err)
 			return
@@ -78,7 +89,7 @@ func (s *Server) handleOffers(w http.ResponseWriter, r *http.Request) {
 		for _, o := range list {
 			out = append(out, viewOffer(o, u))
 		}
-		writeJSON(w, map[string]any{"offers": out})
+		writePaged(w, p, map[string]any{"offers": out}, total)
 	case http.MethodPost:
 		s.createOffer(w, r, u)
 	default:
@@ -436,12 +447,24 @@ func (s *Server) handleOfferConversations(w http.ResponseWriter, r *http.Request
 		http.Error(w, "GET only", 405)
 		return
 	}
-	list, err := s.st.OfferConversations(u.ID, strings.TrimSpace(r.URL.Query().Get("offer_id")), 100)
+	p := parseListPage(r, 100, 200)
+	offerID := strings.TrimSpace(r.URL.Query().Get("offer_id"))
+	var (
+		list  []*store.OfferConversationView
+		total int
+		err   error
+	)
+	if p.Enabled {
+		list, total, err = s.st.OfferConversationsPage(u.ID, offerID, p.Limit, p.Offset)
+	} else {
+		list, err = s.st.OfferConversations(u.ID, offerID, 100)
+		total = len(list)
+	}
 	if err != nil {
 		s.deny(w, 500, "读取会话列表失败", "offer conversations", err)
 		return
 	}
-	writeJSON(w, map[string]any{"conversations": list})
+	writePaged(w, p, map[string]any{"conversations": list}, total)
 }
 
 func (s *Server) handleOfferConversation(w http.ResponseWriter, r *http.Request) {
@@ -474,7 +497,15 @@ func (s *Server) handleOfferConversation(w http.ResponseWriter, r *http.Request)
 			s.deny(w, 500, "读取会话失败", "offer conversation view", err)
 			return
 		}
-		msgs, err := s.st.OfferMessages(cid, 200)
+		p := parseListPage(r, 200, 500)
+		var msgs []*store.OfferMessage
+		var total int
+		if p.Enabled {
+			msgs, total, err = s.st.OfferMessagesPage(cid, p.Limit, p.Offset)
+		} else {
+			msgs, err = s.st.OfferMessages(cid, 200)
+			total = len(msgs)
+		}
 		if err != nil {
 			s.deny(w, 500, "读取消息失败", "offer messages", err)
 			return
@@ -483,9 +514,9 @@ func (s *Server) handleOfferConversation(w http.ResponseWriter, r *http.Request)
 		if o, err := s.st.ServiceOffer(c.OfferID); err == nil && o != nil {
 			ov = viewOffer(o, u)
 		}
-		writeJSON(w, map[string]any{
+		writePaged(w, p, map[string]any{
 			"conversation": cv, "messages": viewOfferMessages(msgs, u.ID), "offer": ov,
-		})
+		}, total)
 	case http.MethodPost:
 		var in struct {
 			Body string `json:"body"`

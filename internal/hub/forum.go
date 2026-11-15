@@ -66,12 +66,23 @@ func (s *Server) handleForumPosts(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		list, err := s.st.Posts(100)
+		p := parseListPage(r, 100, 200)
+		var (
+			list  []*store.ForumPost
+			total int
+			err   error
+		)
+		if p.Enabled {
+			list, total, err = s.st.PostsPage(listQuery(r), p.Limit, p.Offset)
+		} else {
+			list, err = s.st.Posts(100)
+			total = len(list)
+		}
 		if err != nil {
 			s.deny(w, 500, "读取帖子失败", "forum list", err)
 			return
 		}
-		writeJSON(w, map[string]any{"posts": list})
+		writePaged(w, p, map[string]any{"posts": list}, total)
 	case http.MethodPost:
 		s.createForumPost(w, r, u)
 	default:
