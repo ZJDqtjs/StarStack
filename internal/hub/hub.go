@@ -263,13 +263,50 @@ func (w *Worker) hasRuntime(name string) bool {
 // stated minimum: the broker must only promise a buyer what a machine has
 // demonstrated, otherwise "needs 8 GB of VRAM" silently matches a node that
 // reported nothing at all.
+//
+// encoderFamilyOf 把编码器归到 h264 / hevc / av1 家族。桌面节点之间仍然要求
+// 精确匹配（libx264 的活不能派给只会 h264_nvenc 的机器，参数不同会拼不上）；
+// 只有 Android 节点例外：它上报的是 h264_mediacodec，产出的是同一种编码格式，
+// 只是参数由硬件决定，所以允许它承接同家族的任务。
+func encoderFamilyOf(name string) string {
+	switch {
+	case strings.Contains(name, "264"), strings.HasPrefix(name, "h264"):
+		return "h264"
+	case strings.Contains(name, "265"), strings.Contains(name, "hevc"):
+		return "hevc"
+	case strings.Contains(name, "av1"):
+		return "av1"
+	}
+	return ""
+}
+
+// canEncode 是 meets 的编码器判定：默认精确匹配，仅移动端做家族等价。
+func (w *Worker) canEncode(vcodec string) bool {
+	if has(w.Encoders, vcodec) {
+		return true
+	}
+	if !strings.HasPrefix(w.OS, "android") {
+		return false
+	}
+	want := encoderFamilyOf(vcodec)
+	if want == "" {
+		return false
+	}
+	for _, enc := range w.Encoders {
+		if strings.HasSuffix(enc, "_mediacodec") && encoderFamilyOf(enc) == want {
+			return true
+		}
+	}
+	return false
+}
+
 func (w *Worker) meets(r Req, vcodec string) bool {
 	if r.NodeID != "" && w.ID != r.NodeID {
 		return false
 	}
 	// render jobs have no target codec; their hard requirement is a runtime
 	// (Blender), which the caller puts in Req.Runtime instead
-	if vcodec != "" && !has(w.Encoders, vcodec) {
+	if vcodec != "" && !w.canEncode(vcodec) {
 		return false
 	}
 	if r.Runtime != "" && !w.hasRuntime(r.Runtime) {
@@ -1392,15 +1429,30 @@ func (s *Server) merge(j *Job) {
 	} else if j.Kind == render.KindBlender || j.Kind == render.KindPR {
 		err = s.mergeRender(j)
 	} else {
-		parts := make([]string, len(j.Segs))
-		for i, seg := range j.Segs {
-			parts[i] = seg.path
-		}
 		dst := filepath.Join(s.dataDir, "jobs", j.ID, "out.mp4")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
+		parts := make([]string, len(j.Segs))
+		for i, seg := range j.Segs {
+			p := seg.path
+			// 移动端只能出 MP4（MediaMuxer 没有 mkv），桌面节点出 MKV。
+			// concat demuxer 要求所有分片同容器，先 -c copy 重封装统一成 mkv，
+			// 比整片重编码便宜得多；重封装失败就退回重编码兜底。
+			if !strings.EqualFold(filepath.Ext(p), ".mkv") {
+				mkv := p + ".remux.mkv"
+				if rerr := ffx.RemuxMKV(ctx, p, mkv); rerr == nil {
+					p = mkv
+				} else {
+					log.Printf("job %s seg %s remux failed: %v", j.ID, seg.ID, rerr)
+				}
+			}
+			parts[i] = p
+		}
 		if err = ffx.Concat(ctx, parts, dst); err == nil {
 			j.out = dst
+		} else if err2 := ffx.ConcatEncode(ctx, parts, dst); err2 == nil {
+			// 编码参数/容器仍不一致时至少让任务能出片
+			j.out, err = dst, nil
 		}
 	}
 	if err != nil {

@@ -439,6 +439,22 @@ func BlackClip(ctx context.Context, dst string, dur float64, width, height int, 
 	return nil
 }
 
+// RemuxMKV rewraps a clip into Matroska without touching the encoded frames.
+// Mobile nodes (Android MediaMuxer) can only write MP4, while desktop workers
+// produce MKV; the concat demuxer needs one container for all slices, and a
+// stream-copy remux is far cheaper than re-encoding the whole job.
+func RemuxMKV(ctx context.Context, src, dst string) error {
+	args := []string{"-hide_banner", "-loglevel", "error", "-y",
+		"-i", src, "-map", "0", "-c", "copy", "-f", "matroska", dst}
+	var errBuf strings.Builder
+	cmd := exec.CommandContext(ctx, Ffmpeg, args...)
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("remux: %v %s", err, tail(errBuf.String(), 600))
+	}
+	return nil
+}
+
 func Concat(ctx context.Context, parts []string, dst string) error {
 	return concatArgs(ctx, parts, dst, []string{"-c", "copy"})
 }
