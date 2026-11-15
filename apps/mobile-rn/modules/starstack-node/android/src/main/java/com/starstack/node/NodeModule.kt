@@ -35,8 +35,12 @@ class NodeModule : Module() {
     }
 
     AsyncFunction("stop") {
-      val ctx = appContext.reactContext ?: return@AsyncFunction
-      ctx.startService(Intent(ctx, NodeService::class.java).apply { action = NodeService.ACTION_STOP })
+      // 不用 return@AsyncFunction：AsyncFunction 的 lambda 期望 Any?，
+      // 提前 return 会得到 Unit 造成类型不匹配。
+      val ctx = appContext.reactContext
+      if (ctx != null) {
+        ctx.startService(Intent(ctx, NodeService::class.java).apply { action = NodeService.ACTION_STOP })
+      }
       Unit
     }
 

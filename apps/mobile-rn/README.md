@@ -54,6 +54,17 @@ npx expo run:android                      # 需要本机 JDK 17 + Android SDK
 
 登录后可改服务器地址；本地联调填 `http://<局域网IP>:8787`。
 
+## 构建注意事项（都踩过）
+
+- **Gradle 发行版走腾讯镜像**：`services.gradle.org` 在国内会中途 reset（实测下到 40% 断流）。
+  `plugins/with-gradle-mirror.js` 会在每次 prebuild 后自动改 `gradle-wrapper.properties`，
+  不要手改，改了也会被 prebuild 覆盖。
+- **只编真机 ABI**：`android/gradle.properties` 里 `reactNativeArchitectures=arm64-v8a`。
+  不限制的话 CMake 要编 4 个 ABI，多花十几分钟。
+- **首次构建要装 NDK**（RN 新架构的 C++，约 1GB），装完走缓存；别以为是卡死。
+- **明文 HTTP**：连本地 `http://<局域网IP>:8787` 需要 `usesCleartextTraffic`，
+  由 `expo-build-properties` 写进 manifest（Android 9+ 默认禁止明文）。
+
 ## 节点启动流程
 
 `/api/worker/hello` 认的是 `X-Launch-Code` / `X-Agent-Token` / `X-Node-Secret`，

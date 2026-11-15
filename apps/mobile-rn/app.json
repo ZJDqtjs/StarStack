@@ -7,6 +7,18 @@
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "plugins": [
+      "./plugins/with-gradle-mirror",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      "expo-sharing"
+    ],
     "ios": {
       "supportsTablet": true
     },

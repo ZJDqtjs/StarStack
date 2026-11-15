@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# 本地原生模块的构建产物（gradle 生成的 dex/class 路径超长，绝不能入库）
+modules/*/android/build/
+modules/*/android/.cxx/

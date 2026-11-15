@@ -102,8 +102,29 @@ class NodeRunner(
       api.report(nodeId, secret, segId, "running", 30)
       onPhase("transcoding", mapOf("segId" to segId, "pct" to 30))
 
-      val ok = withContext(Dispatchers.IO) { SegmentCutter.cut(src, out, start, dur) }
-      if (!ok) throw IllegalStateException("切分失败：源片没有可用视频轨或区间越界")
+      val height = claim.optInt("height", 0)
+      val q = claim.optInt("q", 28)
+      val vcodec = claim.optString("vcodec", "libx264")
+
+      // 优先走 MediaCodec 硬编（真正按 height/codec 改写参数）。
+      // 硬编不可用（老设备、不支持的 profile）时退回 stream copy：
+      // 分辨率不变但链路能出片，Broker 合并时会兜底容器与参数差异。
+      val encoded = withContext(Dispatchers.IO) {
+        MediaCodecTranscoder.transcode(src, out, start, dur, height, q, vcodec)
+      }
+      if (!encoded.ok) {
+        out.delete()
+        val copied = withContext(Dispatchers.IO) { SegmentCutter.cut(src, out, start, dur) }
+        if (!copied) throw IllegalStateException("转码失败：${encoded.message}")
+        onPhase(
+          "transcoding",
+          mapOf(
+            "segId" to segId,
+            "pct" to 70,
+            "lastError" to "已回退 stream copy：${encoded.message}"
+          )
+        )
+      }
 
       api.report(nodeId, secret, segId, "uploading", 80)
       onPhase("uploading", mapOf("segId" to segId, "pct" to 80))

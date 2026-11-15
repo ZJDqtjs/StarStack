@@ -22,7 +22,10 @@ object DeviceCaps {
 
   fun helloInfo(ctx: Context, nodeId: String, name: String, slots: Int, price: Double): JSONObject {
     val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-    val memMb = (am.memoryInfo.totalMem / (1024L * 1024L)).toInt()
+    // ActivityManager 只有 getMemoryInfo(outInfo)，没有 memoryInfo 属性
+    val mi = ActivityManager.MemoryInfo()
+    am.getMemoryInfo(mi)
+    val memMb = (mi.totalMem / (1024L * 1024L)).toInt()
 
     return JSONObject().apply {
       put("id", nodeId)
