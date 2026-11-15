@@ -55,34 +55,54 @@ cd home
 CLOUDFLARE_API_TOKEN=xxx CLOUDFLARE_ACCOUNT_ID=xxx npx --yes wrangler@latest deploy
 ```
 
-## 一次性配置
+## 一次性配置（当前进度）
 
-### 1. GitHub Secrets
+> **2026-11-15 已完成：** Worker `starstack-home` 已部署（`https://starstack-home.3528137639.workers.dev`），
+> `home.starstack.run` custom domain 已绑定且 `curl -I` 返回 200，
+> `CLOUDFLARE_ACCOUNT_ID` 已写入仓库 Secrets，两个 workflow 已在 GitHub 上跑通（CI 全绿）。
+> **唯一剩余步骤：补 `CLOUDFLARE_API_TOKEN`。** 补上后 push 到 `main` 就会自动部署。
 
-仓库 → Settings → Secrets and variables → Actions → New repository secret：
+### 1. 补一个长期 API Token
 
-| Secret | 从哪里拿 |
+到 <https://dash.cloudflare.com/profile/api-tokens> → Create Token，用 **Edit Cloudflare Workers** 模板：
+
+| 权限 | 用途 |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → 用 **Edit Cloudflare Workers** 模板创建，权限至少包含 `Account / Workers Scripts / Edit` |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard 右侧栏，或 `wrangler whoami` |
+| `Account / Workers Scripts / Edit` | `wrangler deploy` 必需 |
+| `Account / Account Settings / Read` | 模板自带 |
+| `Zone / Workers Routes / Edit` 或 `DNS / Edit` | 仅当要让 Wrangler 自己管理 custom domain 才需要；当前配置不需要 |
 
-两个都没配时，CI 的部署步骤会**跳过并给出 warning**，Go 测试和站点校验照常跑，不会把仓库刷成一片红。
-`wrangler.jsonc` 里刻意没有写 `routes` / `custom_domain`，因此 Token 不需要 Zone / DNS 写权限。
+写入仓库 Secrets（或用 `gh secret set CLOUDFLARE_API_TOKEN --repo ZJDqtjs/StarStack`）：
 
-### 2. 绑定自定义域（只需做一次）
+```bash
+# 已配置好本机凭据时，一条命令把部署、域名、Secrets 全部复核一遍：
+CLOUDFLARE_API_TOKEN=xxx bash home/scripts/setup-cloudflare.sh
+```
 
-`deploy/nginx-mc-subdomain.conf` 的注释里写明 `*.starstack.run` 泛解析已由 Cloudflare 覆盖。
-Worker 的 custom domain 会生成一条**更具体**的 `home.starstack.run` 记录，优先级高于泛解析，
-但请先确认泛解析记录是 Proxied（橙色云），且该区域的 SSL 模式保持 **Full / Full (strict)**。
+**别把 `wrangler login` 的 OAuth token 写进 Secrets。** 它带 `expiration_time`（本次授权只有 1 小时），
+且 `POST /user/tokens` 与账户级 token 端点对 OAuth 会话都返回 403，派生不出长期 token。
+写进去的表现是"今天能部署，一小时后开始报 401"。
 
-顺序很重要——先得有 Worker，才能绑域名：
+两个 Secret 没配齐时，CI 的部署步骤会**跳过并给出 warning**，Go 测试和站点校验照常跑，
+不会把仓库刷成一片红。`wrangler.jsonc` 里刻意没有写 `routes` / `custom_domain`，
+因此 Token 不需要 Zone / DNS 写权限。
 
-1. 先让 CI 跑一次（`git push origin main`），或本地手动 `wrangler deploy` 创建 `starstack-home`。
-2. Cloudflare Dashboard → Workers & Pages → `starstack-home` → Settings → Domains & Routes → Add → Custom domain → 填 `home.starstack.run`。
-3. Cloudflare 会自动建 DNS 记录并签发证书，等几十秒到几分钟。
-4. `curl -I https://home.starstack.run/` 应返回 200。
+### 2. 自定义域（已完成，此处留档）
 
-想让 Wrangler 每次部署都自己管理域名也可以：给 Token 补 `Zone:Read` + `DNS:Edit`，
+`deploy/nginx-mc-subdomain.conf` 的注释写明 `*.starstack.run` 泛解析已由 Cloudflare 覆盖。
+实测 `home.starstack.run` 绑定前**没有精确 DNS 记录**，泛解析不冲突；custom domain 是精确匹配，
+优先级高于泛解析。原区域 SSL 模式保持 **Full / Full (strict)** 即可。
+
+绑定用的是 API（不是 Dashboard 手点）：
+
+```bash
+PUT https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/workers/domains
+{ "hostname": "home.starstack.run", "service": "starstack-home",
+  "enabled": true, "zone_id": "$ZONE_ID", "zone_name": "starstack.run" }
+```
+
+复核：`curl -I https://home.starstack.run/` → 200。证书由 Cloudflare 自动签发，无需自己申请。
+想让 Wrangler 每次部署都自己管理域名，给 Token 补 `Zone:Read` + `DNS:Edit`，
 再按 `wrangler.jsonc` 顶部注释把 `routes` 段加回去。
 
 ## 流水线
