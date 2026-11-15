@@ -21,6 +21,25 @@
 - **分页与搜索**：`shared/api.js` 的 `ledger/jobs/forumPosts/offers/conversations` 支持**可选** `limit/offset/q` 参数（不传时响应与旧契约完全一致）；视图当前仍走默认全量，需要大数据量列表时按端接入。
 - 刻意不做（小程序遥控器定位）：生图/生视频 ComfyUI 工作台、服务挂牌发布与买卖会话、云电脑、节点一键接入；移动端 Agent 命中这些意图时给出诚实的降级提示卡片。
 
+### 构建戳：判断「谁落后了」的唯一依据
+
+exe 与鸿蒙 rawfile 内嵌的都是**构建期快照**（`EmbeddedResource` / rawfile），
+web 改了不会自动流过去，而且不会报错。所以每份产物自带一枚戳：
+
+- `web-react/vite.config.js` 与 `apps/vite.config.ts` 用 vite `define` 注入 `__BUILD__`（pkg / sha / time），
+  同时落盘 `dist/build.json`。
+- 桌面端「关于」直接读内嵌的 `web/build.json`，显示这枚 exe 里装的是哪一版网页；
+  web 端在「设置 → 关于构建」。两处戳对不上 = 壳里的网页落后了。
+- `apps/desktop/StarStack.Desktop.csproj` 的 `EnsureWebBuildStamp` target 会拦下没有 `build.json`
+  的旧产物：旧网页无法被静默打进 exe。
+
+> **exe 与鸿蒙都取 `web-react/dist`**（唯一 UI 源）。`apps/mobile` 是 Capacitor 时代的旧界面，
+> 已废弃，不再被任何交付形态内嵌；`apps/android` 与 `capacitor.config.ts` 仅作历史保留。
+
+校验命令：`npm --prefix apps run verify:sync`（CI 里是 `多端控制台同步检查` job）。
+它按 **L0 交易主链**（登录/余额/提交/进度/下载/账单）逐端打分，并检查废弃 UI 有没有
+继续给交付形态供血（csproj 内嵌路径、鸿蒙 rawfile 来源、Capacitor 工程、发布流水线）。
+
 ## 目录
 
 ```
@@ -113,8 +132,11 @@ cd apps && npx tsc --noEmit && npm run build
 
 - 提交：控制台「提交任务 → 编译打包」，或 `POST /api/jobs/build`（multipart：file / command / output / timeout / req）。
 - 能力匹配：节点必须以 `--allow-build` 启动并上报 `build` 运行时，调度器只会把编译任务派给这类节点；转码/渲染仍按编码器与运行时匹配。
-- 白名单：broker 以 `--allow-build --build-users a,b`（或 `STARSTACK_BUILD_USERS`）开启，未列名的账号无法提交。
-- 缺环境自动补齐：启动脚本会为白名单账号自动加 `--allow-build --auto-provision`；任务脚本也可自行引导安装（参考本次桌面端 `build.cmd` 安装 .NET SDK 到 `%LOCALAPPDATA%\starstack-sdk`）。
+- 三方同意，各管一段（别再混成一张名单）：
+  - **部署**：broker 带 `--allow-build` 才提供编译任务；不带时 mint 启动码会直接拒绝「接受编译任务」的请求。
+  - **机主**：网页「我的节点」创建节点时勾选「接受编译任务」（等价手工加 `--allow-build`），决定**这台机器**愿不愿意跑别人的命令；不勾就是纯转码/渲染节点。
+  - **买方**：`--build-users a,b`（或 `STARSTACK_BUILD_USERS`）决定谁能提交源码。名单为空 = 没人能提交（`POST /api/jobs/build` 返回 403），但节点照样可以声明愿意接。
+- 缺环境自动补齐：同意编译的启动包会同时带 `--auto-provision`（安装 .NET SDK 等）；任务脚本也可自行引导安装（参考本次桌面端 `build.cmd` 安装 .NET SDK 到 `%LOCALAPPDATA%\starstack-sdk`）。
 - 产物：`GET /download/<job-id>`，zip 内含 `build.log`。
 
 本次桌面端就是用这条链路构建的：源码包 → 1145 节点 → `dotnet publish` → `result.zip` → 在本机安装。

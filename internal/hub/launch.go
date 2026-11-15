@@ -122,6 +122,21 @@ func (s *Server) mintLaunch(u *store.User, req launchReq) (*launchTicket, string
 	if req.Slots < 1 || req.Slots > s.policy.MaxSlots {
 		return nil, "并发槽数需在 1 ~ " + strconv.Itoa(s.policy.MaxSlots) + " 之间"
 	}
+	// Build consent is the provider's, not the operator's: compile jobs run
+	// buyer-supplied commands as this machine's user, and only the person who
+	// owns the machine can weigh that. The broker's --allow-build is a separate
+	// deployment switch (does this platform offer compile jobs at all), and the
+	// submit allowlist is a third thing (who may upload source). Asking the
+	// provider here is what keeps the launcher honest without making the
+	// operator's list decide what a stranger's machine is willing to do.
+	allowBuild := s.policy.buildAllowed(u.Name)
+	if req.AllowBuild != nil {
+		allowBuild = *req.AllowBuild
+	}
+	if allowBuild && !s.policy.AllowBuild {
+		return nil, "本部署未开放编译任务"
+	}
+	allowBuild = allowBuild && s.policy.AllowBuild
 	vmMax, bridge, uplink := 0, "", ""
 	if req.VM {
 		vmMax = req.VMMax
@@ -188,10 +203,11 @@ func (s *Server) mintLaunch(u *store.User, req launchReq) (*launchTicket, string
 		Name: name, Price: req.Price, Slots: req.Slots,
 		OS: goos, Arch: arch, ExpireAt: time.Now().Add(launchTTL),
 		VM: req.VM, VMMax: vmMax, VMBridge: bridge, VMUplink: uplink,
+		AllowBuild: allowBuild,
 	}
 	s.launches[t.Code] = t
-	log.Printf("launch ticket %s minted for node %s by user %s (%s/%s, %.2f 点/秒, %d 槽, vm=%v max=%d bridge=%q)",
-		t.Code, t.NodeID, u.Name, t.OS, t.Arch, t.Price, t.Slots, t.VM, t.VMMax, t.VMBridge)
+	log.Printf("launch ticket %s minted for node %s by user %s (%s/%s, %.2f 点/秒, %d 槽, vm=%v max=%d bridge=%q, build=%v)",
+		t.Code, t.NodeID, u.Name, t.OS, t.Arch, t.Price, t.Slots, t.VM, t.VMMax, t.VMBridge, t.AllowBuild)
 	return t, ""
 }
 
@@ -275,6 +291,12 @@ type launchReq struct {
 	VMMax    int     `json:"vm_max"`
 	VMBridge string  `json:"vm_bridge"`
 	VMUplink string  `json:"vm_uplink"`
+	// AllowBuild is the provider's own answer to "may this machine run buyer
+	// commands?". A pointer, because "the console never asked" and "the provider
+	// said no" must not look the same: nil keeps the old behaviour (the account
+	// allowlist decides) so an older console and the desktop bridge still work,
+	// while an explicit true/false is taken at face value.
+	AllowBuild *bool `json:"allow_build"`
 }
 
 func (s *Server) handleLaunchMint(w http.ResponseWriter, r *http.Request) {
@@ -296,7 +318,8 @@ func (s *Server) handleLaunchMint(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, jsonErr(why), http.StatusBadRequest)
 		return
 	}
-	t.AllowBuild = s.policy.buildAllowed(u.Name)
+	// The provider's build consent was settled in mintLaunch from the request
+	// itself; nothing here overrides it from the account list any more.
 	bin := nodeBinName(t.OS, t.Arch)
 	ready := s.nodeBinReady(t.OS, t.Arch)
 	if !ready {
@@ -311,6 +334,9 @@ func (s *Server) handleLaunchMint(w http.ResponseWriter, r *http.Request) {
 		"bundle":         "/launch/" + t.Code + "/" + t.OS + "/" + t.Arch + "?format=bundle",
 		"worker":         "/dl/" + bin, "ready": ready,
 		"vm": t.VM, "vm_max": t.VMMax,
+		// echoed back so the console can say "this node will / won't accept
+		// compile jobs" instead of leaving the provider to discover it in a log
+		"build": t.AllowBuild,
 	})
 }
 

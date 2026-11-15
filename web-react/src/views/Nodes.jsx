@@ -4,9 +4,21 @@ import { nav } from '../App.jsx'
 import { Card, Btn, Tag, Empty, Stat, Field } from '../ui.jsx'
 import { api, post, href, f1, f2 } from '../api.js'
 
+// 设备系统标签：windows_x64 / linux_arm64 / darwin_x64 …
+// os 在 state 里是 "windows/amd64" 这样的组合值，arch 单独给，两者都兜底。
+const sysTag = w => {
+  const raw = String(w?.os || '').toLowerCase()
+  const [osPart, archPart] = raw.split('/')
+  const os = (osPart || '').trim()
+  let arch = String(w?.arch || archPart || '').toLowerCase().trim()
+  if (arch === 'amd64' || arch === 'x86_64' || arch === 'x64') arch = 'x64'
+  else if (arch === 'arm64' || arch === 'aarch64') arch = 'arm64'
+  return [os, arch].filter(Boolean).join('_') || '未知系统'
+}
+
 export default function Nodes() {
   const { workers, policy, contrib, toast, confirm, prompt } = useApp()
-  const [l, setL] = useState({ name: '', price: '0.80', slots: 2, os: 'windows', arch: 'amd64' })
+  const [l, setL] = useState({ name: '', price: '0.80', slots: 2, os: 'windows', arch: 'amd64', build: false })
   const [lMsg, setLMsg] = useState('')
   const [code, setCode] = useState('')
   const [pairMsg, setPairMsg] = useState('')
@@ -26,14 +38,53 @@ export default function Nodes() {
   const dup = {}
   ;((contrib || {}).nodes || []).forEach(n => { if (n.duplicate) dup[n.id] = true })
 
+  // 桌面端的 WebView2 宿主：只有在 exe 里才存在。它能直接在本机拉起 worker，
+  // 不需要下载节点包；网页端没有这个对象，相关 UI 也就不渲染。
+  const host = (typeof window !== 'undefined' && window.chrome && window.chrome.webview) || null
+  const [hostState, setHostState] = useState(null)
+  const [hostLog, setHostLog] = useState([])
+  useEffect(() => {
+    if (!host) return
+    const onMsg = ev => {
+      const d = ev.data
+      if (!d || typeof d !== 'object') return
+      if (d.kind === 'node.state') {
+        setHostState(d)
+        if (Array.isArray(d.tail) && d.tail.length) setHostLog(d.tail.slice(-40))
+      } else if (d.kind === 'node.log') {
+        setHostLog(prev => [...prev.slice(-39), String(d.line)])
+      }
+    }
+    host.addEventListener('message', onMsg)
+    host.postMessage({ kind: 'node.state' })
+    return () => host.removeEventListener('message', onMsg)
+  }, [host])
+
+  const runLocal = async () => {
+    if (!(+l.price >= 0.05)) { setLMsg('单价至少 0.05 算力点 / 视频秒'); return }
+    if (!(+l.slots >= 1)) { setLMsg('并发槽至少 1 个'); return }
+    const name = l.name.trim() || '桌面节点'
+    setLMsg('正在生成启动码…')
+    try {
+      // 与下载节点包同一个接口：先拿到绑定了账号的启动码，再交给主进程拉起 worker。
+      const d = await post('/api/nodes/launch', { name, price: +l.price, slots: +l.slots, os: l.os, arch: l.arch, allow_build: !!l.build })
+      // server 留空：页面看到的是本地反代地址，真实 Broker 由主进程补齐。
+      host.postMessage({
+        kind: 'node.run',
+        payload: { server: '', nodeId: d.node_id, name, price: +l.price, slots: +l.slots, launch: d.code, allowBuild: !!d.build }
+      })
+      setLMsg('已请求在本机启动节点 ' + d.node_id + '：关掉窗口或点「停止」即停止接活。' + (d.build ? '（含编译任务）' : ''))
+    } catch (e) { setLMsg('启动失败：' + e) }
+  }
+
   const launch = async () => {
     if (!(+l.price >= 0.05)) { setLMsg('单价至少 0.05 算力点 / 视频秒'); return }
     if (!(+l.slots >= 1)) { setLMsg('并发槽至少 1 个'); return }
     setLMsg('正在生成启动码…')
     try {
-      const d = await post('/api/nodes/launch', { name: l.name.trim(), price: +l.price, slots: +l.slots, os: l.os, arch: l.arch })
+      const d = await post('/api/nodes/launch', { name: l.name.trim(), price: +l.price, slots: +l.slots, os: l.os, arch: l.arch, allow_build: !!l.build })
       const a = document.createElement('a'); a.href = href(d.bundle || d.script); a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove()
-      setLMsg('节点包正在下载（' + d.node_id + '，' + Math.max(1, Math.round(d.expires_in_sec / 60)) + ' 分钟内有效）。解压后双击 starstack-node.exe 即可加入。')
+      setLMsg('节点包正在下载（' + d.node_id + '，' + Math.max(1, Math.round(d.expires_in_sec / 60)) + ' 分钟内有效）。解压后双击 starstack-node.exe 即可加入。' + (d.build ? '本机会接编译任务。' : ''))
       toast('节点包已生成，拷到目标机器运行即可', 'ok')
     } catch (e) { setLMsg('生成失败：' + e) }
   }
@@ -71,8 +122,31 @@ export default function Nodes() {
             <Field label="那台机器的系统"><select value={l.os} onChange={e => setL({ ...l, os: e.target.value })}><option value="windows">Windows</option><option value="linux">Linux</option><option value="darwin">macOS</option></select></Field>
             <Field label="芯片"><select value={l.arch} onChange={e => setL({ ...l, arch: e.target.value })}><option value="amd64">x86_64 / Intel·AMD</option><option value="arm64">arm64 / 苹果 M 系</option></select></Field>
           </div>
+          {policy && policy.allow_build && (
+            <label className="check">
+              <input type="checkbox" checked={!!l.build} onChange={e => setL({ ...l, build: e.target.checked })} />
+              <span><b>接受编译任务</b><br />这台机器会执行买家上传的编译命令——以你的用户身份、在你的磁盘上跑。不同意就不勾，只接转码 / 渲染。</span>
+            </label>
+          )}
           <div className="formfoot"><Btn onClick={launch} disabled={policy && !policy['launch_' + l.os]}>下载节点包（exe + 配置）</Btn></div>
           <div className="hint">{lMsg}</div>
+          {host && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+              <div className="hint" style={{ marginTop: 0 }}>
+                本机节点：{hostState && hostState.running ? '运行中' : hostState && hostState.starting ? '启动中…' : '未运行'}
+                {hostState && hostState.nodeId ? ' · ' + hostState.nodeId : ''}
+                {hostState && hostState.pid ? ' · PID ' + hostState.pid : ''}
+                　桌面端可在本机直接开节点，不用下载节点包。
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                <Btn onClick={runLocal} disabled={hostState && (hostState.running || hostState.starting)}>在本机直接运行</Btn>
+                <Btn ghost disabled={!hostState || !hostState.running} onClick={() => host.postMessage({ kind: 'node.stop' })}>停止本机节点</Btn>
+              </div>
+              {hostLog.length > 0 && (
+                <pre style={{ marginTop: 10, maxHeight: 130, overflow: 'auto', fontSize: 12 }}>{hostLog.join('\n')}</pre>
+              )}
+            </div>
+          )}
           {policy && !policy['launch_' + l.os] && <div className="hint warn">这台 Broker 还没有对应平台的节点程序，一键启动暂不可用；可用下面的手动方式。</div>}
           <details style={{ marginTop: 18 }}>
             <summary className="hint" style={{ cursor: 'pointer' }}>高级用法：手动运行 Provider Agent</summary>
@@ -100,7 +174,7 @@ export default function Nodes() {
             return (
               <div className="card" key={w.id} style={{ marginBottom: 10, padding: '16px 18px' }}>
                 <h2 style={{ marginBottom: 10 }}>{w.name || w.id} <Tag tone={w.online ? 'on' : 'off'}>{w.online ? '在线' : '离线'}</Tag>
-                  {w.paused && <Tag>已暂停</Tag>}{dup[w.id] && <Tag tone="warn">同设备重复节点</Tag>}{!w.device_id && <Tag tone="warn">旧版节点</Tag>}</h2>
+                  <Tag>{sysTag(w)}</Tag>{w.paused && <Tag>已暂停</Tag>}{dup[w.id] && <Tag tone="warn">同设备重复节点</Tag>}{!w.device_id && <Tag tone="warn">未采集设备指纹</Tag>}</h2>
                 <div className="stats" style={{ marginTop: 0 }}>
                   <Stat v={f2(w.earned || 0)} l="节点贡献（点）" />
                   <Stat v={f2(w.earned_task || 0)} l="其中：任务算力" />

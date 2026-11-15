@@ -1904,6 +1904,10 @@ tr.tap{cursor:pointer}
           <select id="larch"><option value="amd64">x86_64 / Intel·AMD</option>
             <option value="arm64">arm64 / 苹果 M 系·麒麟</option></select></div>
       </div>
+      <label id="buildbox" style="display:none;margin-top:14px;padding:12px 14px;border:1px solid rgba(0,0,0,.09);border-radius:10px;gap:10px;align-items:flex-start;cursor:pointer;font-weight:400">
+        <input type="checkbox" id="lbuild" style="width:auto;margin-top:2px">
+        <span><b>接受编译任务</b><br>这台机器会执行买家上传的编译命令——以你的用户身份、在你的磁盘上跑。不同意就不勾，只接转码 / 渲染。</span>
+      </label>
       <div class="formfoot"><button class="btn" id="launchbtn">下载节点包（exe + 配置）</button></div>
       <div id="launchmsg" class="hint" role="status"></div>
       <div id="launchwarn" class="hint warn"></div>
@@ -2374,6 +2378,9 @@ function applyPolicy(){
   $('#pathbox').style.display=(POL.local_path&&!render)?'block':'none';
   $('#baselinebox').style.display=(POL.public||render)?'none':'flex';
   $('#pendingbox').style.display=POL.pending?'block':'none';
+  // 编译任务的同意权在机主手里：只有部署开了这个任务类型才让勾
+  const lb=$('#buildbox');
+  if(lb)lb.style.display=POL.allow_build?'flex':'none';
   const tok=POL.public?' \\\n  --token <运维分配的接入令牌>':'';
   $('#agentcmd').textContent=
     'starstack-worker --server '+(location.origin+BASE)+' \\\n  --name 我的旧台式机 --price 0.8'+tok;
@@ -3760,7 +3767,8 @@ $('#chat-body').addEventListener('keydown',e=>{
 $('#launchbtn').onclick=async()=>{
   const msg=$('#launchmsg'),btn=$('#launchbtn');
   const body={name:$('#lname').value.trim(),price:+$('#lprice').value,slots:+$('#lslots').value,
-    os:$('#los').value,arch:$('#larch').value};
+    os:$('#los').value,arch:$('#larch').value,
+    allow_build:!!($('#lbuild')&&$('#lbuild').checked)};
   if(!(body.price>=0.05)){msg.textContent='单价至少 0.05 算力点 / 视频秒';return}
   if(!(body.slots>=1)){msg.textContent='并发槽至少 1 个';return}
   btn.disabled=true;msg.textContent='正在生成启动码…';
@@ -3772,6 +3780,7 @@ $('#launchbtn').onclick=async()=>{
     msg.innerHTML='节点包正在下载（'+esc(d.node_id)+'，'+mins+' 分钟内有效，只能用一次）。'+
       '解压后直接双击里面的 starstack-node.exe 即可加入，配置已经在包里；'+
       '关掉窗口就是停止提供算力，下次重新双击还会是这台机器。'+
+      (d.build?'<br><b>本机会接编译任务</b>：买家的编译命令会以你的用户身份在本机执行。':'')+
       '<br><a href="'+BASE+d.script+'">启动脚本（备选）</a>：需要自定义 QEMU、工作目录或手动参数时再用。'+
       (d.ready?'':'<br><span class="warn">注意：这台 Broker 上还没有 '+esc(d.worker)+'，节点包无法生成，需要运维先把对应平台的二进制放到 --node-bin-dir。</span>');
     toast('节点包已生成，拷到目标机器运行即可','ok');

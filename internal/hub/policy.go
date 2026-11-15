@@ -353,10 +353,14 @@ func (s *Server) countLiveJobsLocked(uid string) int {
 	return n
 }
 
-// buildAllowed gates the compile job kind twice: the deployment must turn it on
-// and the account must be named. An empty BuildUsers list therefore means "nobody",
-// never "everybody" — a public broker must not hand arbitrary command execution
-// to every freshly registered account.
+// buildAllowed answers one narrow question: may this account UPLOAD source to be
+// compiled? It is a spending/abuse gate on the buyer side and has nothing to say
+// about which machine runs the command — that consent belongs to the provider
+// and is captured per node at launch time (see launchReq.AllowBuild).
+//
+// Empty BuildUsers therefore means "nobody may submit", never "everybody": a
+// public broker must not hand arbitrary command execution to every freshly
+// registered account.
 func (p Policy) buildAllowed(userName string) bool {
 	if !p.AllowBuild || len(p.BuildUsers) == 0 {
 		return false

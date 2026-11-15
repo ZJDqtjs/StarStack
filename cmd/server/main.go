@@ -113,8 +113,13 @@ func main() {
 			}
 		}
 		if len(pol.BuildUsers) == 0 {
-			log.Printf("警告：--allow-build 未配置 --build-users（或 STARSTACK_BUILD_USERS），编译任务保持关闭")
-			pol.AllowBuild = false
+			// Not fatal any more: providers may still opt their machines in (the
+			// launcher carries --allow-build), there is simply nobody allowed to
+			// upload source yet. Turning the whole feature off here used to make
+			// every downloaded bundle silently say build=false, which is
+			// indistinguishable from "the provider declined".
+			log.Printf("提示：--allow-build 已开，但没有 --build-users（或 STARSTACK_BUILD_USERS）：" +
+				"节点可以接编译任务，当前没有账号能提交编译任务")
 		} else {
 			log.Printf("build jobs enabled for: %s", strings.Join(pol.BuildUsers, ", "))
 		}

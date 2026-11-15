@@ -1,9 +1,12 @@
 package hub
 
 import (
+	"archive/zip"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -438,5 +441,146 @@ func TestDeviceIdentityAndNodeDeletion(t *testing.T) {
 	}
 	if again, _ := s.st.NodesByOwner("u-owner"); len(again) != 1 {
 		t.Fatalf("rejoin should leave one node, got %d", len(again))
+	}
+}
+
+// TestBuildConsentBelongsToTheProvider pins the split that used to be a single
+// allowlist: an account's presence in --build-users is a statement about who may
+// SUBMIT source for compilation, not about what a stranger's machine is willing
+// to execute. The provider answers that in the console, and the deployment can
+// still refuse to offer the job kind at all.
+func TestBuildConsentBelongsToTheProvider(t *testing.T) {
+	setup := func(t *testing.T, allowBuild bool, users ...string) (*Server, *http.Cookie) {
+		p := DefaultPolicy()
+		p.AllowBuild = allowBuild
+		p.BuildUsers = users
+		s := newTestServer(t, p)
+		return s, asUser(t, s, "vendor")
+	}
+	mint := func(t *testing.T, s *Server, ck *http.Cookie, body map[string]any) (*httptest.ResponseRecorder, string) {
+		t.Helper()
+		b, _ := json.Marshal(body)
+		rec := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/api/nodes/launch", strings.NewReader(string(b)))
+		r.AddCookie(ck)
+		s.handleLaunchMint(rec, r)
+		var out struct {
+			Code  string `json:"code"`
+			Build bool   `json:"build"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		if out.Code != "" {
+			s.mu.Lock()
+			if tk := s.launches[out.Code]; tk != nil && tk.AllowBuild != out.Build {
+				t.Errorf("mint response says build=%v, ticket says %v", out.Build, tk.AllowBuild)
+			}
+			s.mu.Unlock()
+		}
+		return rec, out.Code
+	}
+	base := map[string]any{"price": 0.8, "slots": 2, "os": "windows", "arch": "amd64"}
+
+	// The deployment offers compile jobs, the account is NOT on the submit
+	// allowlist, and the provider ticks the box: the ticket must say yes.
+	s, ck := setup(t, true, "buyer")
+	body := map[string]any{"allow_build": true}
+	for k, v := range base {
+		body[k] = v
+	}
+	rec, code := mint(t, s, ck, body)
+	if rec.Code != 200 {
+		t.Fatalf("mint: %d %s", rec.Code, rec.Body.String())
+	}
+	s.mu.Lock()
+	tk := s.launches[code]
+	s.mu.Unlock()
+	if tk == nil || !tk.AllowBuild {
+		t.Fatalf("a machine that volunteered must get a build launcher: %+v", tk)
+	}
+	rec = httptest.NewRecorder()
+	s.handleLaunchScript(rec, httptest.NewRequest("GET", "/launch/"+code+"/windows/amd64", nil))
+	script := rec.Body.String()
+	if !strings.Contains(script, "--allow-build") || !strings.Contains(script, "--auto-provision") {
+		t.Fatalf("launcher does not carry the build flags:/n%s", script)
+	}
+
+	// The bundle's config is what a double-clicked exe actually reads.
+	dir := t.TempDir()
+	s.SetNodeBinDir(dir)
+	if err := os.WriteFile(filepath.Join(dir, "starstack-worker-windows-amd64.exe"), []byte("bin"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, code2 := mint(t, s, ck, body)
+	rec = httptest.NewRecorder()
+	s.handleLaunchScript(rec, httptest.NewRequest("GET",
+		"/launch/"+code2+"/windows/amd64?format=bundle", nil))
+	if rec.Code != 200 {
+		t.Fatalf("bundle: %d %s", rec.Code, rec.Body.String())
+	}
+	zr, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	if err != nil {
+		t.Fatalf("bundle is not a zip: %v", err)
+	}
+	found := false
+	for _, f := range zr.File {
+		if f.Name != "starstack-node.json" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := io.ReadAll(rc)
+		rc.Close()
+		found = true
+		var cfg struct {
+			AllowBuild    *bool `json:"allow_build"`
+			AutoProvision *bool `json:"auto_provision"`
+		}
+		if err := json.Unmarshal(raw, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AllowBuild == nil || !*cfg.AllowBuild || cfg.AutoProvision == nil || !*cfg.AutoProvision {
+			t.Fatalf("bundle config does not record the consent: %s", raw)
+		}
+	}
+	if !found {
+		t.Fatal("bundle has no starstack-node.json")
+	}
+
+	// An explicit "no" is honoured even for an allowlisted account — the old
+	// rule would have forced build=true on them.
+	s2, ck2 := setup(t, true, "vendor")
+	body = map[string]any{"allow_build": false}
+	for k, v := range base {
+		body[k] = v
+	}
+	_, code3 := mint(t, s2, ck2, body)
+	s2.mu.Lock()
+	tk3 := s2.launches[code3]
+	s2.mu.Unlock()
+	if tk3 == nil || tk3.AllowBuild {
+		t.Fatalf("an allowlisted provider still said no: %+v", tk3)
+	}
+
+	// No field at all (older console, desktop bridge): keep the historical
+	// behaviour rather than silently widening consent.
+	_, code4 := mint(t, s2, ck2, base)
+	s2.mu.Lock()
+	tk4 := s2.launches[code4]
+	s2.mu.Unlock()
+	if tk4 == nil || !tk4.AllowBuild {
+		t.Fatalf("a legacy request must fall back to the allowlist: %+v", tk4)
+	}
+
+	// The deployment has not turned the job kind on: asking for it is an error,
+	// not a silent consent.
+	s3, ck3 := setup(t, false, "vendor")
+	body = map[string]any{"allow_build": true}
+	for k, v := range base {
+		body[k] = v
+	}
+	if rec, _ := mint(t, s3, ck3, body); rec.Code != 400 {
+		t.Fatalf("build opt-in on a broker without --allow-build = %d, want 400", rec.Code)
 	}
 }

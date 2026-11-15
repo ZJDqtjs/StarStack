@@ -17,6 +17,18 @@ public partial class MainWindow : Window
     private readonly AssetServer _server = new();
     private string _baseUrl = string.Empty;
 
+    // 内嵌的控制台（web-react）接口走同源相对路径，而本地静态服务器上没有后端。
+    // 这些前缀由主进程反代到 Broker：同源转发顺带绕开 CORS 与 Cookie Domain 的问题。
+    private static readonly string[] ProxyPrefixes = { "api/", "v1/", "download/", "dl/", "launch/", "comfy/" };
+    private const string DefaultBroker = "https://starstack.run";
+
+    private CoreWebView2Environment? _env;
+    private string _brokerBase = DefaultBroker;
+
+    private static string BrokerFile => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "StarStack", "broker.txt");
+
     // The console page can lend this machine's compute without the downloaded
     // node package: the worker is started as a child process (from next to this
     // exe, or fetched once and cached), so closing the console stops sharing and
@@ -64,12 +76,21 @@ public partial class MainWindow : Window
 
         var environment = await CoreWebView2Environment.CreateAsync(null, dataFolder);
         await Web.EnsureCoreWebView2Async(environment);
+        _env = environment;
+        _brokerBase = LoadBrokerBase();
 
         var core = Web.CoreWebView2;
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.AreDevToolsEnabled = true;
         core.Settings.AreDefaultContextMenusEnabled = true;
         core.Settings.AreBrowserAcceleratorKeysEnabled = true;
+
+        // 把 /api、/v1、/download 等前缀接到 Broker，页面本身还是同源的本地资源。
+        foreach (var prefix in ProxyPrefixes)
+        {
+            core.AddWebResourceRequestedFilter(_baseUrl + prefix + "*", CoreWebView2WebResourceContext.All);
+        }
+        core.WebResourceRequested += OnProxyRequest;
 
         core.WebMessageReceived += (_, args) => OnWebMessage(args);
 
@@ -141,6 +162,9 @@ public partial class MainWindow : Window
             if (root.ValueKind != JsonValueKind.Object) return;
             switch (GetString(root, "kind"))
             {
+                case "broker":
+                    SetBrokerBase(GetString(root, "base"));
+                    break;
                 case "node.state":
                     PostState();
                     break;
@@ -163,6 +187,147 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// 把控制台发往 /api、/v1、/download 的请求转发给 Broker。
+    /// 页面与反代同源，所以浏览器侧既不触发 CORS 预检，也不必为不同 origin 维护 Cookie；
+    /// 认证走页面自带的 Authorization: Bearer（后端同时支持 Cookie 与 Bearer）。
+    /// </summary>
+    private async void OnProxyRequest(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        var env = _env;
+        if (env is null) return;
+
+        var deferral = e.GetDeferral();
+        try
+        {
+            var uri = new Uri(e.Request.Uri);
+            var target = new Uri(new Uri(_brokerBase), uri.PathAndQuery);
+            using var request = new HttpRequestMessage(new HttpMethod(e.Request.Method), target);
+
+            var contentHeaders = new List<KeyValuePair<string, string>>();
+            foreach (var header in e.Request.Headers)
+            {
+                if (IsHopByHop(header.Key)) continue;
+                // Content-Length 交给 StreamContent 算，透传反而容易和实际长度打架
+                if (header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!request.Headers.TryAddWithoutValidation(header.Key, header.Value))
+                {
+                    contentHeaders.Add(new KeyValuePair<string, string>(header.Key, header.Value));
+                }
+            }
+
+            if (e.Request.Content is { } body)
+            {
+                var content = new StreamContent(body);
+                foreach (var kv in contentHeaders) content.Headers.TryAddWithoutValidation(kv.Key, kv.Value);
+                if (body.CanSeek) content.Headers.ContentLength = body.Length;
+                request.Content = content;
+            }
+
+            // ResponseHeadersRead：视频产物动辄几百 MB，不能整包读进内存。
+            // 不能用 using 释放 response —— body 流要留给 WebView 读完，
+            // 方法一返回就 Dispose 会把下载/上传直接截断。
+            var response = await Http
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead)
+                .ConfigureAwait(true);
+            var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(true);
+
+            var headers = new StringBuilder();
+            foreach (var h in response.Headers)
+            {
+                if (IsHopByHop(h.Key)) continue;
+                headers.Append(h.Key).Append(": ").Append(string.Join(", ", h.Value)).Append("\r\n");
+            }
+            foreach (var h in response.Content.Headers)
+            {
+                if (h.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)) continue;
+                headers.Append(h.Key).Append(": ").Append(string.Join(", ", h.Value)).Append("\r\n");
+            }
+            // 长度单独补：下载几百 MB 的产物时，没有 Content-Length 页面就画不出进度，
+            // 也容易在流结束时被判成截断。
+            if (response.Content.Headers.ContentLength is { } length)
+            {
+                headers.Append("Content-Length: ").Append(length).Append("\r\n");
+            }
+
+            // 注意：这里的 stream 不能提前释放，WebView 会在事件返回后继续读。
+            e.Response = env.CreateWebResourceResponse(
+                stream, (int)response.StatusCode, response.ReasonPhrase ?? string.Empty, headers.ToString());
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                e.Response = env.CreateWebResourceResponse(
+                    new MemoryStream(Encoding.UTF8.GetBytes("反代失败：" + ex.Message)),
+                    502, "Bad Gateway", "Content-Type: text/plain; charset=utf-8\r\n");
+            }
+            catch
+            {
+                // 连错误响应都写不进去，只能让页面自己超时
+            }
+        }
+        finally
+        {
+            deferral.Complete();
+        }
+    }
+
+    private static bool IsHopByHop(string name) =>
+        name.Equals("Connection", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("Keep-Alive", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("Upgrade", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("Proxy-Connection", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("TE", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("Trailer", StringComparison.OrdinalIgnoreCase);
+
+    private static string LoadBrokerBase()
+    {
+        try
+        {
+            if (File.Exists(BrokerFile))
+            {
+                var text = File.ReadAllText(BrokerFile).Trim().TrimEnd('/');
+                if (Uri.TryCreate(text, UriKind.Absolute, out var uri) &&
+                    (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                {
+                    return text;
+                }
+            }
+        }
+        catch
+        {
+            // 配置读不出来就用默认值，不能因为这个起不来
+        }
+        return DefaultBroker;
+    }
+
+    private void SetBrokerBase(string raw)
+    {
+        var text = (raw ?? string.Empty).Trim().TrimEnd('/');
+        if (text.Length == 0) text = DefaultBroker;
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            MessageBox.Show("服务器地址不合法，保持当前设置：" + _brokerBase, "星栈算力",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        _brokerBase = text;
+        try
+        {
+            var dir = Path.GetDirectoryName(BrokerFile);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(BrokerFile, text);
+        }
+        catch
+        {
+            // 写不进去只影响下次启动的默认值，本次运行用的仍是新地址
+        }
+    }
+
     private async Task StartWorkerAsync(JsonElement payload)
     {
         if (_starting)
@@ -177,12 +342,18 @@ public partial class MainWindow : Window
             return;
         }
 
+        // 页面只知道自己的同源地址（127.0.0.1 的自助服务），反代目标在主进程这边，
+        // 所以 server 允许留空，用主进程的 Broker 地址补齐。
         var server = GetString(payload, "server").Trim().TrimEnd('/');
+        if (server.Length == 0) server = _brokerBase;
         var nodeId = GetString(payload, "nodeId").Trim();
         var launch = GetString(payload, "launch").Trim();
         var name = CleanName(GetString(payload, "name"));
         var price = GetNumber(payload, "price");
         var slots = (int)GetNumber(payload, "slots");
+        // The provider ticked "接受编译任务" on the page and the broker confirmed
+        // it; without that, the worker must not advertise a build runtime.
+        var allowBuild = GetBool(payload, "allowBuild");
 
         // These values end up as process arguments, so validate rather than trust:
         // the launch code is a capability and the node id names a cache directory.
@@ -220,7 +391,7 @@ public partial class MainWindow : Window
             // checksum, so later starts are offline.
             var worker = FindLocalWorker() ?? await EnsureWorkerAsync(server, ct);
             ct.ThrowIfCancellationRequested();
-            LaunchWorker(worker, server, nodeId, name, price, slots, launch, work);
+            LaunchWorker(worker, server, nodeId, name, price, slots, launch, work, allowBuild);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -244,7 +415,7 @@ public partial class MainWindow : Window
     }
 
     private void LaunchWorker(string worker, string server, string nodeId, string name,
-        double price, int slots, string launch, string work)
+        double price, int slots, string launch, string work, bool allowBuild)
     {
         var psi = new ProcessStartInfo(worker)
         {
@@ -270,6 +441,14 @@ public partial class MainWindow : Window
         Arg("--price", price.ToString("0.##", CultureInfo.InvariantCulture));
         Arg("--slots", slots.ToString(CultureInfo.InvariantCulture));
         Arg("--work", work);
+        if (allowBuild)
+        {
+            // Same pairing the downloaded launcher uses: consenting to run buyer
+            // commands is also consenting to provision the missing toolchain,
+            // which beats a first compile failing on "dotnet not found".
+            psi.ArgumentList.Add("--allow-build");
+            psi.ArgumentList.Add("--auto-provision");
+        }
 
         var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
         proc.OutputDataReceived += (_, ev) => { if (ev.Data is not null) OnWorkerLine(ev.Data); };
@@ -458,6 +637,12 @@ public partial class MainWindow : Window
     private static double GetNumber(JsonElement obj, string name) =>
         obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var d) ? d : 0;
 
+    // Only a literal true counts: the page echoes back what the broker decided,
+    // and a missing or malformed field must never be read as consent to run
+    // buyer-supplied commands.
+    private static bool GetBool(JsonElement obj, string name) =>
+        obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;
+
     // Mirrors the broker's ticket-name sanitiser so the two never disagree about
     // what is a legal display name.
     private static string CleanName(string raw)
@@ -521,13 +706,42 @@ public partial class MainWindow : Window
     private void About_Click(object sender, RoutedEventArgs e)
     {
         MessageBox.Show(
-            "星栈算力 桌面端 v1.0\n\n" +
+            "星栈算力 桌面端 v1.1\n\n" +
             "React + WPF WebView2，控制台资源内嵌在程序里，不依赖远程网页。\n" +
-            "账号、任务、算力市场与账单与网页端一致。\n\n" +
+            WebBuildLine() + "\n\n" +
+            "这枚戳比网页端「设置 → 关于构建」旧，就说明 exe 内嵌的还是旧快照，\n" +
+            "需要重新发布，不会自动同步。\n\n" +
+            $"平台地址：{_brokerBase}\n" +
             $"本地控制台：{(_baseUrl.Length > 0 ? _baseUrl : "—")}",
             "关于星栈算力",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
+    }
+
+    /// <summary>
+    /// The embedded web build carries a build.json stamp (see apps/vite.config.ts).
+    /// Surfacing it here is the whole point: without it nobody can tell whether an
+    /// installed exe is a week behind the web console.
+    /// </summary>
+    private string WebBuildLine()
+    {
+        var raw = _server.ReadText("build.json");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "内嵌网页版本：未知（产物未带 build.json，几乎可以确定是旧构建）";
+        }
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            var root = doc.RootElement;
+            string Field(string name) =>
+                root.TryGetProperty(name, out var v) ? v.GetString() ?? "?" : "?";
+            return $"内嵌网页版本：{Field("sha")} · {Field("time")}（{Field("pkg")}）";
+        }
+        catch (JsonException)
+        {
+            return "内嵌网页版本：build.json 无法解析";
+        }
     }
 
     private static string BoundsPath => Path.Combine(
