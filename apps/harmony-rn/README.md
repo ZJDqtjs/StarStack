@@ -49,16 +49,20 @@ ohpm install             # 从 ../node_modules/@react-native-oh/react-native-har
 
 ## ArkTS 节点服务（当前边界）
 
-`NodeService.ets` 已实现：
+`NodeService.ets` / `MediaPipeline.ets` 已实现：
 
 - `backgroundTaskManager.startBackgroundRunning(..., DATA_TRANSFER)` 长时任务；
-- `/api/worker/hello` 注册（`os=harmony`、`arch=arm64`、设备指纹）；
-- `/api/claim` 20s 长轮询、`/api/report` 失败回报；
+- `/api/worker/hello` 注册（`os=harmony`、`arch=arm64`、设备指纹、`h264_mediacodec`/`hevc_mediacodec`）；
+- `/api/claim` 20s 长轮询、下载源片、`AVDemuxer + AVMuxer` 无重编码切分（stream copy）；
+- SHA-256、`/api/upload` 回传、`/api/report` 的 `done`/`failed`；
 - JS 开关/状态通过 `StarStackNode` TurboModule 与 `StarStackNodeStatus` 事件。
 
-**尚未实现**：`AVDemuxer` / `AVMuxer` / `AVCodec` 的分片执行。因此 hello 里
-`encoders: []`，Broker 不会把转码分片派给鸿蒙节点——宁可空闲，也不接跑不了的活。
-下一步接媒体管线后，再把 `h264_mediacodec` / `hevc_mediacodec` 声明进去。
+**v0 边界**：切分是 stream copy，不按 Claim 的 `height/q/vcodec` 重编码；
+输出参数与源片一致（与 Android 的 fallback 路径相同）。真正重编码需要
+`AVCodec` 的 decode/encode 管线，是下一步；`MediaPipeline.ets` 已隔离，替换该文件即可。
+
+**构建**：`AVDemuxer/AVMuxer` 的实际方法签名以 DevEco 的 HarmonyOS SDK 为准；
+本机没有 SDK，HAP 编译需要在节点 84 的 DevEco 里完成并回报编译错误。
 
 ## 与旧 `apps/harmony` 的关系
 

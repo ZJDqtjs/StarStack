@@ -125,8 +125,10 @@ apps/harmony-rn/
 3. ✅ 鸿蒙 JS/TS + DevEco 工程：`apps/harmony-rn`（RN 0.84.1 + RNOH 0.84.6），
    `harmony/` 来自 RNOH CLI 0.84.6 的官方模板，`EntryAbility` / `RNApp` / `StarStackNodePackage`
    已就位；HAP 需在 DevEco 里 Sync + 签名后构建。
-4. ✅ ArkTS 节点控制面：`NodeService.ets` 已做 `backgroundTaskManager` 长时任务、
-   hello / claim / report；媒体管线（AVDemuxer/AVMuxer/AVCodec）待接，暂不声明 encoders。
+4. ✅ ArkTS 节点：`backgroundTaskManager` 长时任务、hello / claim / report，
+   `AVDemuxer + AVMuxer` stream-copy 切分、SHA-256、upload 与 done 回报；
+   已声明 `h264_mediacodec` / `hevc_mediacodec`。
+   v0 不按 `height/q` 重编码（与 Android fallback 同边界），`AVCodec` 重编码是下一步。
 5. ✅ Broker 登记 `harmony`：`launchOS` / `launchPath` / `canEncode` 已支持，
    单测 `TestCanEncodeFamilyOnlyOpensForMobile` / `TestLaunchAcceptsMobilePlatforms` 通过。
 6. ⏳ 两端原生模块编译：桌面 `windows/`（VS2022 + C++）、鸿蒙 HAP（DevEco + SDK）。

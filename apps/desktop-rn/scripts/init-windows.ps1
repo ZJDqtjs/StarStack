@@ -25,12 +25,15 @@ try {
   npx react-native init-windows --overwrite --template cpp-app --name StarStackDesktop --namespace StarStackDesktop --no-telemetry
   if ($LASTEXITCODE -ne 0) { throw 'react-native init-windows 失败' }
 
+  Write-Host '== 附加 StarStackDesktop 原生模块 =='
+  & (Join-Path $PSScriptRoot 'apply-native.ps1')
+
   Write-Host ''
   Write-Host 'windows/ 已生成。接下来：'
-  Write-Host '1. 把 native/README.md 里的 StarStackDesktop 模块加到 windows/StarStackDesktop/；'
-  Write-Host '2. 在 PackageProviders 里注册该模块；'
-  Write-Host '3. 把 starstack-worker.exe 放到 exe 同目录（或设置 STARSTACK_WORKER 指向它）；'
-  Write-Host '4. npx react-native run-windows'
+  Write-Host '1. 把 starstack-worker.exe 放到 exe 同目录（或设置 STARSTACK_WORKER 指向它）；'
+  Write-Host '2. npx react-native run-windows'
+  Write-Host ''
+  Write-Host '注意：RNW 模板已经用 AddAttributedModules 注册工程内模块，无需再改 App.cpp。'
 }
 finally {
   Pop-Location

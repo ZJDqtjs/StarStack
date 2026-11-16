@@ -9,12 +9,15 @@
  * 与 Android 的 Kotlin 前台 Service 是两套实现，只共用 Broker 契约。
  */
 import http from '@ohos.net.http'
+import request from '@ohos.request'
+import hash from '@ohos.file.hash'
 import backgroundTaskManager from '@ohos.resourceschedule.backgroundTaskManager'
 import wantAgent from '@ohos.app.ability.wantAgent'
 import deviceInfo from '@ohos.deviceInfo'
 import fs from '@ohos.file.fs'
 import picker from '@ohos.file.picker'
 import type { AnyThreadTurboModuleContext } from '@rnoh/react-native-openharmony'
+import { cutSegment } from './MediaPipeline'
 
 interface GPUDetail {
   name: string
@@ -80,6 +83,16 @@ interface ReportBody {
   err: string
 }
 
+interface DoneBody {
+  worker: string
+  seg: string
+  state: string
+  sha: string
+  bytes: number
+  wall: number
+  speed: number
+}
+
 interface PickedFile {
   uri: string
   name: string
@@ -114,6 +127,7 @@ class NodeServiceImpl {
   private lastError: string = ''
   private served: number = 0
   private earned: number = 0
+  private segId: string = ''
 
   start(ctx: AnyThreadTurboModuleContext, baseUrl: string, launchCode: string, nodeId: string, slots: number, price: number): void {
     if (this.running) return
@@ -194,7 +208,7 @@ class NodeServiceImpl {
       running: this.running,
       nodeId: this.nodeId,
       phase: this.phase,
-      segId: '',
+      segId: this.segId,
       pct: 0,
       lastError: this.lastError,
       served: this.served,
@@ -271,8 +285,9 @@ class NodeServiceImpl {
       mem_mb: 8192,
       disk_free_mb: 0,
       gpus: [],
-      // 媒体管线接入前不声明编码器：宁可空闲，也不接自己跑不了的分片。
-      encoders: [],
+      // v0 是 stream copy：声明与 Android 相同的 MediaCodec 家族，让调度器能把
+      // 同家族（h264/hevc）的转码分片派过来；按参数重编码仍是下一步。
+      encoders: ['h264_mediacodec', 'hevc_mediacodec'],
       runtimes: [],
       ffmpeg_version: '',
     }
@@ -319,9 +334,136 @@ class NodeServiceImpl {
         throw new Error('claim HTTP ' + res.responseCode)
       }
       const claim = JSON.parse(res.result as string) as Claim
-      // 媒体管线尚未接入：立即回报失败，让 Broker 按既有重试/重派逻辑处理，
-      // 而不是把分片占着租约到超时。
-      await this.reportFailed(claim, 'HarmonyOS 媒体管线尚未接入（AVDemuxer/AVMuxer/AVCodec）')
+      await this.handle(claim)
+    } finally {
+      req.destroy()
+    }
+  }
+
+  private async handle(claim: Claim): Promise<void> {
+    if (!claim.seg_id || !claim.src_url) return
+    if (claim.kind && claim.kind !== 'transcode') {
+      await this.reportFailed(claim, `鸿蒙节点暂只接转码分片（收到 kind=${claim.kind}）`)
+      return
+    }
+    const ctx = this.ctx
+    if (!ctx) return
+
+    const src = ctx.uiAbilityContext.cacheDir + '/' + claim.seg_id + '.src'
+    const out = ctx.uiAbilityContext.cacheDir + '/' + claim.seg_id + '.mp4'
+    this.segId = claim.seg_id
+    try {
+      this.phase = 'fetching'
+      this.emit()
+      await this.downloadTo(claim.src_url, src)
+
+      this.phase = 'transcoding'
+      this.emit()
+      const begin = Date.now()
+      const ok = await cutSegment(src, out, claim.start, claim.dur)
+      if (!ok) {
+        await this.reportFailed(claim, 'AVDemuxer/AVMuxer 切分失败')
+        return
+      }
+
+      this.phase = 'uploading'
+      this.emit()
+      const wallSec = (Date.now() - begin) / 1000
+      const sha = await hash.hash(out, 'sha256')
+      const bytes = fs.statSync(out).size
+      await this.upload(claim.seg_id, out)
+      const speed = wallSec > 0 ? claim.dur / wallSec : 0
+      await this.reportDone(claim.seg_id, sha, bytes, wallSec, speed)
+      this.served += 1
+      this.phase = 'polling'
+      this.segId = ''
+      this.emit()
+    } catch (e) {
+      await this.reportFailed(claim, e instanceof Error ? e.message : String(e))
+    } finally {
+      try {
+        fs.unlinkSync(src)
+      } catch (e) {
+      }
+      try {
+        fs.unlinkSync(out)
+      } catch (e) {
+      }
+    }
+  }
+
+  private async downloadTo(url: string, path: string): Promise<void> {
+    const req = http.createHttp()
+    try {
+      const res = await req.request(url, {
+        method: http.RequestMethod.GET,
+        expectDataType: http.HttpDataType.ARRAY_BUFFER,
+        connectTimeout: 15000,
+        readTimeout: 120000,
+      })
+      if (res.responseCode < 200 || res.responseCode >= 300) {
+        throw new Error('下载源片失败 HTTP ' + res.responseCode)
+      }
+      const file = fs.openSync(path, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC)
+      fs.writeSync(file.fd, res.result as ArrayBuffer)
+      fs.closeSync(file)
+    } finally {
+      req.destroy()
+    }
+  }
+
+  private upload(segId: string, path: string): Promise<void> {
+    const ctx = this.ctx
+    if (!ctx) return Promise.reject(new Error('节点上下文已丢失'))
+    const name = path.substring(path.lastIndexOf('/') + 1)
+    return new Promise<void>((resolve, reject) => {
+      const config: request.UploadConfig = {
+        url: this.baseUrl + '/api/upload?seg=' + encodeURIComponent(segId) + '&worker=' + encodeURIComponent(this.nodeId),
+        header: this.headers(),
+        method: 'POST',
+        files: [
+          {
+            filename: name,
+            name: 'file',
+            uri: 'internal://cache/' + name,
+            type: 'application/octet-stream',
+          },
+        ],
+        data: [],
+      }
+      request
+        .uploadFile(ctx.uiAbilityContext, config)
+        .then((task: request.UploadTask) => {
+          task.on('complete', () => resolve())
+          task.on('fail', () => reject(new Error('回传产物失败')))
+        })
+        .catch((e: Error) => reject(e))
+    })
+  }
+
+  private async reportDone(segId: string, sha: string, bytes: number, wallSec: number, speed: number): Promise<void> {
+    const body: DoneBody = {
+      worker: this.nodeId,
+      seg: segId,
+      state: 'done',
+      sha: sha,
+      bytes: bytes,
+      wall: wallSec,
+      speed: speed,
+    }
+    await this.postJson(JSON.stringify(body))
+  }
+
+  private async postJson(text: string): Promise<void> {
+    const req = http.createHttp()
+    try {
+      await req.request(this.baseUrl + '/api/report', {
+        method: http.RequestMethod.POST,
+        header: this.headers(),
+        extraData: text,
+        connectTimeout: 10000,
+        readTimeout: 30000,
+      })
     } finally {
       req.destroy()
     }
@@ -334,18 +476,7 @@ class NodeServiceImpl {
       state: 'failed',
       err: reason,
     }
-    const req = http.createHttp()
-    try {
-      await req.request(this.baseUrl + '/api/report', {
-        method: http.RequestMethod.POST,
-        header: this.headers(),
-        extraData: JSON.stringify(body),
-        connectTimeout: 10000,
-        readTimeout: 20000,
-      })
-    } finally {
-      req.destroy()
-    }
+    await this.postJson(JSON.stringify(body))
   }
 }
 

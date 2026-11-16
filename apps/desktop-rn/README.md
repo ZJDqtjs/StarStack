@@ -43,7 +43,10 @@ RNW 0.76+ 的 `react-native-windows-init` 已废弃，脚本改用
 ## 已完成 / 待办
 
 - ✅ JS/TS 壳、共享页面、Platform 契约、类型检查（`npm run typecheck`）
-- ⏳ `windows/` 生成与 C++/WinRT 原生模块（文件对话框、下载、worker 子进程）
+- ✅ C++/WinRT 原生模块源码：`native/StarStackDesktopModule.{h,cpp}`
+  （`GetOpenFileNameW` / WinHTTP 下载 / `starstack-worker.exe` + JobObject / 状态事件）
+- ✅ `scripts/apply-native.ps1`：生成 `windows/` 后自动把模块加进 `.vcxproj`
+- ⏳ `windows/` 生成与 VS2022 编译（节点 84）
 - ⏳ MSIX / 单文件分发
 
 ## 与旧 `apps/desktop` 的关系
