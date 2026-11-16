@@ -20,7 +20,7 @@ export default function Market({ params }: { params?: RouteParams }) {
   return (
     <View style={{ flex: 1 }}>
       {tab === 'offers' ? (
-        <Offers tab={tab} onTab={setTab} />
+        <Offers tab={tab} onTab={setTab} initialQ={params?.q} />
       ) : tab === 'vm' ? (
         <VM tab={tab} onTab={setTab} />
       ) : (
@@ -54,15 +54,27 @@ function MarketTop({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
 
 /* ------------------------------- 服务挂牌 ------------------------------- */
 
-function Offers({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
+function Offers({
+  tab,
+  onTab,
+  initialQ,
+}: {
+  tab: Tab
+  onTab: (t: Tab) => void
+  initialQ?: string
+}) {
   const app = useApp()
   const s = useStyles(makeStyles)
   const { c } = useTheme()
   const [offers, setOffers] = useState<any[]>([])
-  const [q, setQ] = useState('')
+  const [q, setQ] = useState(initialQ || '')
   const [cat, setCat] = useState('all')
   const [open, setOpen] = useState<any>(null)
   const [refreshing, setRefreshing] = useState(false)
+
+  useEffect(() => {
+    if (initialQ !== undefined) setQ(initialQ)
+  }, [initialQ])
 
   const load = useCallback(async () => {
     try {

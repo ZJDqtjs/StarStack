@@ -99,18 +99,20 @@ export function createApi({ baseUrl, getToken, request, upload }: ApiOptions) {
     recharge: (amount: number) => post('/api/me/recharge', { amount }),
 
     // 服务市场（卖家挂牌）与买卖会话
-    offers: () => get('/api/offers'),
+    // 支持可选 q / limit / offset（分页与服务端搜索）；不传时维持旧契约。
+    offers: (opts?: Record<string, unknown>) => get('/api/offers' + qsSuffix(opts)),
     useOffer: (id: string) => post('/api/offers/' + enc(id) + '/use', {}),
     contactOffer: (id: string) => post('/api/offers/' + enc(id) + '/conversation', {}),
     publishOffer: (form: FormData) => uploadTo('/api/offers', form),
     deleteOffer: (id: string) => del('/api/offers/' + enc(id)),
     offerImage: (id: string) => url('/api/offers/media/' + enc(id)),
-    conversations: () => get('/api/offers/conversations'),
-    conversation: (id: string) => get('/api/offers/conversations/' + enc(id)),
+    conversations: (opts?: Record<string, unknown>) => get('/api/offers/conversations' + qsSuffix(opts)),
+    conversation: (id: string, opts?: Record<string, unknown>) =>
+      get('/api/offers/conversations/' + enc(id) + qsSuffix(opts)),
     sendMessage: (id: string, body: string) => post('/api/offers/conversations/' + enc(id), { body }),
 
     // 社区
-    posts: () => get('/api/forum/posts'),
+    posts: (opts?: Record<string, unknown>) => get('/api/forum/posts' + qsSuffix(opts)),
     post: (id: string) => get('/api/forum/posts/' + enc(id)),
     createPost: (form: FormData) => uploadTo('/api/forum/posts', form),
     commentPost: (id: string, form: FormData) => uploadTo('/api/forum/posts/' + enc(id) + '/comments', form),
@@ -119,6 +121,17 @@ export function createApi({ baseUrl, getToken, request, upload }: ApiOptions) {
     // model gateway
     catalog: () => get('/api/models/catalog'),
     tryChat: (model: string, messages: unknown[]) => post('/api/models/try', { model, messages }),
+    upstreams: () => get('/api/models/upstreams'),
+    addUpstream: (body: unknown) => post('/api/models/upstreams', body),
+    probeUpstream: (base_url: string, api_key: string) =>
+      post('/api/models/upstreams/probe', { base_url, api_key }),
+    setUpstream: (id: string, enabled: boolean) => put('/api/models/upstreams/' + enc(id), { enabled }),
+    delUpstream: (id: string) => del('/api/models/upstreams/' + enc(id)),
+    // 用量对账仅平台自营账户返回 200；普通账户 403，调用方降级为提示文案。
+    usage: (days = 7) => get('/api/models/usage?days=' + enc(String(days))),
+
+    // ComfyUI 算力池任务（API 格式工作流 JSON）
+    submitComfy: (body: unknown) => post('/api/jobs/comfy', body),
 
     // compute market and provider nodes
     market: () => get('/api/market'),

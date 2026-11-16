@@ -32,7 +32,8 @@ apps/mobile-rn/
   src/ui/index.tsx           Card / Btn / Chip / Segmented / Sheet / Page / Toast 等
   src/ctx.tsx                登录态、机器/任务快照、导航栈、prefill
   src/screens/               Overview / Create / Market / Jobs / JobDetail / Me / Wallet
-                             Nodes / Messages / Forum / ApiView / Sell / Settings / Auth
+                             Nodes / Messages / Forum / ApiView / AgentChat / Sell / Settings / Auth
+  src/agent.ts               星舷助手意图规则（与 shared/agent.js、web-react 同源，按本端路由注入）
   src/native/nodeService.ts  原生模块桥 + 状态订阅
   modules/starstack-node/    Expo 本地模块（Kotlin）
     android/src/main/java/com/starstack/node/
@@ -54,7 +55,11 @@ apps/mobile-rn/
 | 创作 | 视频转码 / Blender 渲染 / 编译打包（含估算预扣），市场「立即使用」可带场景预填 |
 | 市场 | 服务挂牌（搜索 + 分类 + 详情 + 立即使用 / 联系卖家）、云主机（租用/续费/停机）、算力池 |
 | 任务 | 进行中 / 已完成 / 全部；详情含分片列表、通讯记录、下载产物与取消 |
-| 我的 | 账户概览、钱包账单、我的发布、买卖会话、节点、论坛、模型 API 试聊、设置 |
+| 我的 | 账户概览、钱包账单、我的发布、买卖会话、节点、论坛、模型 API（试聊/密钥/上游/用量）、设置 |
+
+模型 API 的「试聊」是星舷助手：`AgentChat.tsx` 支持历史会话（`ss-agent-chats-v1`，与网页端
+同一份本地结构）、自然语言指令（导航 / 预填创作 / 市场搜索 / 充值 / 建密钥 / 查余额、任务、节点），
+识别不了回落 `/api/models/try` 模型对话；长对话按服务端 12 条 / 8000 字上限自动裁剪。
 
 次要页面（钱包、节点、消息、论坛、模型 API、发布、设置、任务详情）以页面栈推入，安卓返回键先退栈。
 

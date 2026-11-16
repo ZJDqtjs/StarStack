@@ -25,6 +25,8 @@ export type RouteParams = {
   tab?: string
   id?: string
   offer?: any
+  // Agent 指令「在市场搜索 xxx」把关键词带进服务市场
+  q?: string
 }
 
 export type Prefill = { kind?: 'transcode' | 'blender' | 'build'; tpl?: Record<string, any> } | null
