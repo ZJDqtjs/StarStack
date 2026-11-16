@@ -381,6 +381,9 @@ func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
 	if kind == "blender" {
 		unit = "帧"
 	}
+	if kind == render.KindComfy {
+		unit = "次"
+	}
 	out := map[string]any{
 		"duration": dur, "hold": hold, "hold_price": holdPrice, "hold_basis": basis,
 		"cheapest": round4(dur * lowest), "eligible": len(cands), "nodes": cands,
@@ -731,6 +734,15 @@ func (s *Server) settleSegment(j *Job, seg *Seg, wd *Worker) {
 		cost = round4(price * minutes)
 		billed = seg.Wall
 		note = "编译任务 " + j.ID + " 提供 " + itoa(minutes) + " 分钟算力"
+	}
+	if j.Kind == render.KindComfy {
+		// One graph is one generation: the buyer authorised exactly one run at
+		// the frozen price, so that is what the provider is paid. Wall clock is
+		// recorded for the contribution ledger but does not enter the price —
+		// a slow checkpoint should not cost the buyer more than the quote.
+		cost = round4(price)
+		billed = seg.Wall
+		note = "ComfyUI 任务 " + j.ID + " 提供 1 次算力"
 	}
 	if cost <= 0 {
 		return

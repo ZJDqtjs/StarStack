@@ -21,6 +21,10 @@ type nodeConfig struct {
 	Work          string   `json:"work"`
 	AllowBuild    *bool    `json:"allow_build"`
 	AutoProvision *bool    `json:"auto_provision"`
+	// ComfyUI opts this machine into running buyer-supplied prompt graphs
+	// against its own local ComfyUI; ComfyURL says where that server listens.
+	ComfyUI  *bool  `json:"comfyui"`
+	ComfyURL string `json:"comfy_url"`
 }
 
 // loadNodeConfig looks next to the executable first: that is where the bundle

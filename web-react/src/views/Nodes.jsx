@@ -6,7 +6,7 @@ import { api, post, href, f1, f2 } from '../api.js'
 
 export default function Nodes() {
   const { workers, policy, contrib, toast, confirm, prompt } = useApp()
-  const [l, setL] = useState({ name: '', price: '0.80', slots: 2, os: 'windows', arch: 'amd64' })
+  const [l, setL] = useState({ name: '', price: '0.80', slots: 2, os: 'windows', arch: 'amd64', comfyui: false })
   const [lMsg, setLMsg] = useState('')
   const [code, setCode] = useState('')
   const [pairMsg, setPairMsg] = useState('')
@@ -31,7 +31,7 @@ export default function Nodes() {
     if (!(+l.slots >= 1)) { setLMsg('并发槽至少 1 个'); return }
     setLMsg('正在生成启动码…')
     try {
-      const d = await post('/api/nodes/launch', { name: l.name.trim(), price: +l.price, slots: +l.slots, os: l.os, arch: l.arch })
+      const d = await post('/api/nodes/launch', { name: l.name.trim(), price: +l.price, slots: +l.slots, os: l.os, arch: l.arch, comfyui: !!l.comfyui })
       const a = document.createElement('a'); a.href = href(d.bundle || d.script); a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove()
       setLMsg('节点包正在下载（' + d.node_id + '，' + Math.max(1, Math.round(d.expires_in_sec / 60)) + ' 分钟内有效）。解压后双击 starstack-node.exe 即可加入。')
       toast('节点包已生成，拷到目标机器运行即可', 'ok')
@@ -71,6 +71,14 @@ export default function Nodes() {
             <Field label="那台机器的系统"><select value={l.os} onChange={e => setL({ ...l, os: e.target.value })}><option value="windows">Windows</option><option value="linux">Linux</option><option value="darwin">macOS</option></select></Field>
             <Field label="芯片"><select value={l.arch} onChange={e => setL({ ...l, arch: e.target.value })}><option value="amd64">x86_64 / Intel·AMD</option><option value="arm64">arm64 / 苹果 M 系</option></select></Field>
           </div>
+          <label className="check" style={{ marginTop: 4 }}>
+            <input type="checkbox" checked={!!l.comfyui} onChange={e => setL({ ...l, comfyui: e.target.checked })} style={{ width: 'auto' }} />
+            允许执行 ComfyUI 任务
+          </label>
+          <div className="hint">
+            勾选后这台机器会以 <span className="num">--allow-comfy</span> 启动：平台派发的 prompt 图交给它本机的
+            ComfyUI（默认 <span className="num">127.0.0.1:8188</span>）执行，按次结算。启动节点前请先打开 ComfyUI。
+          </div>
           <div className="formfoot"><Btn onClick={launch} disabled={policy && !policy['launch_' + l.os]}>下载节点包（exe + 配置）</Btn></div>
           <div className="hint">{lMsg}</div>
           {policy && !policy['launch_' + l.os] && <div className="hint warn">这台 Broker 还没有对应平台的节点程序，一键启动暂不可用；可用下面的手动方式。</div>}
@@ -100,7 +108,8 @@ export default function Nodes() {
             return (
               <div className="card" key={w.id} style={{ marginBottom: 10, padding: '16px 18px' }}>
                 <h2 style={{ marginBottom: 10 }}>{w.name || w.id} <Tag tone={w.online ? 'on' : 'off'}>{w.online ? '在线' : '离线'}</Tag>
-                  {w.paused && <Tag>已暂停</Tag>}{dup[w.id] && <Tag tone="warn">同设备重复节点</Tag>}{!w.device_id && <Tag tone="warn">旧版节点</Tag>}</h2>
+                  {w.paused && <Tag>已暂停</Tag>}{dup[w.id] && <Tag tone="warn">同设备重复节点</Tag>}{!w.device_id && <Tag tone="warn">旧版节点</Tag>}
+                  {(w.runtimes || []).some(r => r.name === 'comfyui') && <Tag tone="on">可执行 ComfyUI</Tag>}</h2>
                 <div className="stats" style={{ marginTop: 0 }}>
                   <Stat v={f2(w.earned || 0)} l="节点贡献（点）" />
                   <Stat v={f2(w.earned_task || 0)} l="其中：任务算力" />

@@ -602,6 +602,7 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/jobs", s.handleJobs)
 	mux.HandleFunc("/api/jobs/render", s.handleCreateRender)
 	mux.HandleFunc("/api/jobs/build", s.handleCreateBuild)
+	mux.HandleFunc("/api/jobs/comfy", s.handleCreateComfy)
 	mux.HandleFunc("/api/estimate", s.handleEstimate)
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/jobs/", s.handleJobFile)
@@ -973,7 +974,8 @@ func (s *Server) dispatchLocked(seg *Seg, wd *Worker) bool {
 	}
 	// A build is measured in minutes, not clip seconds: size its lease from the
 	// job's own timeout or a 20-minute compile would be reclaimed while it runs.
-	if j.Kind == render.KindBuild {
+	// A ComfyUI generation is the same shape: one graph, wall-clock bound.
+	if j.Kind == render.KindBuild || j.Kind == render.KindComfy {
 		limit := 1800
 		if j.Spec != nil && j.Spec.TimeoutSec > 0 {
 			limit = j.Spec.TimeoutSec
@@ -1184,9 +1186,10 @@ func (s *Server) dispatchBudgetLocked(liveJobs int) int {
 // footage so a long video is not killed mid-flight, floored so a short one still
 // gets a reasonable grace period for queueing and failover.
 func (s *Server) deadlineLocked(j *Job) time.Duration {
-	if j.Kind == render.KindBuild {
-		// Compiling is wall-clock bound by the command's own timeout, so the
-		// footage-shaped formula would kill a legitimate build mid-restore.
+	if j.Kind == render.KindBuild || j.Kind == render.KindComfy {
+		// Compiling (and sampling a prompt graph) is wall-clock bound by the
+		// job's own timeout, so the footage-shaped formula would kill a
+		// legitimate run mid-flight.
 		limit := 30 * time.Minute
 		if j.Spec != nil && j.Spec.TimeoutSec > 0 {
 			limit = time.Duration(j.Spec.TimeoutSec)*time.Second + 10*time.Minute
@@ -1252,6 +1255,11 @@ func jobReq(j *Job) (Req, string) {
 		// A build is its own service: only agents that explicitly opted in
 		// advertise it, so a transcoding node is never scored for a compile.
 		r.Runtime = "build"
+		v = ""
+	case render.KindComfy:
+		// Same contract for ComfyUI: the agent advertises "comfyui" only after
+		// --allow-comfy, and the graph is executed against its local server.
+		r.Runtime = "comfyui"
 		v = ""
 	default:
 		if r.Runtime != "" {
@@ -1383,9 +1391,10 @@ func (s *Server) jobsOrdered() []*Job {
 
 func (s *Server) merge(j *Job) {
 	var err error
-	if j.Kind == render.KindBuild {
-		// The provider returned exactly the tree the buyer asked for; there is
-		// nothing to stitch, so the uploaded artifact becomes the job output.
+	if j.Kind == render.KindBuild || j.Kind == render.KindComfy {
+		// The provider returned exactly the tree (or the generated images) the
+		// buyer asked for; there is nothing to stitch, so the uploaded artifact
+		// becomes the job output.
 		if len(j.Segs) == 1 {
 			j.out = j.Segs[0].path
 		}
@@ -1422,9 +1431,11 @@ func (s *Server) merge(j *Job) {
 	}
 	j.SumWall = sum
 	if j.Wall > 0 {
-		if j.Kind != render.KindBuild {
+		if j.Kind != render.KindBuild && j.Kind != render.KindComfy {
 			j.Speed = j.Duration / j.Wall
 		} else {
+			// Neither a compile nor one generation is a throughput figure: the
+			// unit is minutes/次, not video seconds, so a ratio would be a lie.
 			j.Speed = 0
 		}
 	}
@@ -1614,7 +1625,9 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		// A build failure is a toolchain error, not an ffmpeg one-word failure:
 		// the buyer needs the tail of the compiler output to fix their command.
 		limit := 200
-		if j := s.jobs[seg.JobID]; j != nil && j.Kind == render.KindBuild {
+		if j := s.jobs[seg.JobID]; j != nil && (j.Kind == render.KindBuild || j.Kind == render.KindComfy) {
+			// Compiler tails and Python tracebacks are long; both explain a
+			// failure far better than the first 200 characters.
 			limit = 1500
 		}
 		why := clip(rep.Err, limit)

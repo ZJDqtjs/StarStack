@@ -60,6 +60,10 @@ type launchTicket struct {
 	// requesting account is on the build allowlist: the provider still has to
 	// double-click that script, so the consent stays explicit on the machine.
 	AllowBuild bool `json:"-"`
+	// ComfyUI writes --allow-comfy into the launcher when the provider ticked
+	// the box on the console. Nothing on the platform runs the graph: the
+	// machine's own ComfyUI does, so the opt-in belongs to this ticket.
+	ComfyUI bool `json:"-"`
 }
 
 const maxLaunchVMs = 8
@@ -184,6 +188,7 @@ func (s *Server) mintLaunch(u *store.User, req launchReq) (*launchTicket, string
 		Name: name, Price: req.Price, Slots: req.Slots,
 		OS: goos, Arch: arch, ExpireAt: time.Now().Add(launchTTL),
 		VM: req.VM, VMMax: vmMax, VMBridge: bridge, VMUplink: uplink,
+		ComfyUI: req.ComfyUI,
 	}
 	s.launches[t.Code] = t
 	log.Printf("launch ticket %s minted for node %s by user %s (%s/%s, %.2f 点/秒, %d 槽, vm=%v max=%d bridge=%q)",
@@ -271,6 +276,9 @@ type launchReq struct {
 	VMMax    int     `json:"vm_max"`
 	VMBridge string  `json:"vm_bridge"`
 	VMUplink string  `json:"vm_uplink"`
+	// ComfyUI lets this machine run buyer-supplied ComfyUI graphs against its
+	// own local ComfyUI (default http://127.0.0.1:8188).
+	ComfyUI bool `json:"comfyui"`
 }
 
 func (s *Server) handleLaunchMint(w http.ResponseWriter, r *http.Request) {
@@ -306,7 +314,7 @@ func (s *Server) handleLaunchMint(w http.ResponseWriter, r *http.Request) {
 		"script":         "/launch/" + t.Code + "/" + t.OS + "/" + t.Arch,
 		"bundle":         "/launch/" + t.Code + "/" + t.OS + "/" + t.Arch + "?format=bundle",
 		"worker":         "/dl/" + bin, "ready": ready,
-		"vm": t.VM, "vm_max": t.VMMax,
+		"vm": t.VM, "vm_max": t.VMMax, "comfyui": t.ComfyUI,
 	})
 }
 
@@ -374,6 +382,11 @@ func (s *Server) serveLaunchBundle(w http.ResponseWriter, t *launchTicket) {
 		"launch":         t.Code,
 		"allow_build":    t.AllowBuild,
 		"auto_provision": t.AllowBuild,
+		"comfyui":        t.ComfyUI,
+		// The agent probes this endpoint at startup and rejects ComfyUI jobs
+		// while it is down, so a provider who keeps ComfyUI elsewhere only has
+		// to edit this line in starstack-node.json.
+		"comfy_url": defaultComfyURL,
 	}, "", "  ")
 	if err != nil {
 		http.Error(w, jsonErr("配置生成失败"), http.StatusInternalServerError)
@@ -429,7 +442,13 @@ func renderLauncher(t *launchTicket, baseURL, bin string) (string, string, strin
 	slots := strconv.Itoa(t.Slots)
 
 	vmArgsWin, vmArgsSh, qemuWin, qemuSh := "", "", "", ""
-	buildArgs := ""
+	buildArgs, comfyArgs := "", ""
+	if t.ComfyUI {
+		// No --comfy-url here on purpose: the script is plain ASCII for cmd.exe,
+		// and the default 127.0.0.1:8188 is what a locally installed ComfyUI
+		// listens on. A provider who moved it edits starstack-node.json instead.
+		comfyArgs = " --allow-comfy"
+	}
 	if t.AllowBuild {
 		// Compiling usually needs a toolchain the provider may not have. The
 		// provider already opted into running buyer commands, so provisioning the
@@ -610,7 +629,7 @@ if /i not "!GOT!"=="%WANT%" (
 echo Joining the compute pool as %NODE_ID%: ` + price + ` credits per video-second, ` + slots + ` slots.
 echo Keep this window open while you are sharing. Status and earnings: the web console.
 "%BIN%" --server "%SERVER%" --id "%NODE_ID%" --launch "%LAUNCH%" ^
-  --price ` + price + ` --slots ` + slots + ` --work "%DIR%\cache"` + vmArgsWin + buildArgs + `
+  --price ` + price + ` --slots ` + slots + ` --work "%DIR%\cache"` + vmArgsWin + buildArgs + comfyArgs + `
 echo.
 echo Node stopped. Double-click this file to join again - the credential in
 echo %DIR%\cache\node-%NODE_ID%.key means no launch code is needed any more.
@@ -646,7 +665,7 @@ if [ "$GOT" != "$WANT" ]; then
 fi` + qemuSh + `
 echo "以 $NODE_ID 加入算力池：` + price + ` 点/视频秒，` + slots + ` 个并发槽"
 exec "$BIN" --server "$SERVER" --id "$NODE_ID" --launch "$LAUNCH" \
-  --name "` + t.Name + `" --price ` + price + ` --slots ` + slots + ` --work "$DIR/cache"` + vmArgsSh + buildArgs + `
+  --name "` + t.Name + `" --price ` + price + ` --slots ` + slots + ` --work "$DIR/cache"` + vmArgsSh + buildArgs + comfyArgs + `
 `
 	return sh, "application/x-sh", "starstack-node-" + t.NodeID + ".sh"
 }

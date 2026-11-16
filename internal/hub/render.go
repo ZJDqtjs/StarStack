@@ -33,7 +33,7 @@ func artifactName(kind string, index int) string {
 		// frames arrive as a zip; the broker stitches them into a video later
 		return fmt.Sprintf("seg%03d.zip", index)
 	}
-	if kind == render.KindBuild {
+	if kind == render.KindBuild || kind == render.KindComfy {
 		// one indivisible unit, so the name is the buyer-facing one
 		return "result.zip"
 	}

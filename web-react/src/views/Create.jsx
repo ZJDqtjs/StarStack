@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useApp } from '../store.jsx'
 import { nav } from '../App.jsx'
 import { Card, Kpi, Chip, Btn, Empty } from '../ui.jsx'
-import { href, f2 } from '../api.js'
+import { href, f2, post } from '../api.js'
 
 let comfyPromise = null
 function loadComfy() {
@@ -55,6 +55,66 @@ function ComfyCard({ kind }) {
       </p>
       <input type="file" className="cw-hidden" data-cw-file accept=".json,.png,application/json,image/png" />
     </div>
+  )
+}
+
+// PoolCard submits an exported API-format graph to a provider node instead of
+// proxying it to the operator's own ComfyUI. Same graph, different executor:
+// the node's machine runs it and is paid per completed generation.
+function PoolCard({ kind }) {
+  const { policy, toast } = useApp()
+  const [file, setFile] = useState(null)
+  const [timeout, setTimeoutSec] = useState('900')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const fileRef = useRef(null)
+  const allowed = !!(policy && policy.allow_comfy)
+
+  const submit = async e => {
+    e.preventDefault()
+    if (!file) { setMsg('先选择 API 格式的工作流 JSON（ComfyUI 里「导出（API）」）'); return }
+    if (!allowed) { setMsg('这台 Broker 没有向你的账号开放 ComfyUI 任务'); return }
+    setBusy(true); setMsg('正在读取工作流…')
+    try {
+      const text = await file.text()
+      let graph
+      try { graph = JSON.parse(text) } catch (err) { throw new Error('不是合法的 JSON 文件') }
+      if (graph && graph.nodes && graph.links) throw new Error('这是 UI 工作流，请在 ComfyUI 里用「导出（API）」再提交')
+      setMsg('提交到算力池…')
+      const d = await post('/api/jobs/comfy', {
+        name: file.name.replace(/\.json$/i, ''), kind, prompt: graph, timeout: +timeout || 900,
+      })
+      setMsg('任务 ' + d.id + ' 已入队，预扣 ' + f2(d.hold) + ' 点（按次结算，未执行全额退还）。' + (d.note || ''))
+      toast('已提交到算力池', 'ok')
+    } catch (err) { setMsg('提交失败：' + err) }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <Card kicker="Compute Pool" title="提交到算力池（节点执行）">
+      <form onSubmit={submit}>
+        <div className="hint" style={{ marginTop: 0 }}>
+          由开启了 <span className="num">--allow-comfy</span> 的算力节点用<b>它自己的</b> ComfyUI 执行这张图：
+          模型与自定义节点由节点提供，平台只按完成次数结算。工作台那条路走的是官方 ComfyUI，两条互不影响。
+        </div>
+        <div className="wb-pick" style={{ marginTop: 12 }}>
+          <Btn sm type="button" onClick={() => fileRef.current.click()}>选择工作流 JSON</Btn>
+          <span className="wb-pick-or">{file ? file.name : 'API 格式：{ "3": { "class_type": ... } }'}</span>
+        </div>
+        <input ref={fileRef} type="file" className="sr" accept=".json,application/json"
+          onChange={e => { setFile(e.target.files[0] || null); setMsg('') }} />
+        <div className="row">
+          <div><label>超时（秒）</label><input value={timeout} onChange={e => setTimeoutSec(e.target.value)} inputMode="numeric" /></div>
+          <div><label>产物类型</label><input value={kind === 'image' ? '图片（按次）' : '视频（按次）'} readOnly /></div>
+        </div>
+        <div className="formfoot">
+          <Btn type="submit" disabled={busy || !allowed}>提交到算力池</Btn>
+          <Btn ghost type="button" onClick={() => nav('jobs')}>我的任务 →</Btn>
+          <div className="hint">{msg}</div>
+        </div>
+        {!allowed && <div className="hint warn">该部署未开放 ComfyUI 任务：需要服务端 --allow-comfy 且你的账号在 --comfy-users 名单里。</div>}
+      </form>
+    </Card>
   )
 }
 
@@ -152,6 +212,7 @@ export default function Create({ kind }) {
         </Card>
         <div className="sticky" ref={cardRef}><ComfyCard kind={kind} /></div>
       </div>
+      <div style={{ marginTop: 18 }}><PoolCard kind={kind} /></div>
     </div>
   )
 }

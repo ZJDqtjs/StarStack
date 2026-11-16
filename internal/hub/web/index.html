@@ -1904,6 +1904,10 @@ tr.tap{cursor:pointer}
           <select id="larch"><option value="amd64">x86_64 / Intel·AMD</option>
             <option value="arm64">arm64 / 苹果 M 系·麒麟</option></select></div>
       </div>
+      <label class="check" style="margin-top:4px"><input type="checkbox" id="lcomfy" style="width:auto">
+        允许执行 ComfyUI 任务</label>
+      <div class="hint">勾选后节点会以 --allow-comfy 启动：平台派发的 prompt 图交给这台机器本机的 ComfyUI
+        （默认 127.0.0.1:8188）执行，按次结算。启动节点前请先打开 ComfyUI。</div>
       <div class="formfoot"><button class="btn" id="launchbtn">下载节点包（exe + 配置）</button></div>
       <div id="launchmsg" class="hint" role="status"></div>
       <div id="launchwarn" class="hint warn"></div>
@@ -3759,8 +3763,9 @@ $('#chat-body').addEventListener('keydown',e=>{
 }
 $('#launchbtn').onclick=async()=>{
   const msg=$('#launchmsg'),btn=$('#launchbtn');
+  const comfy=$('#lcomfy');
   const body={name:$('#lname').value.trim(),price:+$('#lprice').value,slots:+$('#lslots').value,
-    os:$('#los').value,arch:$('#larch').value};
+    os:$('#los').value,arch:$('#larch').value,comfyui:!!(comfy&&comfy.checked)};
   if(!(body.price>=0.05)){msg.textContent='单价至少 0.05 算力点 / 视频秒';return}
   if(!(body.slots>=1)){msg.textContent='并发槽至少 1 个';return}
   btn.disabled=true;msg.textContent='正在生成启动码…';

@@ -47,6 +47,10 @@ func main() {
 		"a provider agent must also be started with --allow-build")
 	buildUsers := flag.String("build-users", "", "comma-separated account names allowed to submit build jobs "+
 		"(empty = nobody); prefer STARSTACK_BUILD_USERS")
+	allowComfy := flag.Bool("allow-comfy", false, "expose the ComfyUI job kind, where a provider node runs a "+
+		"buyer-supplied prompt graph on its own ComfyUI; a provider agent must also be started with --allow-comfy")
+	comfyUsers := flag.String("comfy-users", "", "comma-separated account names allowed to submit ComfyUI jobs "+
+		"(empty = nobody); prefer STARSTACK_COMFY_USERS")
 	flag.Parse()
 
 	ffx.Ffmpeg, ffx.Ffprobe = *ffmpeg, *ffprobe
@@ -67,6 +71,9 @@ func main() {
 	}
 	if *buildUsers == "" {
 		*buildUsers = os.Getenv("STARSTACK_BUILD_USERS")
+	}
+	if *comfyUsers == "" {
+		*comfyUsers = os.Getenv("STARSTACK_COMFY_USERS")
 	}
 	*data, _ = filepath.Abs(*data)
 	os.MkdirAll(*data, 0o700)
@@ -117,6 +124,20 @@ func main() {
 			pol.AllowBuild = false
 		} else {
 			log.Printf("build jobs enabled for: %s", strings.Join(pol.BuildUsers, ", "))
+		}
+	}
+	pol.AllowComfy = *allowComfy
+	if *allowComfy {
+		for _, name := range strings.Split(*comfyUsers, ",") {
+			if n := strings.TrimSpace(name); n != "" {
+				pol.ComfyUsers = append(pol.ComfyUsers, n)
+			}
+		}
+		if len(pol.ComfyUsers) == 0 {
+			log.Printf("警告：--allow-comfy 未配置 --comfy-users（或 STARSTACK_COMFY_USERS），ComfyUI 任务保持关闭")
+			pol.AllowComfy = false
+		} else {
+			log.Printf("comfyui jobs enabled for: %s", strings.Join(pol.ComfyUsers, ", "))
 		}
 	}
 
