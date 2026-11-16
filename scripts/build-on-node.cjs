@@ -4,7 +4,7 @@
  * 轮询任务完成后下载 result.zip 并解压。
  *
  * 用法（在 starstack 根目录）：
- *   $env:STARSTACK_BROKER='https://starstack.run'
+ *   $env:STARSTACK_BROKER='http://20.24.210.119:8787'   # 默认就是这台
  *   $env:STARSTACK_USER='<账号>'
  *   $env:STARSTACK_PASSWORD='<口令>'
  *   node scripts/build-on-node.cjs desktop
@@ -19,7 +19,7 @@ const { execFileSync } = require('child_process')
 
 const ROOT = path.resolve(__dirname, '..')
 const KIND = (process.argv[2] || '').trim()
-const BROKER = (process.env.STARSTACK_BROKER || 'https://starstack.run').replace(/\/+$/, '')
+const BROKER = (process.env.STARSTACK_BROKER || 'http://20.24.210.119:8787').replace(/\/+$/, '')
 const USER = process.env.STARSTACK_USER || ''
 const PASS = process.env.STARSTACK_PASSWORD || ''
 const NODE_ID = process.env.STARSTACK_NODE_ID || '84'
