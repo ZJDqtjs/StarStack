@@ -914,3 +914,18 @@ tr.tap{cursor:pointer}
   .try-conv-list{max-height:180px}
 }
 @media(hover:none){.try-conv-del{opacity:1}}
+
+/* ---------- 生图 / 生视频：本页生成结果 ---------- */
+.gen-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.gen-item{display:block;aspect-ratio:1/1;border:1px solid var(--hair);border-radius:10px;
+  overflow:hidden;background:var(--inset);transition:border-color .13s}
+.gen-item:hover{border-color:var(--accent)}
+.gen-item img{width:100%;height:100%;object-fit:cover;display:block}
+.gen-item.gen-video{aspect-ratio:16/9;background:#000}
+.gen-item.gen-video{object-fit:contain}
+.gen-state{display:flex;align-items:center;gap:12px;padding:16px 4px}
+.gen-state b{display:block;font-size:13px;font-weight:650;color:var(--ink)}
+.gen-state span{display:block;margin-top:3px;font-size:12px;line-height:1.6;color:var(--mute)}
+.gen-spinner{width:20px;height:20px;flex:0 0 20px;border-radius:50%;
+  border:2px solid var(--accent-soft);border-top-color:var(--accent);animation:genspin .8s linear infinite}
+@keyframes genspin{to{transform:rotate(360deg)}}

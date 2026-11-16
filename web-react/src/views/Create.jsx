@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useApp } from '../store.jsx'
 import { nav } from '../App.jsx'
 import { Card, Kpi, Chip, Btn, Empty } from '../ui.jsx'
-import { href, f2, post } from '../api.js'
+import { api, href, f2, post } from '../api.js'
 
 let comfyPromise = null
 function loadComfy() {
@@ -21,6 +21,7 @@ function loadComfy() {
 
 const IMG_PRESETS = ['赛博朋克城市夜景，霓虹雨夜，电影感光效，16:9', '清晨的山间薄雾，柔和逆光，写实摄影，层次丰富', '日系插画风格的校园午后，樱花与单车，暖色调', '未来空间站内部，冷色调电影概念设计，广角镜头']
 const VID_PRESETS = ['海边日落延时，镜头缓慢推进，暖色调，电影感', '雨夜城市街道，霓虹倒影，手持跟拍，浅景深', '云海之上的日出，无人机缓慢拉升，胶片颗粒', '产品特写环绕运镜，柔和棚拍光，简洁背景']
+const isVideoFile = name => /\.(mp4|webm|mov|mkv|gif)$/i.test(String(name || ''))
 
 function ComfyCard({ kind }) {
   return (
@@ -118,8 +119,51 @@ function PoolCard({ kind }) {
   )
 }
 
+// 默认（非高级）模式下就在这里出结果，用户不需要接触 ComfyUI 工作台
+function ResultPanel({ kind, running, elapsed, result, online, advanced }) {
+  const items = (result && result.outputs) || []
+  return (
+    <Card kicker="Result" title="生成结果">
+      {running ? (
+        <div className="gen-state">
+          <span className="gen-spinner" />
+          <div>
+            <b>正在生成{elapsed ? `（已等待 ${elapsed} 秒）` : ''}</b>
+            <span>任务已提交到执行队列，完成后会自动显示在这里，可以先切到别的页面。</span>
+          </div>
+        </div>
+      ) : items.length ? (
+        <>
+          <div className="gen-grid">
+            {items.map((o, i) => isVideoFile(o.filename)
+              ? <video key={i} className="gen-item gen-video" src={o.url} controls preload="metadata" />
+              : <a key={i} className="gen-item" href={o.url} target="_blank" rel="noreferrer" title="打开原图">
+                <img src={o.url} alt={`生成结果 ${i + 1}`} />
+              </a>)}
+          </div>
+          <div className="hint" style={{ marginBottom: 0 }}>
+            共 {items.length} 个产物{result && result.id ? ` · 任务 ${String(result.id).slice(0, 12)}` : ''} · 点图片在新标签打开原图
+          </div>
+        </>
+      ) : (
+        <Empty inline>
+          {online === false
+            ? '平台生图执行器当前不可用，暂时无法生成。'
+            : `填好${kind === 'image' ? '画面' : '镜头'}描述后点「生成${kind === 'image' ? '图片' : '视频'}」，结果会显示在这里。`}
+        </Empty>
+      )}
+      {!advanced && (
+        <div className="hint">
+          需要调工作流节点、导入自己的 ComfyUI 图，或把任务交给算力节点？到「设置」打开<b>高级选项</b>后，本页会显示工作台与算力池。
+          <button type="button" className="linkbtn" onClick={() => nav('settings')}>去设置 →</button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 export default function Create({ kind }) {
-  const { workers, toast, prefill, setPrefill } = useApp()
+  const { workers, toast, prefill, setPrefill, advanced } = useApp()
   const [prompt, setPrompt] = useState('')
   const [size, setSize] = useState(kind === 'image' ? '16:9 · 1344×768' : '16:9')
   const [style, setStyle] = useState('写实摄影')
@@ -127,11 +171,27 @@ export default function Create({ kind }) {
   const [dur, setDur] = useState('5 秒')
   const [motion, setMotion] = useState('')
   const [msg, setMsg] = useState('')
+  const [online, setOnline] = useState(null)
+  const [running, setRunning] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const [result, setResult] = useState(null)
   const cardRef = useRef(null)
+  const aliveRef = useRef(true)
 
+  useEffect(() => {
+    aliveRef.current = true
+    return () => { aliveRef.current = false }
+  }, [])
+  // 高级模式才需要页面内的 ComfyUI 卡片；绑定时机同时依赖 advanced（卡片按需挂载）
   useEffect(() => {
     let alive = true
     loadComfy().then(() => { if (alive && window.ComfyWorkbench) window.ComfyWorkbench.rebindCards() }).catch(() => {})
+    return () => { alive = false }
+  }, [kind, advanced])
+  useEffect(() => {
+    let alive = true
+    setResult(null); setMsg('')
+    api('/api/comfy/status').then(d => { if (alive) setOnline(!!d.reachable) }).catch(() => { if (alive) setOnline(false) })
     return () => { alive = false }
   }, [kind])
   useEffect(() => {
@@ -143,17 +203,43 @@ export default function Create({ kind }) {
   const prices = on.map(w => Number(w.price) || 0).filter(p => p > 0)
   const min = prices.length ? Math.min(...prices) : null
 
-  const submit = e => {
+  const submit = async e => {
     e.preventDefault()
     if (!prompt.trim()) { setMsg(kind === 'image' ? '先写画面描述' : '先写镜头描述'); return }
-    if (!window.ComfyWorkbench) { setMsg('工作台组件尚未加载，请刷新页面重试'); return }
+    if (running) return
+    if (!window.ComfyWorkbench) {
+      try { await loadComfy() } catch (err) { setMsg('生成组件加载失败，请刷新页面重试'); return }
+      if (!window.ComfyWorkbench) { setMsg('生成组件加载失败，请刷新页面重试'); return }
+    }
     const p = kind === 'image'
       ? { prompt: prompt.trim(), size, style, negative: neg.trim() }
       : { prompt: prompt.trim(), duration: dur, size, motion: motion.trim() }
-    window.ComfyWorkbench.generate(kind, p)
-    setMsg('已写入工作流并打开 ComfyUI 工作台')
-    toast('参数已写入工作流', 'ok', kind === 'image' ? '生图' : '生视频')
+    // 高级：沿用原来的完整工作台（可调节点、导入工作流、查看队列）
+    if (advanced) {
+      window.ComfyWorkbench.generate(kind, p)
+      setMsg('已写入工作流并打开 ComfyUI 工作台')
+      toast('参数已写入工作流', 'ok', kind === 'image' ? '生图' : '生视频')
+      return
+    }
+    // 默认：留在本页直接生成并展示结果
+    setRunning(true); setElapsed(0); setResult(null); setMsg('提交中…')
+    try {
+      const r = await window.ComfyWorkbench.run(kind, p, i => {
+        if (aliveRef.current) setElapsed(Math.round((i + 1) * 1.5))
+      })
+      if (!aliveRef.current) return
+      setResult(r)
+      setMsg(r.outputs.length ? `生成完成，共 ${r.outputs.length} 个产物` : '任务完成，但没有返回产物；请检查工作流是否有输出节点')
+      if (r.outputs.length) toast('生成完成', 'ok', kind === 'image' ? '生图' : '生视频')
+    } catch (err) {
+      const m = String((err && err.message) || err)
+      if (aliveRef.current) { setMsg(m); toast(m, 'bad', '生成失败') }
+    } finally {
+      if (aliveRef.current) setRunning(false)
+    }
   }
+
+  const offline = online === false
 
   return (
     <div>
@@ -161,7 +247,15 @@ export default function Create({ kind }) {
         <div className="phead-txt">
           <span className="eyebrow">{kind === 'image' ? 'Image Generation' : 'Video Generation'}</span>
           <h1>{kind === 'image' ? '生图工作台' : '生视频工作台'}</h1>
-          <p>{kind === 'image' ? '部署或导入 ComfyUI 工作流后，画面描述会写进节点参数，一键提交到官方执行队列。' : '部署视频工作流，镜头描述、时长与画幅直接写入节点，提交后由 ComfyUI 队列生成并回传进度。'}</p>
+          <p>
+            {advanced
+              ? (kind === 'image'
+                ? '部署或导入 ComfyUI 工作流后，画面描述会写进节点参数，一键提交到官方执行队列。'
+                : '部署视频工作流，镜头描述、时长与画幅直接写入节点，提交后由 ComfyUI 队列生成并回传进度。')
+              : (kind === 'image'
+                ? '描述你想要的画面，选好画幅与风格，点生成即可；结果直接显示在本页，不需要接触 ComfyUI。'
+                : '描述镜头与运镜，选好时长与画幅，点生成即可；结果直接显示在本页，不需要接触 ComfyUI。')}
+          </p>
         </div>
         <div className="phead-actions"><Btn ghost onClick={() => nav('market')}>找卖家工作流 →</Btn></div>
       </div>
@@ -205,14 +299,25 @@ export default function Create({ kind }) {
               <><label>运镜 / 风格（可选）</label><input value={motion} onChange={e => setMotion(e.target.value)} placeholder="例如：缓慢推进、手持感、胶片颗粒" /></>
             )}
             <div className="formfoot">
-              <Btn type="submit">{kind === 'image' ? '生成图片' : '生成视频'}</Btn>
+              <Btn type="submit" disabled={running}>{running ? '生成中…' : (kind === 'image' ? '生成图片' : '生成视频')}</Btn>
+              {advanced && <Btn ghost type="button" onClick={() => window.ComfyWorkbench && window.ComfyWorkbench.open(kind)}>打开工作台</Btn>}
               <div className="hint">{msg}</div>
             </div>
+            {offline && (
+              <div className="hint warn">
+                平台生图执行器（ComfyUI）当前不可用，生成会失败。可以让部署方用 <span className="num">--comfyui</span> 指向一个可访问的实例；
+                也可以先把工作流导出，交给算力节点执行。
+              </div>
+            )}
           </form>
         </Card>
-        <div className="sticky" ref={cardRef}><ComfyCard kind={kind} /></div>
+        <div className="sticky" ref={cardRef}>
+          {advanced
+            ? <ComfyCard kind={kind} />
+            : <ResultPanel kind={kind} running={running} elapsed={elapsed} result={result} online={online} advanced={advanced} />}
+        </div>
       </div>
-      <div style={{ marginTop: 18 }}><PoolCard kind={kind} /></div>
+      {advanced && <div style={{ marginTop: 18 }}><PoolCard kind={kind} /></div>}
     </div>
   )
 }

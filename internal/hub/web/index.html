@@ -884,6 +884,19 @@ tr.tap{cursor:pointer}
   .try-conv-list{max-height:180px}
 }
 @media(hover:none){.try-conv-del{opacity:1}}
+/* ---------- 生图 / 生视频：本页生成结果 ---------- */
+.gen-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.gen-item{display:block;aspect-ratio:1/1;border:1px solid var(--hair);border-radius:10px;
+  overflow:hidden;background:var(--inset);transition:border-color .13s}
+.gen-item:hover{border-color:var(--accent)}
+.gen-item img{width:100%;height:100%;object-fit:cover;display:block}
+.gen-item.gen-video{aspect-ratio:16/9;background:#000;object-fit:contain}
+.gen-state{display:flex;align-items:center;gap:12px;padding:16px 4px}
+.gen-state b{display:block;font-size:13px;font-weight:650;color:var(--ink)}
+.gen-state span{display:block;margin-top:3px;font-size:12px;line-height:1.6;color:var(--mute)}
+.gen-spinner{width:20px;height:20px;flex:0 0 20px;border-radius:50%;
+  border:2px solid var(--accent-soft);border-top-color:var(--accent);animation:genspin .8s linear infinite}
+@keyframes genspin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -1075,7 +1088,7 @@ tr.tap{cursor:pointer}
 <section class="view" id="v-image">
   <div class="phead">
     <div class="phead-txt"><span class="eyebrow">Image Generation</span><h1>生图工作台</h1>
-      <p>部署或导入 ComfyUI 工作流后，画面描述会写进节点参数，一键提交到官方执行队列。</p></div>
+      <p id="img-desc">描述你想要的画面，选好画幅与风格，点生成即可；结果直接显示在本页。</p></div>
     <div class="phead-actions"><button class="ghost" data-go="market">找卖家工作流 →</button></div>
   </div>
   <div class="kpis">
@@ -1113,7 +1126,7 @@ tr.tap{cursor:pointer}
       </form>
     </div>
     <div class="sticky">
-      <div class="card" data-cw-kind="image">
+      <div class="card" data-cw-kind="image" id="img-workbench" style="display:none">
         <div class="cw-card-head">
           <h2 style="margin:0"><span class="kicker">Workbench</span>预设工作台</h2>
           <span class="cw-chip" data-cw-conn>检测中…</span>
@@ -1140,6 +1153,11 @@ tr.tap{cursor:pointer}
         <p class="cw-card-note" id="cw-note-image">支持官方 workflow.json、API 格式 prompt.json 与含工作流元数据的 PNG；部署后本页表单会把参数写入该工作流并提交 ComfyUI 队列。</p>
         <input type="file" class="cw-hidden" data-cw-file accept=".json,.png,application/json,image/png">
       </div>
+      <div class="card" id="img-result">
+        <h2><span class="kicker">Result</span>生成结果</h2>
+        <div id="img-result-body"><div class="empty inline">填好画面描述后点「生成图片」，结果会显示在这里。</div></div>
+        <div class="hint">需要调工作流节点、导入自己的 ComfyUI 图？到「设置」打开<b>高级选项</b>后，本页会显示工作台。<button type="button" class="linkbtn" data-go="settings">去设置 →</button></div>
+      </div>
     </div>
   </div>
 </section>
@@ -1148,7 +1166,7 @@ tr.tap{cursor:pointer}
 <section class="view" id="v-video">
   <div class="phead">
     <div class="phead-txt"><span class="eyebrow">Video Generation</span><h1>生视频工作台</h1>
-      <p>部署视频工作流，镜头描述、时长与画幅直接写入节点，提交后由 ComfyUI 队列生成并回传进度。</p></div>
+      <p id="vid-desc">描述镜头与运镜，选好时长与画幅，点生成即可；结果直接显示在本页。</p></div>
     <div class="phead-actions"><button class="ghost" data-go="market">找卖家工作流 →</button></div>
   </div>
   <div class="kpis">
@@ -1184,7 +1202,7 @@ tr.tap{cursor:pointer}
       </form>
     </div>
     <div class="sticky">
-      <div class="card" data-cw-kind="video">
+      <div class="card" data-cw-kind="video" id="vid-workbench" style="display:none">
         <div class="cw-card-head">
           <h2 style="margin:0"><span class="kicker">Workbench</span>预设工作台</h2>
           <span class="cw-chip" data-cw-conn>检测中…</span>
@@ -1210,6 +1228,11 @@ tr.tap{cursor:pointer}
         </div>
         <p class="cw-card-note" id="cw-note-video">导入视频工作流后，镜头描述、时长与画幅会写入对应节点；生成由 ComfyUI 队列执行，WebSocket 实时回传进度。</p>
         <input type="file" class="cw-hidden" data-cw-file accept=".json,.png,application/json,image/png">
+      </div>
+      <div class="card" id="vid-result">
+        <h2><span class="kicker">Result</span>生成结果</h2>
+        <div id="vid-result-body"><div class="empty inline">填好镜头描述后点「生成视频」，结果会显示在这里。</div></div>
+        <div class="hint">需要调工作流节点、导入自己的 ComfyUI 图？到「设置」打开<b>高级选项</b>后，本页会显示工作台。<button type="button" class="linkbtn" data-go="settings">去设置 →</button></div>
       </div>
     </div>
   </div>
@@ -2744,11 +2767,24 @@ function applyMode(){
   $('#qualitybox').style.display=(!ADV&&!render)?'':'none';
   $('#tipcard').style.display=ADV?'none':'';
   $('#wb-adv').open=ADV;
+  // 生图 / 生视频：ComfyUI 工作台属于高级选项，默认只显示本页结果面板
+  for(const k of ['img','vid']){
+    const wb=$('#'+k+'-workbench'),rs=$('#'+k+'-result');
+    if(wb)wb.style.display=ADV?'':'none';
+    if(rs)rs.style.display=ADV?'none':'';
+  }
+  const id=$('#img-desc'),vd=$('#vid-desc');
+  if(id)id.textContent=ADV
+    ?'部署或导入 ComfyUI 工作流后，画面描述会写进节点参数，一键提交到官方执行队列。'
+    :'描述你想要的画面，选好画幅与风格，点生成即可；结果直接显示在本页，不需要接触 ComfyUI。';
+  if(vd)vd.textContent=ADV
+    ?'部署视频工作流，镜头描述、时长与画幅直接写入节点，提交后由 ComfyUI 队列生成并回传进度。'
+    :'描述镜头与运镜，选好时长与画幅，点生成即可；结果直接显示在本页，不需要接触 ComfyUI。';
   if(!ADV)applyQuality();
   $('#advtoggle').checked=ADV;
   $('#advhint').textContent=ADV
-    ?'高级选项已显示在提交任务页。'
-    :'简洁模式只保留文件、任务类型和画质；渲染任务仍会展开必要参数。';
+    ?'高级选项已显示：任务提交页可展开编码参数，生图 / 生视频页会显示 ComfyUI 工作台。'
+    :'简洁模式只保留必要参数：生图 / 生视频直接在本页出结果，任务提交页只留文件、类型和画质。';
 }
 
 /* ---------------- 硬件要求 → 预估 ---------------- */
@@ -2889,7 +2925,19 @@ $('#f').addEventListener('submit',async e=>{
 });
 
 /* ---------------- 生图 / 生视频：ComfyUI 工作台 ---------------- */
-function cwGenerate(kind){
+function cwResultHTML(r){
+  const items=(r&&r.outputs)||[];
+  if(!items.length)return '<div class="empty inline">任务完成，但没有返回产物。</div>';
+  const grid=items.map(o=>{
+    const video=/\.(mp4|webm|mov|mkv|gif)$/i.test(o.filename||'');
+    return video
+      ? '<video class="gen-item gen-video" src="'+esc(o.url)+'" controls preload="metadata"></video>'
+      : '<a class="gen-item" href="'+esc(o.url)+'" target="_blank" rel="noreferrer"><img src="'+esc(o.url)+'" alt=""></a>';
+  }).join('');
+  return '<div class="gen-grid">'+grid+'</div>'+
+    '<div class="hint" style="margin-bottom:0">共 '+items.length+' 个产物 · 点图片在新标签打开原图</div>';
+}
+async function cwGenerate(kind){
   const p=kind==='image'
     ?{prompt:$('#img-prompt').value.trim(),size:$('#img-size').value,
       style:$('#img-style').value,negative:$('#img-neg').value.trim()}
@@ -2897,18 +2945,37 @@ function cwGenerate(kind){
       size:$('#vid-size').value,motion:$('#vid-motion').value.trim()};
   if(!p.prompt)return kind==='image'?'先写画面描述':'先写镜头描述';
   if(!window.ComfyWorkbench)return '工作台组件尚未加载，请刷新页面重试';
-  ComfyWorkbench.generate(kind,p);
-  return '已写入工作流并打开 ComfyUI 工作台';
+  // 高级：沿用完整工作台（调节点、导入工作流、看队列）
+  if(ADV){ComfyWorkbench.generate(kind,p);return '已写入工作流并打开 ComfyUI 工作台'}
+  // 默认：留在本页直接生成并展示结果
+  const key=kind==='image'?'img':'vid';
+  const box=$('#'+key+'-result-body');
+  const btn=$('#'+key+'-form button[type=submit]');
+  if(btn){btn.disabled=true;btn.textContent='生成中…'}
+  if(box)box.innerHTML='<div class="gen-state"><span class="gen-spinner"></span><div><b>正在生成</b>'+
+    '<span id="gen-wait-'+key+'">任务已提交到执行队列…</span></div></div>';
+  try{
+    const r=await ComfyWorkbench.run(kind,p,i=>{
+      const w=$('#gen-wait-'+key);
+      if(w)w.textContent='任务已提交到执行队列，已等待 '+Math.round((i+1)*1.5)+' 秒';
+    });
+    if(box)box.innerHTML=cwResultHTML(r);
+    return r.outputs.length?('生成完成，共 '+r.outputs.length+' 个产物'):'任务完成，但没有返回产物';
+  }catch(err){
+    const m=String((err&&err.message)||err);
+    if(box)box.innerHTML='<div class="hint warn" style="margin:0">'+esc(m)+'</div>';
+    return '生成失败：'+m;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=kind==='image'?'生成图片':'生成视频'}
+  }
 }
-$('#img-form').addEventListener('submit',e=>{
+$('#img-form').addEventListener('submit',async e=>{
   e.preventDefault();
-  const m=cwGenerate('image');
-  $('#img-msg').textContent=m;
+  $('#img-msg').textContent=await cwGenerate('image');
 });
-$('#vid-form').addEventListener('submit',e=>{
+$('#vid-form').addEventListener('submit',async e=>{
   e.preventDefault();
-  const m=cwGenerate('video');
-  $('#vid-msg').textContent=m;
+  $('#vid-msg').textContent=await cwGenerate('video');
 });
 
 /* ---------------- 模型 API： tabs ---------------- */

@@ -30,9 +30,9 @@ export default function Settings() {
       <Card kicker="Preferences" title="界面设置">
         <label className="check" style={{ marginTop: 0 }}>
           <input type="checkbox" checked={advanced} onChange={toggle} style={{ width: 'auto' }} />
-          <span><b>显示高级选项</b><br />编码器、硬件要求、分片数、服务端路径</span>
+          <span><b>显示高级选项</b><br />编码器、硬件要求、分片数、服务端路径、ComfyUI 工作台</span>
         </label>
-        <div className="hint">{advanced ? '高级选项已显示在提交任务页。' : '简洁模式只保留文件、任务类型和画质；渲染任务仍会展开必要参数。'}</div>
+        <div className="hint">{advanced ? '高级选项已显示：任务提交页可展开编码参数，生图 / 生视频页会显示 ComfyUI 工作台与算力池。' : '简洁模式只保留必要参数：生图 / 生视频直接在本页出结果，任务提交页只留文件、类型和画质。'}</div>
         <div className="hint" style={{ marginTop: 8 }}>深色 / 浅色主题、侧边栏展开状态都可以通过左下角按钮随时切换，偏好保存在本机。</div>
       </Card>
       <Card kicker="Security" title="安全说明">
