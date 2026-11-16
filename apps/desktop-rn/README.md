@@ -33,8 +33,12 @@ powershell -ExecutionPolicy Bypass -File scripts/init-windows.ps1
 npx react-native run-windows
 ```
 
-前置：Node 22、VS2022（Desktop development with C++ + Windows 10/11 SDK）、
-`starstack-worker.exe` 放在 exe 同目录（或设置 `STARSTACK_WORKER`）。
+前置：Node 22、PowerShell 7（`pwsh`）、.NET SDK 8+、VS2022（Desktop development with C++ +
+Windows 10/11 SDK）、`starstack-worker.exe` 放在 exe 同目录（或设置 `STARSTACK_WORKER`）。
+
+RNW 0.76+ 的 `react-native-windows-init` 已废弃，脚本改用
+`npx react-native init-windows --overwrite --template cpp-app`。该命令在加载时会调用 `pwsh`，
+所以缺 PowerShell 7 时 `init-windows` 不会出现在 `npx react-native --help` 里。
 
 ## 已完成 / 待办
 

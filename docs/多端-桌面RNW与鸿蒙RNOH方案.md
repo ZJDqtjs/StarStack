@@ -75,7 +75,10 @@ apps/desktop-rn/
 - `metro.config.js` 的 `watchFolders` 加 `../mobile-rn`，`resolver.nodeModulesPaths` 同时指向
   `apps/desktop-rn/node_modules` 与 `apps/mobile-rn/node_modules` 之外的依赖必须由本工程声明。
 - 共享页面 import `react-native-svg`，桌面工程也要装同一主版本。
-- `windows/` 目录由 `npx react-native-windows-init --version 0.84.2` 生成，需要 VS2022 + C++ 工作负载 + Windows SDK。
+- `windows/` 目录由 `npx react-native init-windows --overwrite --template cpp-app` 生成
+  （RNW 0.76+ 已废弃 `react-native-windows-init`），需要 PowerShell 7、.NET SDK 8+、
+  VS2022 + C++ 工作负载 + Windows SDK。`init-windows` 在加载时会调用 `pwsh`，缺它时命令不会出现在
+  `npx react-native --help` 中。
 - 本地节点走 `starstack-worker.exe`：沿用当前 WPF 的 `WorkerHost` 逻辑，改成 RNW TurboModule（C#/C++）。
 
 ## 五、鸿蒙 RNOH 工程（下一步）
@@ -132,3 +135,11 @@ apps/harmony-rn/
 > RNOH 的 `@react-native-oh/template` 在 npm 上不存在（CLI `init` 默认会 404）。
 > 本工程改用 CLI 包内自带的 `harmony` 模板 + `@react-native-oh/react-native-harmony` 包内的
 > `react_native_openharmony.har`，文件与官方 init 输出同源。
+
+本地已验证：
+
+- `apps/harmony-rn` 的 `npm run harmony:debug` 成功产出
+  `harmony/entry/src/main/resources/rawfile/bundle.harmony.js`（5 个 asset），说明共享 screens
+  在 RNOH Metro 下可解析；`npm run harmony` 需要 RN 包内的 `hermesc`，当前本机没有，留给节点 84。
+- `apps/desktop-rn` 三端类型检查通过；`init-windows` 需要 `pwsh`/`.NET SDK`，本机两者都没有，
+  所以 `windows/` 只能在节点 84 生成（脚本已改为 RNW 0.76+ 的正确命令）。
