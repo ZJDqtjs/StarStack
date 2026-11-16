@@ -1,32 +1,10 @@
 // 原生算力节点桥：JS 只负责开关与展示，长轮询/转码/心跳全在 Kotlin 前台 Service 里。
 // 没装原生模块时（Expo Go）available=false，界面给出明确提示而不是静默失败。
 import { EventEmitter, requireOptionalNativeModule } from 'expo-modules-core'
+import { EMPTY_NODE_STATUS, type NodeStatus } from '../platform'
 
-export type NodePhase = 'idle' | 'registering' | 'polling' | 'fetching' | 'transcoding' | 'uploading' | 'error'
-
-export type NodeStatus = {
-  running: boolean
-  nodeId: string
-  phase: NodePhase
-  segId: string
-  pct: number
-  lastError: string
-  served: number
-  earned: number
-  encoder: string
-}
-
-export const EMPTY_STATUS: NodeStatus = {
-  running: false,
-  nodeId: '',
-  phase: 'idle',
-  segId: '',
-  pct: 0,
-  lastError: '',
-  served: 0,
-  earned: 0,
-  encoder: '',
-}
+export type { NodePhase, NodeStatus } from '../platform'
+export const EMPTY_STATUS: NodeStatus = EMPTY_NODE_STATUS
 
 type NativeNodeModule = {
   start(baseUrl: string, launchCode: string, nodeId: string, slots: number, price: number): Promise<void>

@@ -266,8 +266,14 @@ func (w *Worker) hasRuntime(name string) bool {
 //
 // encoderFamilyOf 把编码器归到 h264 / hevc / av1 家族。桌面节点之间仍然要求
 // 精确匹配（libx264 的活不能派给只会 h264_nvenc 的机器，参数不同会拼不上）；
-// 只有 Android 节点例外：它上报的是 h264_mediacodec，产出的是同一种编码格式，
-// 只是参数由硬件决定，所以允许它承接同家族的任务。
+// 只有移动端节点例外：Android / HarmonyOS 上报的是 h264_mediacodec，
+// 产出的是同一种编码格式，只是参数由硬件决定，所以允许它承接同家族的任务。
+// isMobileNodeOS 识别 App 内常驻节点的平台前缀。移动端没法装 ffmpeg，
+// 只能上报 MediaCodec 系列编码器，因此需要放宽到编码家族匹配。
+func isMobileNodeOS(os string) bool {
+	return strings.HasPrefix(os, "android") || strings.HasPrefix(os, "harmony")
+}
+
 func encoderFamilyOf(name string) string {
 	switch {
 	case strings.Contains(name, "264"), strings.HasPrefix(name, "h264"):
@@ -285,7 +291,7 @@ func (w *Worker) canEncode(vcodec string) bool {
 	if has(w.Encoders, vcodec) {
 		return true
 	}
-	if !strings.HasPrefix(w.OS, "android") {
+	if !isMobileNodeOS(w.OS) {
 		return false
 	}
 	want := encoderFamilyOf(vcodec)

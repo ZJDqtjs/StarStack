@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
-import * as DocumentPicker from 'expo-document-picker'
 import { api } from '../api'
+import { usePlatform } from '../platform'
 import { f1, points } from '../api/format'
 import { useApp, type RouteParams } from '../ctx'
 import { Badge, Btn, Card, Chip, Field, Icon, Page, PageHead, Segmented } from '../ui'
@@ -31,6 +31,7 @@ export default function Create({ params }: { params?: RouteParams }) {
   const app = useApp()
   const s = useStyles(makeStyles)
   const { c } = useTheme()
+  const platform = usePlatform()
   const [kind, setKind] = useState<Kind>(params?.kind || 'transcode')
   const [file, setFile] = useState<Picked | null>(null)
   const [duration, setDuration] = useState('')
@@ -71,13 +72,11 @@ export default function Create({ params }: { params?: RouteParams }) {
 
   const pick = async () => {
     try {
-      const res = await DocumentPicker.getDocumentAsync({
+      const a = await platform.pickFile({
         type: kind === 'transcode' ? 'video/*' : ['application/zip', 'application/octet-stream', 'application/x-zip-compressed', '*/*'],
-        copyToCacheDirectory: true,
       })
-      if (res.canceled || !res.assets?.length) return
-      const a = res.assets[0]
-      setFile({ uri: a.uri, name: a.name, size: a.size ?? undefined, mimeType: a.mimeType ?? undefined })
+      if (!a) return
+      setFile(a)
       setMsg('')
     } catch (e) {
       Alert.alert('选取失败', errText(e))

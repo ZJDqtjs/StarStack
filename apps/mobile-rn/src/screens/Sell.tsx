@@ -121,7 +121,7 @@ export default function Sell() {
           { key: 'publish' as Tab, label: '发布服务' },
         ]}
         value={tab}
-        onChange={setTab}
+        onChange={(v) => setTab(v as Tab)}
       />
 
       {tab === 'publish' ? (

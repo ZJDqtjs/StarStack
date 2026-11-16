@@ -1,6 +1,7 @@
 # 构建产物
 bin/
 dist/
+build-output/
 
 # 运行时数据与本地测试产生的目录
 data/

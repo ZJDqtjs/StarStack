@@ -1,0 +1,17 @@
+node_modules/
+npm-debug.log
+yarn-error.log
+.metro-health-check*
+
+# RNOH / DevEco build outputs
+harmony/oh_modules/
+harmony/entry/oh_modules/
+harmony/.hvigor/
+harmony/build/
+harmony/entry/build/
+harmony/entry/src/main/resources/rawfile/bundle.harmony.js
+harmony/entry/src/main/resources/rawfile/hermes_bundle.hbc
+harmony/entry/src/main/resources/rawfile/assets/
+harmony/entry/src/main/cpp/generated/
+harmony/entry/src/main/ets/codegen/
+harmony/*.har

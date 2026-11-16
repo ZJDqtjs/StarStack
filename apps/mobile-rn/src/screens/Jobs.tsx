@@ -49,7 +49,7 @@ export default function Jobs() {
           { key: 'all' as Filter, label: `全部 ${counts.all}` },
         ]}
         value={filter}
-        onChange={setFilter}
+        onChange={(v) => setFilter(v as Filter)}
       />
 
       {list.length === 0 ? (

@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "星栈算力 HarmonyOS 客户端"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "星栈算力控制台"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "星栈算力"
+    }
+  ]
+}
