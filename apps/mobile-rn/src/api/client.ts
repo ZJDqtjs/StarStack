@@ -96,10 +96,42 @@ export function createApi({ baseUrl, getToken, request, upload }: ApiOptions) {
     ledger: (opts?: Record<string, unknown>) => get('/api/ledger' + qsSuffix(opts)),
     settings: () => get('/api/me/settings'),
     saveSettings: (advanced: boolean) => put('/api/me/settings', { advanced }),
+    recharge: (amount: number) => post('/api/me/recharge', { amount }),
+
+    // 服务市场（卖家挂牌）与买卖会话
+    // 支持可选 q / limit / offset（分页与服务端搜索）；不传时维持旧契约。
+    offers: (opts?: Record<string, unknown>) => get('/api/offers' + qsSuffix(opts)),
+    useOffer: (id: string) => post('/api/offers/' + enc(id) + '/use', {}),
+    contactOffer: (id: string) => post('/api/offers/' + enc(id) + '/conversation', {}),
+    publishOffer: (form: FormData) => uploadTo('/api/offers', form),
+    deleteOffer: (id: string) => del('/api/offers/' + enc(id)),
+    offerImage: (id: string) => url('/api/offers/media/' + enc(id)),
+    conversations: (opts?: Record<string, unknown>) => get('/api/offers/conversations' + qsSuffix(opts)),
+    conversation: (id: string, opts?: Record<string, unknown>) =>
+      get('/api/offers/conversations/' + enc(id) + qsSuffix(opts)),
+    sendMessage: (id: string, body: string) => post('/api/offers/conversations/' + enc(id), { body }),
+
+    // 社区
+    posts: (opts?: Record<string, unknown>) => get('/api/forum/posts' + qsSuffix(opts)),
+    post: (id: string) => get('/api/forum/posts/' + enc(id)),
+    createPost: (form: FormData) => uploadTo('/api/forum/posts', form),
+    commentPost: (id: string, form: FormData) => uploadTo('/api/forum/posts/' + enc(id) + '/comments', form),
+    mediaUrl: (id: string) => url('/api/forum/media/' + enc(id)),
 
     // model gateway
     catalog: () => get('/api/models/catalog'),
     tryChat: (model: string, messages: unknown[]) => post('/api/models/try', { model, messages }),
+    upstreams: () => get('/api/models/upstreams'),
+    addUpstream: (body: unknown) => post('/api/models/upstreams', body),
+    probeUpstream: (base_url: string, api_key: string) =>
+      post('/api/models/upstreams/probe', { base_url, api_key }),
+    setUpstream: (id: string, enabled: boolean) => put('/api/models/upstreams/' + enc(id), { enabled }),
+    delUpstream: (id: string) => del('/api/models/upstreams/' + enc(id)),
+    // 用量对账仅平台自营账户返回 200；普通账户 403，调用方降级为提示文案。
+    usage: (days = 7) => get('/api/models/usage?days=' + enc(String(days))),
+
+    // ComfyUI 算力池任务（API 格式工作流 JSON）
+    submitComfy: (body: unknown) => post('/api/jobs/comfy', body),
 
     // compute market and provider nodes
     market: () => get('/api/market'),
@@ -115,6 +147,16 @@ export function createApi({ baseUrl, getToken, request, upload }: ApiOptions) {
     vmOffers: () => get('/api/vm/offers'),
     vmInstances: () => get('/api/vm/instances'),
     vmOrder: (body: unknown) => post('/api/vm/orders', body),
+    vmStop: (id: string) => post('/api/vm/instances/' + enc(id) + '/stop', {}),
+    vmExtend: (id: string, hours: number) => post('/api/vm/instances/' + enc(id) + '/extend', { hours }),
+    vmUpdateOffer: (id: string, enabled: boolean) => put('/api/vm/offers/' + enc(id), { enabled }),
+    vmPublishOffer: (body: unknown) => post('/api/vm/offers', body),
+    vmDeleteOffer: (id: string) => del('/api/vm/offers/' + enc(id)),
+
+    // API keys（模型网关）
+    keys: () => get('/api/keys'),
+    createKey: (name: string, daily_quota: number) => post('/api/keys', { name, daily_quota }),
+    deleteKey: (id: string) => del('/api/keys/' + enc(id)),
 
     downloadUrl: (jobId: string, which?: string) =>
       url('/download/' + enc(jobId) + (which ? '?which=' + enc(which) : '')),

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useApp } from '../ctx'
 import { Btn, Card, Empty, Field, Loader, Sheet, Stats, Tag } from '../ui'
-import { f1, f2, memGB } from '../../../shared/index.js'
+import { f2, memGB, workerTS } from '../../../shared/index.js'
 
 function NodeCard({ w, onPrice, onPause, onOpen }: any) {
   const reliability = w.ok + w.bad > 0 ? Math.round((100 * w.ok) / (w.ok + w.bad)) + '%' : '—'
@@ -10,7 +10,7 @@ function NodeCard({ w, onPrice, onPause, onOpen }: any) {
     <Card onClick={() => onOpen(w)}>
       <h3 style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         {w.name || w.id}
-        <Tag tone={w.online ? 'ok' : 'bad'}>{w.online ? '在线' : '离线'}</Tag>
+        <Tag tone={w.online ? 'ok' : 'bad'}>{workerTS(w)} {w.online ? '在线' : '离线'}</Tag>
         {w.mine && <Tag tone="link">我的机器</Tag>}
         {w.paused && <Tag tone="bad">已停止派活</Tag>}
       </h3>
@@ -155,7 +155,7 @@ export default function Market() {
           <>
             <h3 style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               {detail.name || detail.id}
-              <Tag tone={detail.online ? 'ok' : 'bad'}>{detail.online ? '在线' : '离线'}</Tag>
+              <Tag tone={detail.online ? 'ok' : 'bad'}>{workerTS(detail)} {detail.online ? '在线' : '离线'}</Tag>
               {detail.mine && <Tag tone="link">我的机器</Tag>}
             </h3>
             <div className="hint" style={{ marginTop: 6 }}>

@@ -11,6 +11,7 @@
 package render
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -25,7 +26,17 @@ const (
 	// shardable along file boundaries without a dependency graph, so the
 	// scheduler treats the whole job as one slice.
 	KindBuild = "build"
+	// KindComfy runs one ComfyUI prompt graph on a provider machine. Like a
+	// build it is one indivisible unit — a graph is one generation, not a range
+	// that splits — but the executor is the provider's own ComfyUI, reached over
+	// HTTP, so the node must advertise the "comfyui" runtime to be matched.
+	KindComfy = "comfy"
 )
+
+// MaxComfyPromptBytes caps the graph a buyer may submit. A large workflow with
+// embedded notes is still far below this; anything bigger is a mistake or an
+// attempt to make every claim payload huge.
+const MaxComfyPromptBytes = 512 << 10
 
 // Spec is the whole render job as the broker stores it: everything an agent
 // needs except the piece it is currently handed.
@@ -56,6 +67,14 @@ type Spec struct {
 	Command    string `json:"command,omitempty"`
 	Output     string `json:"output,omitempty"`
 	TimeoutSec int    `json:"timeout_sec,omitempty"`
+
+	// Comfy. Prompt is the ComfyUI API-format graph — exactly the object the
+	// buyer would POST to /prompt — and the agent forwards it to its own ComfyUI
+	// unmodified, so model names are the provider's business, not the platform's.
+	// Media is "image" or "video" and only decides labels and the unit; billing
+	// is one charge per completed generation either way.
+	Prompt json.RawMessage `json:"prompt,omitempty"`
+	Media  string          `json:"media,omitempty"`
 }
 
 // Unit names the thing the buyer is billed for: seconds of footage, seconds of
@@ -67,7 +86,39 @@ func (s *Spec) Unit() string {
 	if s != nil && s.Kind == KindBuild {
 		return "分钟"
 	}
+	if s != nil && s.Kind == KindComfy {
+		return "次"
+	}
 	return "视频秒"
+}
+
+// ValidComfyPrompt checks that raw is a ComfyUI *API-format* graph: one object
+// per node, each carrying class_type. The UI format ({"nodes":[...],"links":[...]})
+// is deliberately rejected — it is an editor document, not something /prompt
+// accepts, and silently converting it would hide that from the buyer.
+func ValidComfyPrompt(raw json.RawMessage) error {
+	if len(raw) == 0 {
+		return errors.New("缺少 ComfyUI 工作流（API 格式 JSON）")
+	}
+	if len(raw) > MaxComfyPromptBytes {
+		return fmt.Errorf("工作流超过 %d KiB", MaxComfyPromptBytes>>10)
+	}
+	var graph map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &graph); err != nil {
+		return errors.New("工作流必须是 JSON 对象（ComfyUI 的 API 格式）")
+	}
+	if len(graph) == 0 {
+		return errors.New("工作流里没有任何节点")
+	}
+	for id, body := range graph {
+		var node struct {
+			ClassType string `json:"class_type"`
+		}
+		if err := json.Unmarshal(body, &node); err != nil || node.ClassType == "" {
+			return fmt.Errorf("节点 %s 缺少 class_type：这是 UI 工作流，请在 ComfyUI 里用「导出（API）」", id)
+		}
+	}
+	return nil
 }
 
 // Validate rejects a spec the planner cannot honour, before any credits are
@@ -94,6 +145,16 @@ func (s *Spec) Validate() error {
 		}
 		if s.Width < 0 || s.Height < 0 {
 			return errors.New("输出尺寸无效")
+		}
+	case KindComfy:
+		if err := ValidComfyPrompt(s.Prompt); err != nil {
+			return err
+		}
+		if s.Media != "" && s.Media != "image" && s.Media != "video" {
+			return fmt.Errorf("未知的 ComfyUI 产物类型 %q", s.Media)
+		}
+		if s.TimeoutSec < 0 || s.TimeoutSec > 3600 {
+			return errors.New("超时需在 0~3600 秒之间")
 		}
 	default:
 		return fmt.Errorf("未知的渲染类型 %q", s.Kind)

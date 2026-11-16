@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useApp } from '../store.jsx'
 import { nav } from '../App.jsx'
 import { Card, Btn, Tag, Modal, Stat } from '../ui.jsx'
-import { api, f1, f2 } from '../api.js'
+import { api, f2, workerTS, durCN } from '../api.js'
 
 export default function Pool() {
   const { workers, setTarget, toast, confirm, prompt } = useApp()
@@ -45,21 +45,22 @@ export default function Pool() {
       </Card>
       <Card kicker="Nodes" title="全部在线节点">
         <div className="tablewrap"><table><thead><tr><th>节点</th><th>硬件</th><th>运行时</th><th>编码能力</th><th>占用</th><th>吞吐</th><th>信誉</th><th>单价</th></tr></thead>
-          <tbody>{workers.length ? workers.map(w => {
+          <tbody>{on.length ? on.map(w => {
             const rel = w.ok + w.bad > 0 ? Math.round(100 * w.ok / (w.ok + w.bad)) + '%' : '—'
             return (
               <tr key={w.id} className="tap" onClick={() => setNode(w)}>
-                <td><b>{w.name || w.id}</b><span className="sub-line">{w.os}</span>{w.mine && <Tag tone="mine">我的机器</Tag>}<br /><Tag tone={w.online ? 'on' : 'off'}>{w.online ? '在线' : '离线 ' + f1(w.since) + 's'}</Tag></td>
+                <td><b>{w.name || w.id}</b><span className="sub-line">{w.os}</span>{w.mine && <Tag tone="mine">我的机器</Tag>}<br /><Tag tone={w.online ? 'on' : 'off'}>{workerTS(w)} {w.online ? '在线' : '离线'}</Tag></td>
                 <td>{w.cpus} 核 · {w.mem_mb ? Math.round(w.mem_mb / 1024) + 'GB' : '内存未知'}<br />{(w.gpus || []).map(g => g.name + ' ' + g.mem_mb + 'MB').join('、') || '无独显'}</td>
                 <td>{(w.runtimes || []).map(r => <Tag key={r.name}>{r.name}</Tag>)}</td>
                 <td style={{ maxWidth: 190 }}>{(w.encoders || []).map(e => <Tag key={e}>{e}</Tag>)}</td>
                 <td className="num">{w.active}/{w.slots}</td>
                 <td className="num">{w.speed > 0 ? f2(w.speed) + '×' : '—'}</td>
-                <td>{rel}<span className="sub-line">✓{w.ok} ✗{w.bad}</span>{w.parked_sec ? <Tag tone="off">停派 {w.parked_sec}s</Tag> : null}</td>
+                <td>{rel}<span className="sub-line">✓{w.ok} ✗{w.bad}</span>{w.parked_sec ? <Tag tone="off">停派 {durCN(w.parked_sec)}</Tag> : null}</td>
                 <td className="num">{f2(w.price)} 点/秒{w.mine && <><br /><Btn ghost tiny onClick={e => { e.stopPropagation(); reprice(w.id, w.price) }}>改价</Btn></>}</td>
               </tr>
             )
-          }) : <tr><td colSpan={8} className="empty">尚无节点注册</td></tr>}</tbody></table></div>
+          }) : <tr><td colSpan={8} className="empty">当前没有在线节点</td></tr>}</tbody></table></div>
+        <div className="hint">离线节点不进入算力市场，可到「我的机器」里查看、暂停或删除。</div>
       </Card>
       <Modal open={!!node} onClose={() => setNode(null)} title={node ? (node.name || node.id) : ''}
         foot={<><Btn ghost onClick={() => setNode(null)}>关闭</Btn><Btn sm onClick={assign}>派任务给这台节点</Btn></>}>

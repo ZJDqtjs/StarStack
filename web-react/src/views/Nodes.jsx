@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useApp } from '../store.jsx'
 import { nav } from '../App.jsx'
 import { Card, Btn, Tag, Empty, Stat, Field } from '../ui.jsx'
-import { api, post, href, f1, f2 } from '../api.js'
+import { api, post, href, f2, workerTS } from '../api.js'
 
 // 设备系统标签：windows_x64 / linux_arm64 / darwin_x64 …
 // os 在 state 里是 "windows/amd64" 这样的组合值，arch 单独给，两者都兜底。
@@ -18,7 +18,7 @@ const sysTag = w => {
 
 export default function Nodes() {
   const { workers, policy, contrib, toast, confirm, prompt } = useApp()
-  const [l, setL] = useState({ name: '', price: '0.80', slots: 2, os: 'windows', arch: 'amd64', build: false })
+  const [l, setL] = useState({ name: '', price: '0.80', slots: 2, os: 'windows', arch: 'amd64', build: false, comfyui: false })
   const [lMsg, setLMsg] = useState('')
   const [code, setCode] = useState('')
   const [pairMsg, setPairMsg] = useState('')
@@ -67,13 +67,13 @@ export default function Nodes() {
     setLMsg('正在生成启动码…')
     try {
       // 与下载节点包同一个接口：先拿到绑定了账号的启动码，再交给主进程拉起 worker。
-      const d = await post('/api/nodes/launch', { name, price: +l.price, slots: +l.slots, os: l.os, arch: l.arch, allow_build: !!l.build })
+      const d = await post('/api/nodes/launch', { name, price: +l.price, slots: +l.slots, os: l.os, arch: l.arch, allow_build: !!l.build, comfyui: !!l.comfyui })
       // server 留空：页面看到的是本地反代地址，真实 Broker 由主进程补齐。
       host.postMessage({
         kind: 'node.run',
-        payload: { server: '', nodeId: d.node_id, name, price: +l.price, slots: +l.slots, launch: d.code, allowBuild: !!d.build }
+        payload: { server: '', nodeId: d.node_id, name, price: +l.price, slots: +l.slots, launch: d.code, allowBuild: !!d.build, comfyui: !!d.comfyui }
       })
-      setLMsg('已请求在本机启动节点 ' + d.node_id + '：关掉窗口或点「停止」即停止接活。' + (d.build ? '（含编译任务）' : ''))
+      setLMsg('已请求在本机启动节点 ' + d.node_id + '：关掉窗口或点「停止」即停止接活。' + (d.build ? '（含编译任务）' : '') + (d.comfyui ? '（含 ComfyUI 任务）' : ''))
     } catch (e) { setLMsg('启动失败：' + e) }
   }
 
@@ -82,9 +82,9 @@ export default function Nodes() {
     if (!(+l.slots >= 1)) { setLMsg('并发槽至少 1 个'); return }
     setLMsg('正在生成启动码…')
     try {
-      const d = await post('/api/nodes/launch', { name: l.name.trim(), price: +l.price, slots: +l.slots, os: l.os, arch: l.arch, allow_build: !!l.build })
+      const d = await post('/api/nodes/launch', { name: l.name.trim(), price: +l.price, slots: +l.slots, os: l.os, arch: l.arch, allow_build: !!l.build, comfyui: !!l.comfyui })
       const a = document.createElement('a'); a.href = href(d.bundle || d.script); a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove()
-      setLMsg('节点包正在下载（' + d.node_id + '，' + Math.max(1, Math.round(d.expires_in_sec / 60)) + ' 分钟内有效）。解压后双击 starstack-node.exe 即可加入。' + (d.build ? '本机会接编译任务。' : ''))
+      setLMsg('节点包正在下载（' + d.node_id + '，' + Math.max(1, Math.round(d.expires_in_sec / 60)) + ' 分钟内有效）。解压后双击 starstack-node.exe 即可加入。' + (d.build ? '本机会接编译任务。' : '') + (d.comfyui ? '本机会接 ComfyUI 任务。' : ''))
       toast('节点包已生成，拷到目标机器运行即可', 'ok')
     } catch (e) { setLMsg('生成失败：' + e) }
   }
@@ -103,6 +103,16 @@ export default function Nodes() {
     const w = workers.find(x => x.id === id)
     if (!await confirm('删除节点「' + (w ? (w.name || w.id) : id) + '」？\n\n这台机器会从「我的机器」里移除；已结算的收益流水保留用于对账。\n如果节点程序还在运行，请把它关掉。', '删除节点')) return
     try { await api('/api/nodes/' + encodeURIComponent(id), { method: 'DELETE' }); toast('节点已删除', 'ok') } catch (e) { toast(String(e), 'bad') }
+  }
+  const offlineMine = mine.filter(w => !w.online)
+  const pruneOffline = async () => {
+    if (!offlineMine.length) return
+    if (!await confirm('清理这 ' + offlineMine.length + ' 台离线节点？\n\n它们会从「我的机器」里移除，已结算的收益流水保留用于对账。\n还有任务在跑的机器会被跳过；想重新接入请重新下载节点包。', '清理离线节点')) return
+    let ok = 0, fail = 0
+    for (const w of offlineMine) {
+      try { await api('/api/nodes/' + encodeURIComponent(w.id), { method: 'DELETE' }); ok++ } catch (e) { fail++ }
+    }
+    toast('已清理 ' + ok + ' 台离线节点' + (fail ? '，' + fail + ' 台仍有任务在跑，稍后再试' : ''), fail ? 'warn' : 'ok')
   }
 
   return (
@@ -128,6 +138,14 @@ export default function Nodes() {
               <span><b>接受编译任务</b><br />这台机器会执行买家上传的编译命令——以你的用户身份、在你的磁盘上跑。不同意就不勾，只接转码 / 渲染。</span>
             </label>
           )}
+          <label className="check" style={{ marginTop: 4 }}>
+            <input type="checkbox" checked={!!l.comfyui} onChange={e => setL({ ...l, comfyui: e.target.checked })} style={{ width: 'auto' }} />
+            允许执行 ComfyUI 任务
+          </label>
+          <div className="hint">
+            勾选后这台机器会以 <span className="num">--allow-comfy</span> 启动：平台派发的 prompt 图交给它本机的
+            ComfyUI（默认 <span className="num">127.0.0.1:8188</span>）执行，按次结算。启动节点前请先打开 ComfyUI。
+          </div>
           <div className="formfoot"><Btn onClick={launch} disabled={policy && !policy['launch_' + l.os]}>下载节点包（exe + 配置）</Btn></div>
           <div className="hint">{lMsg}</div>
           {host && (
@@ -168,13 +186,16 @@ export default function Nodes() {
             </div>
           )}
         </Card>
-        <Card kicker="Mine" title="我的机器">
+        <Card kicker="Mine" title="我的机器" side={offlineMine.length ? <Btn ghost tiny onClick={pruneOffline}>清理离线节点（{offlineMine.length}）</Btn> : null}>
           {mine.length ? mine.map(w => {
             const legacy = Math.max(0, Number(w.earned || 0) - Number(w.earned_task || 0) - Number(w.earned_vm || 0))
             return (
               <div className="card" key={w.id} style={{ marginBottom: 10, padding: '16px 18px' }}>
                 <h2 style={{ marginBottom: 10 }}>{w.name || w.id} <Tag tone={w.online ? 'on' : 'off'}>{w.online ? '在线' : '离线'}</Tag>
-                  <Tag>{sysTag(w)}</Tag>{w.paused && <Tag>已暂停</Tag>}{dup[w.id] && <Tag tone="warn">同设备重复节点</Tag>}{!w.device_id && <Tag tone="warn">未采集设备指纹</Tag>}</h2>
+                  <Tag>{sysTag(w)}</Tag>
+                  {w.last_seen ? <Tag>{workerTS(w)}</Tag> : null}
+                  {w.paused && <Tag>已暂停</Tag>}{dup[w.id] && <Tag tone="warn">同设备重复节点</Tag>}{!w.device_id && <Tag tone="warn">未采集设备指纹</Tag>}
+                  {(w.runtimes || []).some(r => r.name === 'comfyui') && <Tag tone="on">可执行 ComfyUI</Tag>}</h2>
                 <div className="stats" style={{ marginTop: 0 }}>
                   <Stat v={f2(w.earned || 0)} l="节点贡献（点）" />
                   <Stat v={f2(w.earned_task || 0)} l="其中：任务算力" />

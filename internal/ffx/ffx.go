@@ -569,21 +569,16 @@ func probeEncoder(ctx context.Context, name string) bool {
 	return cmd.Run() == nil
 }
 
+// Every hardware encoder is probed on its own, never once per family. A family
+// probe is one codec's answer applied to its siblings: the GTX 750 (GM107) has a
+// working h264_nvenc and no HEVC encoder at all, so a cached "nvenc works" also
+// advertised hevc_nvenc and sent buyers' HEVC jobs to a node that could only fail
+// them. The probes are cheap (one black frame, and a missing codec fails in
+// milliseconds), so paying for one per name is the honest price.
 func filterHardwareEncoders(ctx context.Context, encs []string) []string {
-	probed := map[string]bool{}
 	out := make([]string, 0, len(encs))
 	for _, enc := range encs {
-		family := hardwareEncoderFamily(enc)
-		if family == "" {
-			out = append(out, enc)
-			continue
-		}
-		ok, done := probed[family]
-		if !done {
-			ok = probeEncoder(ctx, enc)
-			probed[family] = ok
-		}
-		if ok {
+		if hardwareEncoderFamily(enc) == "" || probeEncoder(ctx, enc) {
 			out = append(out, enc)
 		}
 	}
@@ -707,12 +702,44 @@ func DetectRuntimes(ctx context.Context) []Runtime {
 	return rs
 }
 
-func GPUs(ctx context.Context) []GPUDetail {
-	out, err := exec.CommandContext(ctx, "nvidia-smi",
-		"--query-gpu=name,memory.total", "--format=csv,noheader,nounits").Output()
-	if err != nil {
-		return nil
+// nvidia-smi is the only way this agent learns about a discrete GPU, so it is
+// also the only single point of failure: a half-upgraded machine can leave an
+// nvidia-smi in PATH that no longer matches the installed driver (it crashes on
+// start, printing nothing), while the copy the installer shipped still talks to
+// the card. PATH is tried first, then the directories the driver installs into.
+// A missing or crashing candidate is skipped rather than reported as "no GPU".
+func nvidiaSMICandidates() []string {
+	c := []string{"nvidia-smi"}
+	if runtime.GOOS == "windows" {
+		if pf := os.Getenv("ProgramFiles"); pf != "" {
+			c = append(c, filepath.Join(pf, "NVIDIA Corporation", "NVSMI", "nvidia-smi.exe"))
+		}
+		if root := os.Getenv("SystemRoot"); root != "" {
+			c = append(c, filepath.Join(root, "System32", "nvidia-smi.exe"))
+		}
+	} else {
+		c = append(c, "/usr/bin/nvidia-smi", "/usr/local/nvidia/bin/nvidia-smi")
 	}
+	return c
+}
+
+func GPUs(ctx context.Context) []GPUDetail {
+	for _, bin := range nvidiaSMICandidates() {
+		c, cancel := context.WithTimeout(ctx, 10*time.Second)
+		out, err := exec.CommandContext(c, bin,
+			"--query-gpu=name,memory.total", "--format=csv,noheader,nounits").Output()
+		cancel()
+		if err != nil {
+			continue
+		}
+		if list := parseGPUs(out); len(list) > 0 {
+			return list
+		}
+	}
+	return nil
+}
+
+func parseGPUs(out []byte) []GPUDetail {
 	var list []GPUDetail
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)

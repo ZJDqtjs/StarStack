@@ -45,8 +45,14 @@ type Policy struct {
 	// restricted to named accounts even when on: the provider still has to opt in
 	// with --allow-build on its own agent, which is what makes the trust explicit
 	// on both sides.
-	AllowBuild   bool
-	BuildUsers   []string
+	AllowBuild bool
+	BuildUsers []string
+	// AllowComfy exposes the ComfyUI job kind: the buyer submits an API-format
+	// prompt graph and a provider machine with --allow-comfy runs it against its
+	// own ComfyUI. Same double gate as builds — the deployment must opt in and
+	// the account must be named, because the graph reaches someone else's GPU.
+	AllowComfy   bool
+	ComfyUsers   []string
 	secureCookie bool   // set the Secure flag on session cookies (TLS / reverse proxy)
 	CookiePath   string // Path the session cookie is scoped to ("/starstack/" behind a proxy)
 	TrustProxy   bool   // believe X-Forwarded-For for the client address
@@ -109,6 +115,7 @@ func (s *Server) policyView() map[string]any {
 		"local_path": s.policy.AllowLocalPath, "pending": s.policy.ShowPending,
 		"signup_credit": s.policy.SignupCredit, "signup_invite_required": s.policy.SignupInvite != "",
 		"allow_build":     s.policy.AllowBuild,
+		"allow_comfy":     s.policy.AllowComfy,
 		"max_segs":        s.policy.MaxSegs,
 		"max_active_jobs": s.policy.MaxActiveJobs, "max_active_vms": s.policy.MaxActiveVMs,
 		"cost_weight":          s.policy.CostWeight,
@@ -362,10 +369,20 @@ func (s *Server) countLiveJobsLocked(uid string) int {
 // public broker must not hand arbitrary command execution to every freshly
 // registered account.
 func (p Policy) buildAllowed(userName string) bool {
-	if !p.AllowBuild || len(p.BuildUsers) == 0 {
+	return p.namedAllowed(p.AllowBuild, p.BuildUsers, userName)
+}
+
+// comfyAllowed is the same double gate for ComfyUI graphs. The graph reaches a
+// stranger's GPU and can reference custom nodes, so "on" alone is not consent.
+func (p Policy) comfyAllowed(userName string) bool {
+	return p.namedAllowed(p.AllowComfy, p.ComfyUsers, userName)
+}
+
+func (Policy) namedAllowed(on bool, allow []string, userName string) bool {
+	if !on || len(allow) == 0 {
 		return false
 	}
-	for _, name := range p.BuildUsers {
+	for _, name := range allow {
 		if strings.EqualFold(strings.TrimSpace(name), userName) {
 			return true
 		}
