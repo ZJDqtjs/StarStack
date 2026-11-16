@@ -51,8 +51,8 @@ type Policy struct {
 	// prompt graph and a provider machine with --allow-comfy runs it against its
 	// own ComfyUI. Same double gate as builds — the deployment must opt in and
 	// the account must be named, because the graph reaches someone else's GPU.
-	AllowComfy bool
-	ComfyUsers []string
+	AllowComfy   bool
+	ComfyUsers   []string
 	secureCookie bool   // set the Secure flag on session cookies (TLS / reverse proxy)
 	CookiePath   string // Path the session cookie is scoped to ("/starstack/" behind a proxy)
 	TrustProxy   bool   // believe X-Forwarded-For for the client address

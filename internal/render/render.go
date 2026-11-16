@@ -73,8 +73,8 @@ type Spec struct {
 	// unmodified, so model names are the provider's business, not the platform's.
 	// Media is "image" or "video" and only decides labels and the unit; billing
 	// is one charge per completed generation either way.
-	Prompt    json.RawMessage `json:"prompt,omitempty"`
-	Media     string          `json:"media,omitempty"`
+	Prompt json.RawMessage `json:"prompt,omitempty"`
+	Media  string          `json:"media,omitempty"`
 }
 
 // Unit names the thing the buyer is billed for: seconds of footage, seconds of
