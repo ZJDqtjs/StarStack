@@ -113,11 +113,22 @@ apps/harmony-rn/
 > Android 0.88 的 engine 要求 Node `^22.13.0 || ^24.3.0 || >=26`；本机当前 Node 20 只能做类型检查，
 > 正式打包必须在节点 84 用 Node 22。
 
-## 七、执行顺序
+## 七、执行顺序与当前状态
 
-1. ✅ 平台能力注入层（`platform.tsx` / `platform-expo.tsx`），`tsc --noEmit` 通过。
-2. ⏳ 桌面 RNW 最小闭环：登录 + 总览 + 我的任务 + 文件选择，节点 84 出一次 Windows 包。
-3. ⏳ 鸿蒙 RNOH 最小闭环：登录 + 总览 + 我的任务，DevEco 出一次 HAP。
-4. ⏳ 两端平台模块：桌面 worker.exe、鸿蒙 ArkTS 长时任务与解码。
-5. ⏳ Broker 登记 `harmony` 平台与调度匹配。
-6. ⏳ 打包与发布流程接入 CI。
+1. ✅ 平台能力注入层（`platform.tsx` / `platform-expo.tsx`），三端 `tsc --noEmit` 通过。
+2. ✅ 桌面 JS/TS 壳：`apps/desktop-rn`（RN 0.84.1 + RNW 0.84.2），
+   `App.tsx` 左侧导航 + 共享 screens，`src/platform-win.tsx` 定义原生模块契约。
+   `windows/` 与 C++/WinRT 模块由 `scripts/init-windows.ps1` 在节点 84 生成/接入。
+3. ✅ 鸿蒙 JS/TS + DevEco 工程：`apps/harmony-rn`（RN 0.84.1 + RNOH 0.84.6），
+   `harmony/` 来自 RNOH CLI 0.84.6 的官方模板，`EntryAbility` / `RNApp` / `StarStackNodePackage`
+   已就位；HAP 需在 DevEco 里 Sync + 签名后构建。
+4. ✅ ArkTS 节点控制面：`NodeService.ets` 已做 `backgroundTaskManager` 长时任务、
+   hello / claim / report；媒体管线（AVDemuxer/AVMuxer/AVCodec）待接，暂不声明 encoders。
+5. ✅ Broker 登记 `harmony`：`launchOS` / `launchPath` / `canEncode` 已支持，
+   单测 `TestCanEncodeFamilyOnlyOpensForMobile` / `TestLaunchAcceptsMobilePlatforms` 通过。
+6. ⏳ 两端原生模块编译：桌面 `windows/`（VS2022 + C++）、鸿蒙 HAP（DevEco + SDK）。
+7. ⏳ 打包与发布流程接入 CI。
+
+> RNOH 的 `@react-native-oh/template` 在 npm 上不存在（CLI `init` 默认会 404）。
+> 本工程改用 CLI 包内自带的 `harmony` 模板 + `@react-native-oh/react-native-harmony` 包内的
+> `react_native_openharmony.har`，文件与官方 init 输出同源。

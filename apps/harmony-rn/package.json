@@ -1,0 +1,33 @@
+{
+  "name": "starstack-harmony-rn",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "react-native start",
+    "harmony": "react-native bundle-harmony --dev false --js-engine hermes --entry-file index.js --bundle-output harmony/entry/src/main/resources/rawfile/hermes_bundle.hbc --assets-dest harmony/entry/src/main/resources/rawfile/assets",
+    "harmony:debug": "react-native bundle-harmony --dev true --entry-file index.js --bundle-output harmony/entry/src/main/resources/rawfile/bundle.harmony.js --assets-dest harmony/entry/src/main/resources/rawfile/assets",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-oh/react-native-harmony": "0.84.6",
+    "react": "19.2.3",
+    "react-native": "0.84.1",
+    "react-native-svg": "15.16.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.3",
+    "@babel/runtime": "^7.25.0",
+    "@react-native-community/cli": "20.1.0",
+    "@react-native-oh/react-native-harmony-cli": "0.84.6",
+    "@react-native/babel-preset": "0.84.1",
+    "@react-native/metro-config": "0.84.1",
+    "@react-native/typescript-config": "0.84.1",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=22.11.0"
+  }
+}

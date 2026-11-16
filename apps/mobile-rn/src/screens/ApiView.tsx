@@ -236,7 +236,7 @@ export default function ApiView() {
           title="模型 API"
           desc="OpenAI 兼容网关：星舷助手支持自然语言指令与历史对话，密钥只显示一次。"
         />
-        <Segmented items={TABS} value={tab} onChange={setTab} />
+        <Segmented items={TABS} value={tab} onChange={(v) => setTab(v as Tab)} />
       </View>
 
       {tab === 'try' ? (

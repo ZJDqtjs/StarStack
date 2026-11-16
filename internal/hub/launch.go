@@ -78,6 +78,9 @@ var launchOS = map[string]string{
 	// 启动码只用于给 /api/worker/hello 换节点凭证。登记平台名是为了让
 	// mintLaunch 接受 os=android，而不是把它悄悄改回 windows。
 	"android": "starstack-worker-android-%s",
+	// HarmonyOS 同理：节点跑在 RNOH App 的 ArkTS 长时任务里，没有独立脚本。
+	// 登记后 /api/nodes/launch 才接受 os=harmony，调度器也能按该 os 匹配。
+	"harmony": "starstack-worker-harmony-%s",
 }
 
 var launchArch = map[string]bool{"amd64": true, "arm64": true}
@@ -349,7 +352,7 @@ func (s *Server) handleLaunchMint(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-var launchPath = regexp.MustCompile(`^/launch/([0-9a-f]{16,64})/(windows|linux|darwin|android)/(amd64|arm64)$`)
+var launchPath = regexp.MustCompile(`^/launch/([0-9a-f]{16,64})/(windows|linux|darwin|android|harmony)/(amd64|arm64)$`)
 
 // handleLaunchScript renders the launcher for a live ticket. The code in the URL
 // is the whole capability — it is single-use, minutes-old and bound to one node
@@ -380,6 +383,11 @@ func (s *Server) handleLaunchScript(w http.ResponseWriter, r *http.Request) {
 	if t.OS == "android" {
 		// Android 节点跑在 App 里，没有可下载的启动脚本；启动码只给 hello 用。
 		http.Error(w, "Android 节点请在 App 内点「开始贡献算力」，不需要下载脚本", http.StatusBadRequest)
+		return
+	}
+	if t.OS == "harmony" {
+		// 鸿蒙节点跑在 RNOH App 的 ArkTS 长时任务里，同样没有可下载脚本。
+		http.Error(w, "鸿蒙节点请在 App 内点「开始贡献算力」，不需要下载脚本", http.StatusBadRequest)
 		return
 	}
 	if r.URL.Query().Get("format") == "bundle" {
