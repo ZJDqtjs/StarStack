@@ -2121,6 +2121,12 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 				// is selling); the interface addresses only to their owner
 				"vm": wd.VM,
 			}
+			// last_seen lets the console print the moment a node was last heard
+			// from instead of a bare "N seconds ago"; "since" stays for clients
+			// that already count down from it.
+			if !wd.seen.IsZero() {
+				view["last_seen"] = wd.seen.Unix()
+			}
 			if wd.cooling() {
 				view["parked_sec"] = int(time.Until(wd.CoolUntil).Seconds()) + 1
 			}

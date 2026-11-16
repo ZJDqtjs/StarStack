@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useApp } from '../store.jsx'
 import { nav } from '../App.jsx'
 import { Card, Btn, Tag, Empty, Stat, Field } from '../ui.jsx'
-import { api, post, href, f1, f2 } from '../api.js'
+import { api, post, href, f2, workerTS } from '../api.js'
 
 export default function Nodes() {
   const { workers, policy, contrib, toast, confirm, prompt } = useApp()
@@ -53,6 +53,16 @@ export default function Nodes() {
     if (!await confirm('删除节点「' + (w ? (w.name || w.id) : id) + '」？\n\n这台机器会从「我的机器」里移除；已结算的收益流水保留用于对账。\n如果节点程序还在运行，请把它关掉。', '删除节点')) return
     try { await api('/api/nodes/' + encodeURIComponent(id), { method: 'DELETE' }); toast('节点已删除', 'ok') } catch (e) { toast(String(e), 'bad') }
   }
+  const offlineMine = mine.filter(w => !w.online)
+  const pruneOffline = async () => {
+    if (!offlineMine.length) return
+    if (!await confirm('清理这 ' + offlineMine.length + ' 台离线节点？\n\n它们会从「我的机器」里移除，已结算的收益流水保留用于对账。\n还有任务在跑的机器会被跳过；想重新接入请重新下载节点包。', '清理离线节点')) return
+    let ok = 0, fail = 0
+    for (const w of offlineMine) {
+      try { await api('/api/nodes/' + encodeURIComponent(w.id), { method: 'DELETE' }); ok++ } catch (e) { fail++ }
+    }
+    toast('已清理 ' + ok + ' 台离线节点' + (fail ? '，' + fail + ' 台仍有任务在跑，稍后再试' : ''), fail ? 'warn' : 'ok')
+  }
 
   return (
     <div>
@@ -102,12 +112,12 @@ export default function Nodes() {
             </div>
           )}
         </Card>
-        <Card kicker="Mine" title="我的机器">
+        <Card kicker="Mine" title="我的机器" side={offlineMine.length ? <Btn ghost tiny onClick={pruneOffline}>清理离线节点（{offlineMine.length}）</Btn> : null}>
           {mine.length ? mine.map(w => {
             const legacy = Math.max(0, Number(w.earned || 0) - Number(w.earned_task || 0) - Number(w.earned_vm || 0))
             return (
               <div className="card" key={w.id} style={{ marginBottom: 10, padding: '16px 18px' }}>
-                <h2 style={{ marginBottom: 10 }}>{w.name || w.id} <Tag tone={w.online ? 'on' : 'off'}>{w.online ? '在线' : '离线'}</Tag>
+                <h2 style={{ marginBottom: 10 }}>{w.name || w.id} <Tag tone={w.online ? 'on' : 'off'}>{workerTS(w)} {w.online ? '在线' : '离线'}</Tag>
                   {w.paused && <Tag>已暂停</Tag>}{dup[w.id] && <Tag tone="warn">同设备重复节点</Tag>}{!w.device_id && <Tag tone="warn">旧版节点</Tag>}
                   {(w.runtimes || []).some(r => r.name === 'comfyui') && <Tag tone="on">可执行 ComfyUI</Tag>}</h2>
                 <div className="stats" style={{ marginTop: 0 }}>

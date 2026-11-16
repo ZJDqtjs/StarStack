@@ -30,6 +30,37 @@ export const post = (u, body) => api(u, { method: 'POST', headers: { 'Content-Ty
 export const f1 = v => Number(v || 0).toFixed(1)
 export const f2 = v => Number(v || 0).toFixed(2)
 export const pt = v => f2(v) + ' 点'
+
+// 时间点一律写成「2026年11月16日12:45:45」，不再只甩一个秒数让用户自己换算。
+export const tsCN = t => {
+  const s = Number(t || 0)
+  if (!(s > 0)) return '—'
+  const d = new Date(s * 1000)
+  if (isNaN(d.getTime())) return '—'
+  const p = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+// 节点最后一次心跳的时刻。新后端直接给 last_seen；旧后端只有 since（距心跳的
+// 秒数），一年以内的仍然能反推，再久就不猜了。
+export const workerTS = w => {
+  if (!w) return '—'
+  if (w.last_seen) return tsCN(w.last_seen)
+  const since = Number(w.since || 0)
+  if (since > 0 && since < 31536000) return tsCN(Math.floor(Date.now() / 1000 - since))
+  return '—'
+}
+
+// 时长：按天/小时/分展示，避免出现 2154761.4s 这种没人读得懂的数字。
+export const durCN = v => {
+  const s = Math.max(0, Math.round(Number(v) || 0))
+  if (s < 60) return s + ' 秒'
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600)
+  const m = Math.floor((s % 3600) / 60), ss = s % 60
+  if (d) return `${d} 天 ${h} 小时`
+  if (h) return `${h} 小时 ${m} 分`
+  return `${m} 分 ${ss} 秒`
+}
 export const apiTS = t => new Date(t * 1000).toLocaleString('zh-CN', { hour12: false })
 export function relTime(t) {
   const d = Date.now() - t * 1000

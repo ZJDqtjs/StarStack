@@ -3,7 +3,7 @@ import { openExternal } from '../api'
 import { useApp } from '../ctx'
 import { Btn, Card, CopyBlock, Empty, Field, Loader, Sheet, Stats, Tag } from '../ui'
 import { CommSheet } from './CommLog'
-import { f1, f2, memGB } from '../../../shared/index.js'
+import { f2, memGB, workerTS, durCN } from '../../../shared/index.js'
 
 const ua = (navigator.userAgent || '').toLowerCase()
 const guessOS = () => (ua.includes('windows') ? 'windows' : ua.includes('mac') ? 'darwin' : 'linux')
@@ -317,7 +317,7 @@ export default function Nodes() {
             <div key={w.id} style={{ paddingTop: 10 }}>
               <h3 style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 {w.name || w.id}
-                <Tag tone={w.online ? 'ok' : 'bad'}>{w.online ? '在线' : '离线'}</Tag>
+                <Tag tone={w.online ? 'ok' : 'bad'}>{workerTS(w)} {w.online ? '在线' : '离线'}</Tag>
                 {w.paused && <Tag tone="warn">已暂停</Tag>}
                 {dup[w.id] && <Tag tone="warn">同设备重复节点，建议删除</Tag>}
                 {!w.device_id && <Tag tone="warn">旧版节点（无设备指纹）</Tag>}
@@ -327,8 +327,8 @@ export default function Nodes() {
                   { v: f2(w.earned), k: '节点贡献（点）', hl: true },
                   { v: f2(w.earned_task || 0), k: '其中：任务算力' },
                   { v: f2(w.earned_vm || 0), k: '其中：云主机' },
-                  { v: f1(w.billed_task_sec || 0) + 's', k: '已结算任务时长' },
-                  { v: f1(w.billed_vm_sec || 0) + 's', k: '已结算租用时长' },
+                  { v: durCN(w.billed_task_sec || 0), k: '已结算任务时长' },
+                  { v: durCN(w.billed_vm_sec || 0), k: '已结算租用时长' },
                   { v: `${w.active}/${w.slots}`, k: '占用槽位' },
                   { v: f2(w.price), k: '当前单价' },
                   { v: `${w.ok}/${w.ok + w.bad}`, k: '成功/总数' },

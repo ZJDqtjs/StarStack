@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useApp } from '../store.jsx'
 import { nav } from '../App.jsx'
 import { Card, Btn, Tag, St, Empty, Modal, Stat, Bar } from '../ui.jsx'
-import { api, href, f1, f2, apiTS, ST } from '../api.js'
+import { api, href, f2, apiTS, durCN, ST } from '../api.js'
 
 const INFLIGHT = ['fetching', 'leased', 'running', 'uploading']
 const COMM_EVENT = { 'job.created': '任务创建', 'job.done': '任务完成', 'job.failed': '任务失败', 'job.cancelled': '任务取消', 'seg.dispatched': '派发给节点', 'seg.fetching': '节点取源', 'seg.running': '节点开始执行', 'seg.uploading': '节点回传', 'seg.done': '分片完成', 'seg.failed': '分片失败', 'seg.settled': '结算', 'offer.auto_share': '共享自动交付' }
@@ -13,7 +13,7 @@ function commDetail(e) {
     if (d.kind) p.push('类型 ' + d.kind)
     if (d.hold !== undefined) p.push('预扣 ' + f2(d.hold) + ' 点')
     if (d.index !== undefined) p.push('#' + d.index)
-    if (d.wall !== undefined) p.push('耗时 ' + f1(d.wall) + ' 秒')
+    if (d.wall !== undefined) p.push('耗时 ' + durCN(d.wall))
     if (d.match !== undefined) p.push(d.match ? '哈希一致' : '哈希不一致')
     if (d.cost !== undefined) p.push('结算 ' + f2(d.cost) + ' 点')
     if (d.refunded !== undefined) p.push('退还 ' + f2(d.refunded) + ' 点')
@@ -66,7 +66,7 @@ export default function Jobs() {
               })}
             </div>
             <div className="stats">
-              <Stat v={f1(j.wall || 0) + 's'} l="分布式墙钟" />
+              <Stat v={durCN(j.wall)} l="分布式墙钟" />
               <Stat v={speedup > 0 ? f2(speedup) + 'x' : '—'} l="分片并行比" />
               <Stat v={done + '/' + j.segs.length} l="分片完成" />
               <Stat v={verified + '/' + j.segs.length} l="哈希校验一致" />
