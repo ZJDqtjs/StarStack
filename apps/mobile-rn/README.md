@@ -27,8 +27,12 @@ apps/mobile-rn/
     transport.ts             RN fetch，带超时与 FormData 上传
     format.ts, constants.ts  金额/时间格式化、状态文案
   src/session.ts             AsyncStorage 会话 + 内存镜像（createApi 要同步读）
-  src/ui/                    基础组件（Card / Btn / Field / Badge / Stat）
-  src/screens/               Auth / Overview / Nodes
+  src/theme.tsx              星舷设计系统：明/暗双色板 + useStyles（对齐 web-react/styles.css）
+  src/ui/icon.tsx            24×24 线性图标（路径与 web-react 同一套，react-native-svg）
+  src/ui/index.tsx           Card / Btn / Chip / Segmented / Sheet / Page / Toast 等
+  src/ctx.tsx                登录态、机器/任务快照、导航栈、prefill
+  src/screens/               Overview / Create / Market / Jobs / JobDetail / Me / Wallet
+                             Nodes / Messages / Forum / ApiView / Sell / Settings / Auth
   src/native/nodeService.ts  原生模块桥 + 状态订阅
   modules/starstack-node/    Expo 本地模块（Kotlin）
     android/src/main/java/com/starstack/node/
@@ -39,6 +43,26 @@ apps/mobile-rn/
       DeviceCaps.kt          os/arch/cpus/mem/encoders/runtimes + 设备指纹哈希
       SegmentCutter.kt       MediaExtractor + MediaMuxer 按区间切分
 ```
+
+## 界面结构（2026-11 改版）
+
+底部 5 个主 Tab + 页面栈，图标与配色直接复用 `web-react` 的星舷设计系统：
+
+| Tab | 内容 |
+|---|---|
+| 总览 | 余额/进行中/在线节点/累计贡献、快捷入口、本机节点开关、最近任务与流水 |
+| 创作 | 视频转码 / Blender 渲染 / 编译打包（含估算预扣），市场「立即使用」可带场景预填 |
+| 市场 | 服务挂牌（搜索 + 分类 + 详情 + 立即使用 / 联系卖家）、云主机（租用/续费/停机）、算力池 |
+| 任务 | 进行中 / 已完成 / 全部；详情含分片列表、通讯记录、下载产物与取消 |
+| 我的 | 账户概览、钱包账单、我的发布、买卖会话、节点、论坛、模型 API 试聊、设置 |
+
+次要页面（钱包、节点、消息、论坛、模型 API、发布、设置、任务详情）以页面栈推入，安卓返回键先退栈。
+
+设计约定：颜色只在 `src/theme.tsx` 的 `LIGHT` / `DARK` 里定义，新增颜色先去
+`web-react/src/styles.css` 加变量再同步过来；屏幕样式统一写 `makeStyles(c)` + `useStyles()`，
+不要在组件里硬编码十六进制色值，否则深色主题会漏掉。
+
+静态预览稿见 `docs/mobile-ui-preview.html`（六个机位，可切深浅色），只作视觉参照，实际界面是原生 View。
 
 ## 跑起来
 
@@ -64,6 +88,9 @@ npx expo run:android                      # 需要本机 JDK 17 + Android SDK
 - **首次构建要装 NDK**（RN 新架构的 C++，约 1GB），装完走缓存；别以为是卡死。
 - **明文 HTTP**：连本地 `http://<局域网IP>:8787` 需要 `usesCleartextTraffic`，
   由 `expo-build-properties` 写进 manifest（Android 9+ 默认禁止明文）。
+- **新增了原生依赖 `react-native-svg`**（图标）：改完 `package.json` 必须重新
+  `npx expo prebuild --platform android`，否则原生侧没有 autolink，运行时会白屏报
+  `requireNativeComponent: RNSVGSvgViewAndroid was not found`。
 
 ## 节点启动流程
 
@@ -99,6 +126,7 @@ Broker 侧已登记 android 平台：`mintLaunch` 不会再把它改回 windows�
 
 ## 与现有 `apps/mobile` 的关系
 
-`apps/mobile` 是 Capacitor 套壳版（React + Vite + WebView），功能完整、已经在用。
-这个 RN 端是并行新增的，**不改动旧端**；等原生端能力追平后再决定是否替换。
+`apps/mobile` 是 Capacitor 套壳版（React + Vite + WebView），**已废弃**（2026-11-15）：
+`apps/capacitor.config.ts` 的 `webDir` 已改指 `web-react/dist`，release.yml 不再构建 Capacitor APK。
+手机端唯一形态是本工程（RN + Kotlin 前台 Service，同时是常驻算力节点）。
 两者共用同一套后端协议与 `apps/shared/` 的接口约定。

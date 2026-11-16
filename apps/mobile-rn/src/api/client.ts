@@ -96,6 +96,25 @@ export function createApi({ baseUrl, getToken, request, upload }: ApiOptions) {
     ledger: (opts?: Record<string, unknown>) => get('/api/ledger' + qsSuffix(opts)),
     settings: () => get('/api/me/settings'),
     saveSettings: (advanced: boolean) => put('/api/me/settings', { advanced }),
+    recharge: (amount: number) => post('/api/me/recharge', { amount }),
+
+    // 服务市场（卖家挂牌）与买卖会话
+    offers: () => get('/api/offers'),
+    useOffer: (id: string) => post('/api/offers/' + enc(id) + '/use', {}),
+    contactOffer: (id: string) => post('/api/offers/' + enc(id) + '/conversation', {}),
+    publishOffer: (form: FormData) => uploadTo('/api/offers', form),
+    deleteOffer: (id: string) => del('/api/offers/' + enc(id)),
+    offerImage: (id: string) => url('/api/offers/media/' + enc(id)),
+    conversations: () => get('/api/offers/conversations'),
+    conversation: (id: string) => get('/api/offers/conversations/' + enc(id)),
+    sendMessage: (id: string, body: string) => post('/api/offers/conversations/' + enc(id), { body }),
+
+    // 社区
+    posts: () => get('/api/forum/posts'),
+    post: (id: string) => get('/api/forum/posts/' + enc(id)),
+    createPost: (form: FormData) => uploadTo('/api/forum/posts', form),
+    commentPost: (id: string, form: FormData) => uploadTo('/api/forum/posts/' + enc(id) + '/comments', form),
+    mediaUrl: (id: string) => url('/api/forum/media/' + enc(id)),
 
     // model gateway
     catalog: () => get('/api/models/catalog'),
@@ -115,6 +134,16 @@ export function createApi({ baseUrl, getToken, request, upload }: ApiOptions) {
     vmOffers: () => get('/api/vm/offers'),
     vmInstances: () => get('/api/vm/instances'),
     vmOrder: (body: unknown) => post('/api/vm/orders', body),
+    vmStop: (id: string) => post('/api/vm/instances/' + enc(id) + '/stop', {}),
+    vmExtend: (id: string, hours: number) => post('/api/vm/instances/' + enc(id) + '/extend', { hours }),
+    vmUpdateOffer: (id: string, enabled: boolean) => put('/api/vm/offers/' + enc(id), { enabled }),
+    vmPublishOffer: (body: unknown) => post('/api/vm/offers', body),
+    vmDeleteOffer: (id: string) => del('/api/vm/offers/' + enc(id)),
+
+    // API keys（模型网关）
+    keys: () => get('/api/keys'),
+    createKey: (name: string, daily_quota: number) => post('/api/keys', { name, daily_quota }),
+    deleteKey: (id: string) => del('/api/keys/' + enc(id)),
 
     downloadUrl: (jobId: string, which?: string) =>
       url('/download/' + enc(jobId) + (which ? '?which=' + enc(which) : '')),
