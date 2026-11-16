@@ -1,12 +1,13 @@
-# 星栈算力 · 移动端与小程序
+# 星栈算力 · 多端客户端
 
-同一套后端接口的两个客户端：
+同一套后端接口的各端客户端：
 
-- `mobile/` — React + Vite + Capacitor 的安卓 App，覆盖控制台全部 9 个视图。
+- `mobile-rn/` — **安卓原生端**（Expo RN + Kotlin 前台 Service），同时是常驻算力节点。
+- `desktop-rn/` — **Windows 原生端**（RNW 0.84.2），复用 `mobile-rn` 的页面与接口层。
+- `harmony-rn/` — **鸿蒙原生端**（RNOH 0.84.6 + ArkTS 长时任务），复用同一套页面。
 - `miniapp/` — 原生微信小程序，覆盖需求方的 5 个页面 + 登录 + 星舷助手。
-- `harmony/` — HarmonyOS NEXT（API 12+）ArkTS 壳，Web 组件加载同一份 React 构建产物。
-- `desktop/` — WPF + WebView2 桌面端，内嵌同一份 React 构建产物，带本机运行节点的消息桥。
-- `shared/` — 两个客户端共用的接口客户端、类型约定、状态文案、格式化函数与 Agent 意图引擎。
+- `shared/` — 接口客户端、类型约定、状态文案、格式化函数与 Agent 意图引擎。
+- `mobile/`、`desktop/`、`harmony/` — Capacitor / WPF+WebView2 / ArkWeb 时代的旧壳，**仅作历史对照**，不再作为交付形态。
 
 后端已支持 `Authorization: Bearer <session token>`（登录响应里新增 `token` 字段）与 `/api/*` 的 CORS 预检，浏览器 Cookie 会话保持原样。
 
