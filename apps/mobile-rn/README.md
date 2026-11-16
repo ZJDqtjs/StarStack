@@ -27,6 +27,8 @@ apps/mobile-rn/
     transport.ts             RN fetch，带超时与 FormData 上传
     format.ts, constants.ts  金额/时间格式化、状态文案
   src/session.ts             AsyncStorage 会话 + 内存镜像（createApi 要同步读）
+  src/platform.tsx           平台能力注入层：pickFile / downloadArtifact / node（页面不直接依赖 Expo）
+  src/platform-expo.tsx      Android 实现：Expo 文件选择/下载/分享 + Kotlin 前台 Service
   src/theme.tsx              星舷设计系统：明/暗双色板 + useStyles（对齐 web-react/styles.css）
   src/ui/icon.tsx            24×24 线性图标（路径与 web-react 同一套，react-native-svg）
   src/ui/index.tsx           Card / Btn / Chip / Segmented / Sheet / Page / Toast 等
@@ -96,6 +98,14 @@ npx expo run:android                      # 需要本机 JDK 17 + Android SDK
 - **新增了原生依赖 `react-native-svg`**（图标）：改完 `package.json` 必须重新
   `npx expo prebuild --platform android`，否则原生侧没有 autolink，运行时会白屏报
   `requireNativeComponent: RNSVGSvgViewAndroid was not found`。
+
+## 跨端复用（桌面 RNW / 鸿蒙 RNOH）
+
+页面与 `api/agent/theme/ui` 不直接依赖 Expo：文件选择、下载分享、常驻节点都通过
+`src/platform.tsx` 的 `usePlatform()` 注入。Android 的实现是 `platform-expo.tsx`；
+桌面 RNW 与鸿蒙 RNOH 各自提供 `Platform` 实现后即可复用同一套 screens。
+版本矩阵、工程目录与节点 84 的工具链要求见
+[`docs/多端-桌面RNW与鸿蒙RNOH方案.md`](../../docs/多端-桌面RNW与鸿蒙RNOH方案.md)。
 
 ## 节点启动流程
 

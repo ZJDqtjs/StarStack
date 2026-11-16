@@ -5,7 +5,7 @@ import { f2, relTime } from '../api/format'
 import { JOB_ST } from '../api/constants'
 import { useApp } from '../ctx'
 import { mem } from '../session'
-import { EMPTY_STATUS, nodeEvents, nodeService, type NodeStatus } from '../native/nodeService'
+import { EMPTY_NODE_STATUS, usePlatform, type NodeStatus } from '../platform'
 import { Badge, Bar, Btn, Card, Empty, Icon, Page, PageHead, type IconName } from '../ui'
 import { useStyles, useTheme, type Palette } from '../theme'
 
@@ -32,16 +32,17 @@ export default function Overview() {
   const app = useApp()
   const s = useStyles(makeStyles)
   const { c } = useTheme()
-  const [st, setSt] = useState<NodeStatus>(EMPTY_STATUS)
+  const node = usePlatform().node
+  const [st, setSt] = useState<NodeStatus>(EMPTY_NODE_STATUS)
   const [ledger, setLedger] = useState<any[]>([])
   const [busy, setBusy] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
-    const sub = nodeEvents?.addListener('onNodeStatus', (next: NodeStatus) => setSt(next))
-    nodeService.status().then(setSt).catch(() => {})
-    return () => sub?.remove()
-  }, [])
+    const off = node.subscribe((next: NodeStatus) => setSt(next))
+    node.status().then(setSt).catch(() => {})
+    return off
+  }, [node])
 
   const loadLedger = useCallback(() => {
     api
@@ -59,7 +60,7 @@ export default function Overview() {
   const reload = useCallback(async () => {
     setRefreshing(true)
     try {
-      const [next] = await Promise.all([nodeService.status(), app.refresh(), api.contribution().catch(() => null)])
+      const [next] = await Promise.all([node.status(), app.refresh(), api.contribution().catch(() => null)])
       setSt(next)
       loadLedger()
     } catch {
@@ -73,13 +74,19 @@ export default function Overview() {
     setBusy(true)
     try {
       if (st.running) {
-        await nodeService.stop()
+        await node.stop()
         app.toast('已停止贡献算力', 'ok')
       } else {
-        const mint = await api.launchNode({ price: 0.8, slots: 1, name: 'android-node', os: 'android', arch: 'arm64' })
+        const mint = await api.launchNode({
+          price: 0.8,
+          slots: 1,
+          name: node.launch.name,
+          os: node.launch.os,
+          arch: node.launch.arch,
+        })
         if (!mint?.code || !mint?.node_id) throw new Error('平台没有返回启动码，检查该账户是否允许接入节点')
-        await nodeService.start(mem.base, String(mint.code), String(mint.node_id), 1, 0.8)
-        Alert.alert('节点已启动', '前台服务会常驻通知栏。建议插电 + Wi-Fi 时运行，系统在低电量或高温时会降频。')
+        await node.start(mem.base, String(mint.code), String(mint.node_id), 1, 0.8)
+        Alert.alert('节点已启动', '节点会按本端平台的能力常驻运行；建议插电 + Wi-Fi，系统在低电量或高温时会降频。')
       }
       await app.refresh()
     } catch (e) {
@@ -160,7 +167,7 @@ export default function Overview() {
         <View style={s.cardHead}>
           <View style={{ flex: 1 }}>
             <Text style={s.cardTitle}>本机算力节点</Text>
-            <Text style={s.cardSub}>{nodeService.available ? 'Kotlin 前台服务 · 退到后台不中断' : '当前环境没有原生节点模块'}</Text>
+            <Text style={s.cardSub}>{node.available ? node.hint : '当前环境没有原生节点模块'}</Text>
           </View>
           <Badge
             text={st.running ? PHASE_LABEL[st.phase] || st.phase : '未运行'}
@@ -168,7 +175,7 @@ export default function Overview() {
           />
         </View>
 
-        {nodeService.available ? (
+        {node.available ? (
           <>
             <View style={s.nodeStats}>
               <View style={s.nodeCell}>

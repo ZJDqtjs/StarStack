@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AppState as RNAppState, BackHandler, Platform, Pressable, StatusBar as RNStatusBar, StyleSheet, Text, View } from 'react-native'
-import { StatusBar } from 'expo-status-bar'
+import { AppState as RNAppState, BackHandler, Platform, Pressable, StatusBar, StatusBar as RNStatusBar, StyleSheet, Text, View } from 'react-native'
+import { PlatformProvider } from './src/platform'
+import { expoPlatform } from './src/platform-expo'
 import { api } from './src/api'
 import { clearToken, getTheme, loadSession, mem, setTheme as persistTheme } from './src/session'
 import { AppCtx, type Prefill, type Route, type RouteParams } from './src/ctx'
@@ -186,23 +187,25 @@ export default function App() {
   )
 
   return (
-    <ThemeProvider mode={mode} toggle={toggleTheme} signedIn={authed}>
-      <AppCtx.Provider value={ctxValue}>
-        <Shell
-          booting={booting}
-          authed={authed}
-          entry={entry}
-          depth={depth}
-          me={me}
-          mode={mode}
-          onToggleTheme={toggleTheme}
-          onNav={nav}
-          onBack={back}
-          onAuthed={() => void refresh()}
-          toastState={toastState}
-        />
-      </AppCtx.Provider>
-    </ThemeProvider>
+    <PlatformProvider value={expoPlatform}>
+      <ThemeProvider mode={mode} toggle={toggleTheme} signedIn={authed}>
+        <AppCtx.Provider value={ctxValue}>
+          <Shell
+            booting={booting}
+            authed={authed}
+            entry={entry}
+            depth={depth}
+            me={me}
+            mode={mode}
+            onToggleTheme={toggleTheme}
+            onNav={nav}
+            onBack={back}
+            onAuthed={() => void refresh()}
+            toastState={toastState}
+          />
+        </AppCtx.Provider>
+      </ThemeProvider>
+    </PlatformProvider>
   )
 }
 
@@ -233,12 +236,12 @@ function Shell({
 }) {
   const s = useStyles(makeStyles)
   const { c } = useTheme()
-  const statusBarStyle = mode === 'dark' ? 'light' : 'dark'
+  const statusBarStyle = mode === 'dark' ? 'light-content' : 'dark-content'
 
   if (booting) {
     return (
       <View style={[s.root, { backgroundColor: c.bg }]}>
-        <StatusBar style={statusBarStyle} />
+        <StatusBar barStyle={statusBarStyle} />
         <Loading text="正在连接星栈…" />
       </View>
     )
@@ -247,7 +250,7 @@ function Shell({
   if (!authed) {
     return (
       <View style={[s.root, { backgroundColor: c.bg }]}>
-        <StatusBar style={statusBarStyle} />
+        <StatusBar barStyle={statusBarStyle} />
         <Auth onDone={onAuthed} />
       </View>
     )
@@ -255,7 +258,7 @@ function Shell({
 
   return (
     <View style={[s.root, { backgroundColor: c.bg }]}>
-      <StatusBar style={statusBarStyle} />
+      <StatusBar barStyle={statusBarStyle} />
       <View style={s.topbar}>
         {depth > 0 ? (
           <Pressable onPress={onBack} style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}>

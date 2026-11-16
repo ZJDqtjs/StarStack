@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Alert, StyleSheet, Text, View } from 'react-native'
-import * as FileSystem from 'expo-file-system/legacy'
-import * as Sharing from 'expo-sharing'
 import { api } from '../api'
+import { usePlatform } from '../platform'
 import { f1, f2, points, relTime, ts } from '../api/format'
 import { JOB_ST } from '../api/constants'
 import { useApp } from '../ctx'
@@ -15,6 +14,7 @@ export default function JobDetail({ id }: { id: string }) {
   const app = useApp()
   const s = useStyles(makeStyles)
   const { c } = useTheme()
+  const platform = usePlatform()
   const [logs, setLogs] = useState<any[]>([])
   const [busy, setBusy] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -54,16 +54,11 @@ export default function JobDetail({ id }: { id: string }) {
     if (!job) return
     setBusy(true)
     try {
-      const url = api.downloadUrl(job.id)
-      const target = `${FileSystem.cacheDirectory}starstack-${job.id}.mp4`
-      const res = await FileSystem.downloadAsync(url, target, {
-        headers: mem.token ? { Authorization: 'Bearer ' + mem.token } : {},
-      })
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(res.uri, { mimeType: 'application/octet-stream', dialogTitle: '保存产物' })
-      } else {
-        Alert.alert('已下载到缓存', res.uri)
-      }
+      await platform.downloadArtifact(
+        api.downloadUrl(job.id),
+        `starstack-${job.id}.mp4`,
+        mem.token ? { Authorization: 'Bearer ' + mem.token } : {},
+      )
     } catch (e) {
       Alert.alert('下载失败', e instanceof Error ? e.message : String(e))
     } finally {
