@@ -1836,11 +1836,11 @@
     }
     for (const n of g.nodes) {
       const d = getDef(n.type) || {}, c = CAT_COLOR[d.category] || '#3f5170';
-      s += `<g><rect x="${n.pos[0]}" y="${n.pos[1]}" width="${n.size[0]}" height="${Math.max(62, Math.min(n.size[1], 110))}" rx="8" fill="#ffffff" stroke="#d9d6f2"/>
+      s += `<g><rect x="${n.pos[0]}" y="${n.pos[1]}" width="${n.size[0]}" height="${Math.max(62, Math.min(n.size[1], 110))}" rx="8" style="fill:var(--card,#fff);stroke:var(--hair2,#d9d6f2)"/>
         <path d="M ${n.pos[0]} ${n.pos[1] + 8} a8 8 0 0 1 8 -8 h${n.size[0] - 16} a8 8 0 0 1 8 8 v16 h-${n.size[0]} z" fill="${c}"/>
         <text x="${n.pos[0] + 9}" y="${n.pos[1] + 19}" fill="#fff" font-size="10" font-family="sans-serif">${h(String(n.title || n.type).slice(0, 26))}</text>
-        <text x="${n.pos[0] + 9}" y="${n.pos[1] + 42}" fill="#7a7896" font-size="9" font-family="sans-serif">${h(n.type.slice(0, 28))}</text>
-        <text x="${n.pos[0] + 9}" y="${n.pos[1] + 56}" fill="#9a97b8" font-size="8" font-family="sans-serif">#${n.id} · ${n.widgets.length} widgets</text></g>`;
+        <text x="${n.pos[0] + 9}" y="${n.pos[1] + 42}" style="fill:var(--mute,#7a7896)" font-size="9" font-family="sans-serif">${h(n.type.slice(0, 28))}</text>
+        <text x="${n.pos[0] + 9}" y="${n.pos[1] + 56}" style="fill:var(--faint,#9a97b8)" font-size="8" font-family="sans-serif">#${n.id} · ${n.widgets.length} widgets</text></g>`;
     }
     svg.setAttribute('viewBox', `${x0} ${y0} ${Math.max(1, x1 - x0)} ${Math.max(1, y1 - y0)}`);
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -1876,8 +1876,68 @@
     if (W.online) { queuePrompt(); if (note) note.textContent = '已把参数写入工作流并提交到 ComfyUI 队列，可在此查看进度与结果。'; }
     else if (note) note.textContent = '参数已写入工作流；当前未连接 ComfyUI 服务，可在工作台导出 API 格式后到官方 ComfyUI 运行。';
   }
+  /* ------------------------------------------------ 静默运行（页面简洁模式）
+     不打开全屏工作台：把表单参数写进当前默认工作流，直接入队并轮询结果。 */
+  function viewUrl(rec) {
+    return CF('view') + '?filename=' + encodeURIComponent(rec.filename)
+      + '&subfolder=' + encodeURIComponent(rec.subfolder || '')
+      + '&type=' + encodeURIComponent(rec.type || 'output');
+  }
+  async function submitPrompt(kind, params) {
+    const g = graphFor(kind);
+    applyParams(g, kind, params || {});
+    if (!W.online) await refreshStatus();
+    if (!W.online) throw new Error('平台尚未接入生图执行器：需要服务端用 --comfyui 指向一个可访问的 ComfyUI 实例');
+    const prompt = toAPI(g);
+    if (!Object.keys(prompt).length) throw new Error('当前工作流没有可执行的输出节点');
+    const doFetch = nativeFetch || fetch;
+    const r = await doFetch(CF('prompt'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: W.clientId, prompt, extra_data: { extra_pnginfo: { workflow: toUI(g) } } })
+    });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok || res.error) {
+      const detail = res.node_errors ? ' · ' + JSON.stringify(res.node_errors).slice(0, 200) : '';
+      throw new Error(String(res.error || ('HTTP ' + r.status)) + detail);
+    }
+    renderCards();
+    return res.prompt_id;
+  }
+  async function waitOutputs(promptId, onTick) {
+    for (let i = 0; i < 400; i++) {
+      try {
+        const hist = await apiJSON(CF('history/' + encodeURIComponent(promptId)));
+        const entry = hist && hist[promptId];
+        if (entry) {
+          const st = entry.status || {};
+          if (st.status_str === 'error') {
+            throw new Error('执行失败：' + JSON.stringify(st.messages || []).slice(0, 160));
+          }
+          const list = [];
+          for (const o of Object.values(entry.outputs || {})) {
+            for (const k of ['images', 'gifs', 'videos', 'animated', 'audio']) {
+              for (const it of (o[k] || [])) {
+                if (it && it.filename) list.push({ filename: it.filename, subfolder: it.subfolder || '', type: it.type || 'output', media: k });
+              }
+            }
+          }
+          return list;
+        }
+      } catch (e) { if (/^执行失败/.test(e.message)) throw e; }
+      if (onTick) onTick(i);
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    throw new Error('等待生成结果超时，可到工作台「结果」面板继续查看');
+  }
+  async function run(kind, params, onTick) {
+    const id = await submitPrompt(kind, params);
+    const outputs = await waitOutputs(id, onTick);
+    return { id, outputs: outputs.map(o => Object.assign({}, o, { url: viewUrl(o) })) };
+  }
+
   window.ComfyWorkbench = {
-    open, close, generate, tutorial,
+    open, close, generate, run, tutorial,
+    viewUrl,
     importFile: (file, kind) => importFile(file, kind || 'image'),
     refreshCards: renderCards,
     graphFor, toUI, toAPI,

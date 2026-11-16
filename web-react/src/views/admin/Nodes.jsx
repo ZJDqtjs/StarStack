@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useApp } from '../../store.jsx'
 import { Card, Btn, Tag, St, Empty, SearchBox, Chip, Stat, Bar, Field } from '../../ui.jsx'
-import { api, f1, f2 } from '../../api.js'
+import { api, f2, workerTS, durCN } from '../../api.js'
 
 export default function AdminNodes() {
   const { workers, toast, confirm, prompt, isAdminApp } = useApp()
@@ -78,7 +78,7 @@ export default function AdminNodes() {
               <tr key={w.id} className="tap" onClick={() => openDrawer(w)}>
                 <td onClick={e => e.stopPropagation()}>{canControl(w) && <input type="checkbox" checked={sel.includes(w.id)} onChange={() => toggleSel(w.id)} aria-label="选择" />}</td>
                 <td><b>{w.name || w.id}</b><span className="sub-line">{w.os} · {w.cpus} 核 · {(w.gpus || []).map(g => g.name).join('/') || '无独显'}</span></td>
-                <td><St s={w.online ? (w.paused ? 'stopped' : 'running') : 'failed'}>{w.online ? (w.paused ? '暂停' : '在线') : '离线'}</St>{w.parked_sec ? <Tag tone="off">停派 {w.parked_sec}s</Tag> : null}</td>
+                <td><St s={w.online ? (w.paused ? 'stopped' : 'running') : 'failed'}>{w.online ? (w.paused ? '暂停' : '在线') : '离线'}</St><span className="sub-line">{workerTS(w)}</span>{w.parked_sec ? <Tag tone="off">停派 {durCN(w.parked_sec)}</Tag> : null}</td>
                 <td style={{ minWidth: 110 }}><Bar pct={loadPct} /><span className="sub-line">{w.active}/{w.slots} · {loadPct}%</span></td>
                 <td className="num">{w.speed > 0 ? f2(w.speed) + '×' : '—'}</td>
                 <td>{rel}<span className="sub-line">✓{w.ok} ✗{w.bad}</span></td>

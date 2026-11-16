@@ -55,6 +55,10 @@ func main() {
 		"account you trust")
 	autoProvision := flag.Bool("auto-provision", false, "install missing toolchains automatically "+
 		"(currently the .NET SDK for build jobs) instead of failing the task")
+	allowComfy := flag.Bool("allow-comfy", false, "accept ComfyUI jobs: the platform will run "+
+		"buyer-supplied prompt graphs against the ComfyUI at --comfy-url as this user. "+
+		"Enable only on a machine and platform account you trust")
+	comfyURL := flag.String("comfy-url", "http://127.0.0.1:8188", "ComfyUI base URL on this machine")
 	configPath := flag.String("config", "", "node config JSON (default: starstack-node.json next to the executable)")
 	flag.Parse()
 
@@ -92,6 +96,12 @@ func main() {
 		}
 		if !explicit["auto-provision"] && cfg.AutoProvision != nil {
 			*autoProvision = *cfg.AutoProvision
+		}
+		if !explicit["allow-comfy"] && cfg.ComfyUI != nil {
+			*allowComfy = *cfg.ComfyUI
+		}
+		if !explicit["comfy-url"] && cfg.ComfyURL != "" {
+			*comfyURL = cfg.ComfyURL
 		}
 		log.Printf("loaded node config: %s", path)
 	}
@@ -132,6 +142,19 @@ func main() {
 		info.Runtimes = append(info.Runtimes, ffx.Runtime{Name: "build", Version: "1"})
 		log.Printf("编译任务已启用：本机将执行平台派发的买家编译命令（--allow-build）")
 	}
+	if *allowComfy {
+		// Same contract for ComfyUI: the runtime is advertised only after the
+		// provider opts in, and the probe result is logged so a node that joins
+		// with ComfyUI still closed knows why its first graph would fail.
+		info.Runtimes = append(info.Runtimes,
+			ffx.Runtime{Name: "comfyui", Version: "1", Path: *comfyURL})
+		log.Printf("ComfyUI 任务已启用：平台派发的 prompt 图将在 %s 上执行（--allow-comfy）", *comfyURL)
+		if err := comfyProbe(context.Background(), *comfyURL); err != nil {
+			log.Printf("警告：%s 现在连不上（%v）。ComfyUI 启动后无需重启节点，下一次派发会自动重试", *comfyURL, err)
+		} else {
+			log.Printf("ComfyUI 自检通过：%s/system_stats 可访问", strings.TrimRight(*comfyURL, "/"))
+		}
+	}
 	if *vmOn {
 		caps, err := ffx.DetectVM(ctx, *qemu, *qemuImg, *vmBridge, *vmUplink, *vmMax)
 		if err != nil {
@@ -166,8 +189,12 @@ func main() {
 		}
 	}
 
+	comfy := ""
+	if *allowComfy {
+		comfy = strings.TrimRight(strings.TrimSpace(*comfyURL), "/")
+	}
 	a := &agent{server: *server, id: *id, deviceID: info.DeviceID,
-		token: *token, launch: *launch, work: *work,
+		token: *token, launch: *launch, work: *work, comfyURL: comfy,
 		hc: newClient(26 * time.Second)}
 	// A launcher from the console cannot carry the label the provider typed: cmd.exe
 	// parses a .cmd in the machine's OEM codepage, so the UTF-8 name would arrive
@@ -247,6 +274,9 @@ type agent struct {
 	// machine into an existing node id, so the credential cache is keyed by the
 	// device rather than by the (changeable) node id.
 	deviceID string
+	// comfyURL is this machine's own ComfyUI. Empty means the agent never
+	// advertises the comfyui runtime, so no graph is ever routed here.
+	comfyURL string
 	hc       *http.Client
 
 	idMu      sync.RWMutex
@@ -463,6 +493,8 @@ func (a *agent) run(c *hub.Claim) {
 		a.runTimeline(c)
 	case render.KindBuild:
 		a.runBuild(c)
+	case render.KindComfy:
+		a.runComfy(c)
 	default:
 		a.runTranscode(c)
 	}
