@@ -64,10 +64,10 @@ for (const name of listedSet) {
 
 // release.yml 必须真的构建这些产物
 //
-// 注意：Android 包（StarStack-RN.apk）不再由 CI 产出 —— 手机端已切到
-// apps/mobile-rn（RN + Kotlin 前台服务），需要 Expo prebuild + Android SDK
-// 本地构建。清单里仍保留它的下载位，但不要求 release.yml 构建它。
-const builtClientAssets = clientAssets.filter((n) => n !== 'StarStack-RN.apk');
+// StarStack-RN.apk 曾经不由 CI 产出（只在本地 `npx expo run:android` 出包），
+// 结果下载页那张卡片永远是 404 —— 现在 build-android job 在 CI 里跑
+// Expo prebuild + assembleRelease，这里一并收紧成硬性要求。
+const builtClientAssets = clientAssets;
 for (const [os, arch] of platforms) {
   if (!releaseYml.includes(`${os}/${arch}`)) warn(`release.yml 缺少编译目标 ${os}/${arch}`);
 }
@@ -76,7 +76,7 @@ for (const token of [
   'starstack-server-linux-amd64',
   ...builtClientAssets,
   '> SHA256SUMS.txt',
-  'web-react-dist', 'assets-desktop', 'assets-sources',
+  'web-react-dist', 'assets-desktop', 'assets-android', 'assets-sources',
   'dist/dl/*'
 ]) {
   if (!releaseYml.includes(token)) warn(`release.yml 缺少预期片段：${token}`);

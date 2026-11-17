@@ -120,11 +120,58 @@ jobs:
           path: dist/dl/*
           if-no-files-found: warn
 
-  # ── 4. Android：已停发 Capacitor APK ──────────────────────────
-  # 手机端唯一形态是 apps/mobile-rn（RN + Kotlin 前台 Service，同时是算力节点）。
-  # 原来的 Capacitor 包（apps/android）已废弃：界面来自 apps/mobile，与 RN 包同名同图标，
-  # 两个包一起发出去只会让人下错。RN 的 APK 目前由本地 `npx expo run:android` 产出，
-  # 需要进 CI 时再单独加 job（Expo prebuild + Android SDK，构建时间约 15-25 分钟）。
+  # ── 4. Android：RN 原生端（Expo prebuild + Gradle） ────────────
+  # 手机端唯一形态是 apps/mobile-rn（RN 界面 + Kotlin 前台 Service，同时是算力节点）。
+  # 老的 Capacitor 包（apps/android + apps/mobile）已废弃停发：界面旧、还和 RN 包同名，
+  # 两个包一起发出去只会让人下错。
+  #
+  # 必须走 assembleRelease：debug 变体按 debuggableVariants 跳过 JS 打包，
+  # 装到手机上没有 Metro 就是白屏 —— 那种包装不了也发不得。
+  build-android:
+    name: Android 安装包（RN / release）
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile-rn/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: 接受 SDK 许可（其余由 AGP 按 ndkVersion/compileSdk 自动补齐）
+        run: yes | sdkmanager --licenses > /dev/null || true
+      - name: npm ci + expo prebuild
+        working-directory: apps/mobile-rn
+        run: |
+          npm ci
+          npx expo prebuild --platform android --no-install
+          test -f android/gradlew
+      - name: gradle assembleRelease
+        working-directory: apps/mobile-rn/android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon --console=plain
+      - name: 收集 APK
+        run: |
+          set -euo pipefail
+          mkdir -p dist/dl
+          apk=apps/mobile-rn/android/app/build/outputs/apk/release/app-release.apk
+          test -f "$apk"
+          cp "$apk" dist/dl/StarStack-RN.apk
+          ls -lh dist/dl/StarStack-RN.apk
+          # 包里必须有 JS bundle，否则就是没打包的 debug 残次品
+          unzip -l dist/dl/StarStack-RN.apk | grep -q 'assets/index.android.bundle'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-android
+          path: dist/dl/StarStack-RN.apk
+          if-no-files-found: error
 
   # ── 5. 小程序 / 鸿蒙源码包 ────────────────────────────────────
   # 小程序没有可安装文件（appid 是 touristappid 测试号）；鸿蒙 HAP 需要
@@ -142,6 +189,10 @@ jobs:
             -x '*/node_modules/*' '*.log')
           (cd apps && zip -qr ../dist/dl/starstack-harmony-source.zip harmony \
             -x '*/oh_modules/*' '*/node_modules/*' '*/build/*' '*.log')
+          # 鸿蒙原生端（RNOH）与旧的 ArkWeb 壳一起打包：前者是后续唯一目标，
+          # 后者留给还在用 DevEco 5.x 的旧工程做对照。
+          (cd apps && zip -qr ../dist/dl/starstack-harmony-source.zip harmony-rn \
+            -x '*/oh_modules/*' '*/node_modules/*' '*/build/*' '*/.hvigor/*' '*.log')
           ls -lh dist/dl
       - uses: actions/upload-artifact@v4
         with:
@@ -150,11 +201,11 @@ jobs:
           if-no-files-found: error
 
   # ── 6. 汇总发布 ───────────────────────────────────────────────
-  # 重工具链的两个 job 允许失败；只有 Go 门禁失败才阻断发布。
+  # 重工具链的三个 job 允许失败；只有 Go 门禁失败才阻断发布。
   # 缺哪端资产，页面会把它标成「该版本未包含」，不会给出死链。
   publish:
     name: 汇总发布 GitHub Release
-    needs: [build-go, build-desktop, build-sources]
+    needs: [build-go, build-desktop, build-android, build-sources]
     if: ${{ always() && needs.build-go.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -171,6 +222,19 @@ jobs:
             | sort | xargs -r sha256sum > SHA256SUMS.txt
           echo "== 本版资产 =="
           ls -lh
+      - name: 点名缺失的资产
+        run: |
+          set -euo pipefail
+          cd dist/dl
+          missing=0
+          for f in StarStack.Desktop.exe StarStack-RN.apk starstack-server-linux-amd64 \
+                   starstack-miniapp-source.zip starstack-harmony-source.zip; do
+            if [ ! -f "$f" ]; then
+              echo "::warning::本版缺少 $f（对应构建 job 失败或被跳过）"
+              missing=$((missing + 1))
+            fi
+          done
+          echo "缺失 $missing 个客户端/服务端资产；欢迎页会把它们标成「该版本未包含」，不会给出死链。"
       - name: 解析标签
         id: meta
         env:
@@ -190,14 +254,14 @@ jobs:
           generate_release_notes: true
           body: |
             由 `.github/workflows/release.yml` 自动构建：Go 六平台节点 + Linux Broker、
-            Windows 桌面单文件 exe、微信小程序与 HarmonyOS 源码包。
+            Windows 桌面单文件 exe、Android 安装包、微信小程序与 HarmonyOS 源码包。
 
             - `SHA256SUMS.txt` 覆盖本版全部文件，用 `sha256sum -c SHA256SUMS.txt` 校验。
             - 微信小程序包是**源码**，用微信开发者工具「导入项目」打开（`touristappid` 为测试号）。
             - HarmonyOS 包是**源码**，需 DevEco Studio 5.x（API 12+）+ 华为账号自动签名。
-            - **Android 包（`StarStack-RN.apk`）暂不在 CI 产出**：手机端已切到 RN + Kotlin 前台服务
-              （`apps/mobile-rn`），需要 Android SDK 与 Expo prebuild，用
-              `cd apps/mobile-rn && npx expo run:android` 本地构建。旧的 Capacitor 包已停止发布。
+            - **Android（`StarStack-RN.apk`）**：RN + Kotlin 前台服务同一份安装包，release 变体已内嵌
+              JS bundle，装上就能跑、不需要 Metro；arm64-v8a，minSdk 24。签名沿用工程内的 debug
+              keystore（内测/自用），上架应用商店前必须换正式签名。
             - Windows 桌面依赖 .NET 8；若本版缺少对应文件，说明该构建步骤失败，
               构建方式见 `apps/README.md`。欢迎页会把缺失资产标为「该版本未包含」。
 

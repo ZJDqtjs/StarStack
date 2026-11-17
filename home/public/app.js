@@ -66,21 +66,45 @@
   /* unknown = 还没拿到 API 结果（或 API 被限流），此时仍给出可用的直链 */
   var releaseState = 'unknown';
 
+  /* 线上 Broker 的 /dl/ 目录里真实存在的文件（已用 HEAD 逐个确认）。
+   * GitHub 还没有 Release 时，这六个节点程序仍然可以直接下；exe / apk / Broker
+   * 二进制不在 /dl/ 里，别在页面上假装能下。 */
+  var BROKER_FILES = {
+    'starstack-worker-windows-amd64.exe': 1,
+    'starstack-worker-windows-arm64.exe': 1,
+    'starstack-worker-linux-amd64': 1,
+    'starstack-worker-linux-arm64': 1,
+    'starstack-worker-darwin-amd64': 1,
+    'starstack-worker-darwin-arm64': 1
+  };
+
+  /* 每张卡片的最终去向与说辞都从这里算，避免「按钮能点、点了 404」 */
+  function resolve(a, byName) {
+    var found = byName && byName[a.file];
+    if (releaseState === 'ready') {
+      if (found && found.browser_download_url) {
+        return { href: found.browser_download_url, label: a.kind === '源码包' ? '下载源码' : '下载',
+          status: '已发布', src: 'GitHub Release', size: found.size, ok: true };
+      }
+      return { href: RELEASES_URL, label: '查看 Releases', status: '该版本未包含',
+        src: '本版未构建', size: null, ok: false };
+    }
+    if (BROKER_FILES[a.file]) {
+      return { href: BROKER_DL + a.file, label: 'Broker 直链', status: '可下载',
+        src: '线上 Broker', size: null, ok: true };
+    }
+    if (releaseState === 'empty') {
+      return { href: RELEASES_URL, label: '待首个 Release', status: '尚未发布',
+        src: '仓库暂无 Release', size: null, ok: false };
+    }
+    return { href: LATEST_BASE + a.file, label: '直链下载', status: '版本信息未知',
+      src: 'latest/download', size: null, ok: true };
+  }
+
   function renderCards(assetsByName) {
     grid.innerHTML = '';
     ASSETS.forEach(function (a) {
-      var found = assetsByName && assetsByName[a.file];
-      var ready = releaseState === 'ready' && !!found;
-      var href = ready && found.browser_download_url ? found.browser_download_url
-        : releaseState === 'empty' ? RELEASES_URL : LATEST_BASE + a.file;
-      var status = ready ? '已发布'
-        : releaseState === 'ready' ? '该版本未包含'
-        : releaseState === 'empty' ? '待首个 Release' : '版本信息未知';
-      var label = ready ? '下载'
-        : releaseState === 'ready' ? '查看 Releases'
-        : releaseState === 'empty' ? '发布后可用' : '直链下载';
-      var disabled = releaseState === 'empty' || (releaseState === 'ready' && !ready);
-
+      var r = resolve(a, assetsByName);
       var card = document.createElement('article');
       card.className = 'dl-card' + (a.client ? ' is-client' : '') + (a.server ? ' is-server' : '');
       card.dataset.group = a.group;
@@ -92,12 +116,12 @@
         '</div>' +
         (a.client ? '<div class="dl-desc">' + a.desc + '<span>' + a.note + '</span></div>' : '') +
         '<div class="dl-file">' + a.file + '</div>' +
-        '<div class="dl-meta"><span>' + (found ? fmtSize(found.size) : '—') + '</span>' +
-          '<span>' + status + '</span></div>' +
-        '<a class="dl-btn' + (disabled ? ' is-disabled' : '') + '" href="' + href + '"' +
-          (disabled ? ' aria-disabled="true"' : '') +
-          ' target="_blank" rel="noopener noreferrer" download>' +
-          (ready && a.kind === '源码包' ? '下载源码' : label) + ' <span aria-hidden="true">↓</span></a>';
+        '<div class="dl-src">' + r.src + '</div>' +
+        '<div class="dl-meta"><span>' + (r.size ? fmtSize(r.size) : '—') + '</span>' +
+          '<span>' + r.status + '</span></div>' +
+        '<a class="dl-btn' + (r.ok ? '' : ' is-disabled') + '" href="' + r.href + '"' +
+          (r.ok ? ' target="_blank" rel="noopener noreferrer"' : ' aria-disabled="true" tabindex="-1"') +
+          '>' + r.label + ' <span aria-hidden="true">' + (r.ok ? '↓' : '↗') + '</span></a>';
       grid.appendChild(card);
     });
     applyFilter(currentGroup);
@@ -145,8 +169,10 @@
         badgeText.textContent = '尚无 Release · 等待首个 v* 标签';
         notice.hidden = false;
         var fallback = document.createElement('span');
-        fallback.innerHTML = '或直接从当前线上 Broker 取节点程序：<a href="' + BROKER_DL +
-          'starstack-worker-windows-amd64.exe" target="_blank" rel="noopener noreferrer">Windows x64 ↗</a>';
+        fallback.innerHTML = '节点程序可先从线上 Broker 直接取：' +
+          '<a href="' + BROKER_DL + 'starstack-worker-windows-amd64.exe" target="_blank" rel="noopener noreferrer">Windows x64 ↗</a>' +
+          ' <a href="' + BROKER_DL + 'starstack-worker-linux-amd64" target="_blank" rel="noopener noreferrer">Linux x64 ↗</a>' +
+          ' <a href="' + BROKER_DL + 'starstack-worker-darwin-arm64" target="_blank" rel="noopener noreferrer">macOS ARM ↗</a>';
         notice.appendChild(fallback);
         renderCards(null);
         return;
@@ -356,4 +382,18 @@
   } else {
     play();
   }
+
+  /* ── 分解动画：进入可视区才播放，离屏一律暂停 ───────────── */
+  (function motion() {
+    var cards = document.querySelectorAll('[data-motion]');
+    if (!cards.length) return;
+    if (!('IntersectionObserver' in window)) {
+      Array.prototype.forEach.call(cards, function (c) { c.classList.add('is-live'); });
+      return;
+    }
+    var mo = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { e.target.classList.toggle('is-live', e.isIntersecting); });
+    }, { threshold: 0.25 });
+    Array.prototype.forEach.call(cards, function (c) { mo.observe(c); });
+  })();
 })();

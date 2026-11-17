@@ -25,6 +25,7 @@
     </a>
     <nav class="nav" aria-label="主导航">
       <a href="#demo">运行演示</a>
+      <a href="#motion">分解动画</a>
       <a href="#capabilities">能做什么</a>
       <a href="#how">怎么工作</a>
       <a href="#download">下载</a>
@@ -265,12 +266,222 @@
     </div>
   </section>
 
+  <!-- ── 分解动画 ──────────────────────────────────────────── -->
+  <section class="section section-alt" id="motion">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="kicker">02 / MOTION</div>
+          <h2>六个关键动作，各自一段动画</h2>
+          <p>上面那条主链讲的是「一个任务的一生」。这里把它拆开，逐个看：
+             切点落在哪、包怎么飞、心跳停了谁接手、哈希怎么对、钱按什么算、加速比为什么不是线性的。</p>
+        </div>
+        <div class="motion-legend">
+          <span class="motion-chip">纯 SVG + CSS</span>
+          <span class="motion-chip">无视频 · 无第三方库</span>
+          <span class="motion-chip">滚到才播</span>
+        </div>
+      </div>
+
+      <div class="motion-grid">
+        <article class="motion-card" data-motion>
+          <div class="motion-head"><span class="motion-no">A</span><h3>按 IDR 定切点</h3></div>
+          <svg class="motion-svg" viewBox="0 0 320 180" role="img" aria-labelledby="mo-a-title">
+            <title id="mo-a-title">扫描源片关键帧并把 60 秒视频切成 4 段</title>
+            <defs>
+              <linearGradient id="moGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#4f6bff"/><stop offset="100%" stop-color="#8b5cf6"/>
+              </linearGradient>
+              <clipPath id="moFilmClip"><rect x="18" y="20" width="284" height="52" rx="8"/></clipPath>
+            </defs>
+            <rect class="mo-panel" x="18" y="20" width="284" height="52" rx="8"/>
+            <g clip-path="url(#moFilmClip)">
+              <g class="mo-frames">
+                <rect x="26" y="30" width="22" height="32" rx="3"/>
+                <rect x="54" y="30" width="22" height="32" rx="3"/>
+                <rect x="82" y="30" width="22" height="32" rx="3"/>
+                <rect x="110" y="30" width="22" height="32" rx="3"/>
+                <rect x="138" y="30" width="22" height="32" rx="3"/>
+                <rect x="166" y="30" width="22" height="32" rx="3"/>
+                <rect x="194" y="30" width="22" height="32" rx="3"/>
+                <rect x="222" y="30" width="22" height="32" rx="3"/>
+                <rect x="250" y="30" width="22" height="32" rx="3"/>
+                <rect x="278" y="30" width="22" height="32" rx="3"/>
+              </g>
+              <g class="mo-scan">
+                <rect x="18" y="20" width="26" height="52" fill="url(#moGrad)" opacity=".16"/>
+                <line class="mo-scan-line" x1="31" y1="18" x2="31" y2="74"/>
+              </g>
+            </g>
+            <g class="mo-idr">
+              <circle cx="37" cy="12" r="3"/>
+              <circle cx="121" cy="12" r="3"/>
+              <circle cx="205" cy="12" r="3"/>
+              <circle cx="289" cy="12" r="3"/>
+            </g>
+            <g class="mo-slices">
+              <rect x="18" y="96" width="62" height="22" rx="6"/>
+              <rect x="88" y="96" width="62" height="22" rx="6"/>
+              <rect x="158" y="96" width="62" height="22" rx="6"/>
+              <rect x="228" y="96" width="62" height="22" rx="6"/>
+              <text x="49" y="111">#1</text>
+              <text x="119" y="111">#2</text>
+              <text x="189" y="111">#3</text>
+              <text x="259" y="111">#4</text>
+            </g>
+            <text class="mo-cap" x="18" y="145">ffprobe 抽关键帧索引 · IDR 对齐切点</text>
+            <text class="mo-cap dim" x="18" y="163">-ss 精确 seek，每片 15.0s，不花屏</text>
+          </svg>
+          <p class="motion-note">切点错一帧，拼回来就花屏、音画不同步。所以切点只取 IDR 帧，宁可片段长短不齐。</p>
+        </article>
+
+        <article class="motion-card" data-motion>
+          <div class="motion-head"><span class="motion-no">B</span><h3>派发：派发即占槽</h3></div>
+          <svg class="motion-svg" viewBox="0 0 320 180" role="img" aria-labelledby="mo-b-title">
+            <title id="mo-b-title">Broker 把分片依次派发给三个在线节点</title>
+            <rect class="mo-panel" x="12" y="72" width="62" height="36" rx="8"/>
+            <text class="mo-node-name" x="43" y="94" text-anchor="middle">Broker</text>
+            <g class="mo-links">
+              <path d="M76 88 L218 35"/>
+              <path d="M76 90 L218 90"/>
+              <path d="M76 92 L218 145"/>
+            </g>
+            <g class="mo-node" style="--d:0s">
+              <rect x="222" y="18" width="86" height="30" rx="8"/>
+              <text x="232" y="37">node-a</text>
+              <text class="mo-node-num" x="298" y="37" text-anchor="end">1</text>
+            </g>
+            <g class="mo-node" style="--d:.5s">
+              <rect x="222" y="75" width="86" height="30" rx="8"/>
+              <text x="232" y="94">node-b</text>
+              <text class="mo-node-num" x="298" y="94" text-anchor="end">2</text>
+            </g>
+            <g class="mo-node" style="--d:1s">
+              <rect x="222" y="132" width="86" height="30" rx="8"/>
+              <text x="232" y="151">node-c</text>
+              <text class="mo-node-num" x="298" y="151" text-anchor="end">1</text>
+            </g>
+            <circle class="mo-pkt p1" r="5"/>
+            <circle class="mo-pkt p2" r="5"/>
+            <circle class="mo-pkt p3" r="5"/>
+            <text class="mo-cap" x="12" y="130">长轮询 claim · 主动出站</text>
+            <text class="mo-cap dim" x="12" y="166">按 score 匹配 · 报价冻进分片</text>
+          </svg>
+          <p class="motion-note">节点永远是主动出站的那一方；派发的一瞬间槽位就被占住，报价同时冻结，之后改价不影响在飞的任务。</p>
+        </article>
+
+        <article class="motion-card" data-motion>
+          <div class="motion-head"><span class="motion-no">C</span><h3>心跳停了就回收</h3></div>
+          <svg class="motion-svg" viewBox="0 0 320 180" role="img" aria-labelledby="mo-c-title">
+            <title id="mo-c-title">node-b 心跳中断后分片被回收重派，迟到的回传被 409 拒绝</title>
+            <defs>
+              <marker id="moArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" fill="#a9b6cf"/>
+              </marker>
+            </defs>
+            <g class="mo-lifeline">
+              <line x1="40" y1="30" x2="40" y2="152"/>
+              <line x1="118" y1="30" x2="118" y2="152"/>
+              <line x1="196" y1="30" x2="196" y2="152"/>
+              <line x1="274" y1="30" x2="274" y2="152"/>
+            </g>
+            <g class="mo-lane-label">
+              <text x="40" y="22" text-anchor="middle">Broker</text>
+              <text x="118" y="22" text-anchor="middle">node-a</text>
+              <text x="196" y="22" text-anchor="middle">node-b</text>
+              <text x="274" y="22" text-anchor="middle">node-c</text>
+            </g>
+            <g class="mo-arrows">
+              <path d="M40 58 H118"/>
+              <path d="M40 76 H196"/>
+              <path d="M40 94 H274"/>
+            </g>
+            <rect class="mo-dead" x="188" y="30" width="16" height="122" rx="8"/>
+            <text class="mo-dead-label" x="196" y="120" text-anchor="middle">离线</text>
+            <rect class="mo-shard" x="185" y="104" width="22" height="12" rx="3"/>
+            <text class="mo-409" x="196" y="140" text-anchor="middle">409</text>
+            <text class="mo-cap" x="12" y="172">25s 无心跳 → 分片重派，老节点迟到回传一律 409</text>
+          </svg>
+          <p class="motion-note">重派时把原节点写进该分片的 Excluded 名单，同一片不会被重复结算——这是账本不重复的关键。</p>
+        </article>
+
+        <article class="motion-card" data-motion>
+          <div class="motion-head"><span class="motion-no">D</span><h3>双份 SHA-256 对账</h3></div>
+          <svg class="motion-svg" viewBox="0 0 320 180" role="img" aria-labelledby="mo-d-title">
+            <title id="mo-d-title">节点自报哈希与 Broker 重算哈希逐片比对</title>
+            <rect class="mo-panel" x="14" y="32" width="246" height="32" rx="8"/>
+            <text class="mo-hash-label" x="24" y="45">节点自报</text>
+            <text class="mo-hash" x="24" y="59">e3b0c442 98fc1c14 9b4e…</text>
+            <rect class="mo-panel" x="14" y="76" width="246" height="32" rx="8"/>
+            <text class="mo-hash-label" x="24" y="89">Broker 重算</text>
+            <g class="mo-type"><text class="mo-hash" x="24" y="103">e3b0c442 98fc1c14 9b4e…</text></g>
+            <circle class="mo-check-ring" cx="286" cy="70" r="16"/>
+            <path class="mo-check" d="M278 70 l6 6 l11 -13"/>
+            <text class="mo-badge" x="14" y="146">verified=true · 一致才计入账单</text>
+          </svg>
+          <p class="motion-note">哈希不是给用户看的装饰：对不上就等于没交付。Broker 落盘时自己再算一遍，只信自己。</p>
+        </article>
+
+        <article class="motion-card" data-motion>
+          <div class="motion-head"><span class="motion-no">E</span><h3>按秒结算，差额退回</h3></div>
+          <svg class="motion-svg" viewBox="0 0 320 180" role="img" aria-labelledby="mo-e-title">
+            <title id="mo-e-title">按冻结单价与实际秒数结算，任务结束后退还预扣差额</title>
+            <defs>
+              <linearGradient id="moGradE" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#4f6bff"/><stop offset="100%" stop-color="#8b5cf6"/>
+              </linearGradient>
+            </defs>
+            <g class="mo-row">
+              <text x="16" y="34">预扣（按最贵可行节点）</text>
+              <text class="mo-amt" x="304" y="34" text-anchor="end">−4.80 点</text>
+            </g>
+            <g class="mo-row" style="--d:.35s">
+              <text x="16" y="58">实结（视频秒数 × 冻结价）</text>
+              <text class="mo-amt" x="304" y="58" text-anchor="end">−2.40 点</text>
+            </g>
+            <g class="mo-row" style="--d:.7s">
+              <text x="16" y="82">退还差额</text>
+              <text class="mo-amt up" x="304" y="82" text-anchor="end">+2.40 点</text>
+            </g>
+            <line class="mo-rule" x1="16" y1="96" x2="304" y2="96"/>
+            <rect class="mo-track" x="16" y="108" width="288" height="10" rx="5"/>
+            <rect class="mo-balance" x="16" y="108" width="288" height="10" rx="5"/>
+            <text class="mo-cap" x="16" y="140">节点收益与账户余额两套口径，分开记账</text>
+            <text class="mo-cap dim" x="16" y="158">失败不结算 · 重复回传不二次计费</text>
+          </svg>
+          <p class="motion-note">先按最贵可行节点保守预扣，再按真实用量结算，余额和节点贡献各自一条账，不混着算。</p>
+        </article>
+
+        <article class="motion-card" data-motion>
+          <div class="motion-head"><span class="motion-no">F</span><h3>为什么不是 4×</h3></div>
+          <svg class="motion-svg" viewBox="0 0 320 180" role="img" aria-labelledby="mo-f-title">
+            <title id="mo-f-title">单机 10.9 秒与分布式 7.5 秒的墙钟对比，实测加速 1.45 倍</title>
+            <defs>
+              <linearGradient id="moGradF" x1="0" y1="1" x2="0" y2="0">
+                <stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#4f6bff"/>
+              </linearGradient>
+            </defs>
+            <line class="mo-axis" x1="18" y1="138" x2="302" y2="138"/>
+            <line class="mo-ideal" x1="18" y1="28" x2="302" y2="28"/>
+            <text class="mo-cap dim" x="18" y="22">线性理想（4 节点 = 4×）</text>
+            <rect class="mo-bar-b" x="64" y="34" width="56" height="104" rx="8"/>
+            <rect class="mo-bar-a" x="160" y="66" width="56" height="72" rx="8"/>
+            <text class="mo-val" x="92" y="152" text-anchor="middle">单机 10.9s</text>
+            <text class="mo-val" x="188" y="152" text-anchor="middle">分布式 7.5s</text>
+            <text class="mo-speedup" x="188" y="58" text-anchor="middle">1.45×</text>
+          </svg>
+          <p class="motion-note">实测那轮所有节点都跑在同一台笔记本上，抢的是同一组 CPU/GPU。1.45× 证明链路通了，不是四台机器该有的收益。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
   <!-- ── 能力 ──────────────────────────────────────────────── -->
   <section class="section section-alt" id="capabilities">
     <div class="wrap">
       <div class="section-head">
         <div>
-          <div class="kicker">02 / CAPABILITIES</div>
+          <div class="kicker">03 / CAPABILITIES</div>
           <h2>一套调度骨架，六条落地链路</h2>
           <p>切片单位和执行命令不同，但「切片 → 派发 → 校验 → 合并 → 结算」是同一套。</p>
         </div>
@@ -327,7 +538,7 @@
     <div class="wrap">
       <div class="section-head">
         <div>
-          <div class="kicker">03 / HOW IT WORKS</div>
+          <div class="kicker">04 / HOW IT WORKS</div>
           <h2>闲置换算力的难，不在转码</h2>
           <p>编码器交给 ffmpeg，平台真正要解决的是「谁来做、做完算不算数、跑了半路掉线怎么办、钱怎么记」。</p>
         </div>
@@ -359,7 +570,7 @@
     <div class="wrap">
       <div class="section-head">
         <div>
-          <div class="kicker">04 / DOWNLOADS</div>
+          <div class="kicker">05 / DOWNLOADS</div>
           <h2>五个端，一个 Release</h2>
           <p>Windows 桌面、Android、微信小程序、HarmonyOS 与算力节点程序，全部由 GitHub Actions 构建并发布到 Releases。
              安装包托管在 GitHub，不走 Workers 静态资源——那边单文件上限 25 MiB，装不下自包含桌面端。</p>
@@ -389,7 +600,7 @@
         <h3>各端获取方式 · 先把限制说清楚</h3>
         <div class="legend-grid">
           <div><b>Windows 桌面</b><span>自包含单文件 <code>StarStack.Desktop.exe</code>，双击即用、无需 .NET 运行时，约 70–90 MB。内嵌 React 控制台，不依赖远程网页。</span></div>
-          <div><b>Android</b><span>debug APK，需允许「未知来源」安装；默认连 <code>https://starstack.run</code>，可在登录页改服务器地址。</span></div>
+          <div><b>Android</b><span><code>release</code> 变体，已内嵌 JS bundle，装上就能跑、不需要 Metro；arm64-v8a、minSdk 24。签名沿用工程内的 debug keystore（内测自用），需允许「未知来源」安装。</span></div>
           <div><b>微信小程序</b><span>提供<b>源码包</b>而非安装包：微信里没有「下载安装小程序」这回事。用微信开发者工具「导入项目」打开，<code>touristappid</code> 是测试号；正式发布需域名备案与合法域名配置。</span></div>
           <div><b>HarmonyOS NEXT</b><span>提供<b>源码包</b>：ArkTS 壳需要 DevEco Studio 5.x（API 12+）与华为账号自动签名，仓库未提供已签名 HAP。Web 控制台资源已内嵌在 <code>rawfile/web</code>。</span></div>
         </div>
@@ -420,7 +631,7 @@
   <section class="section" id="quickstart">
     <div class="wrap quickstart">
       <div>
-        <div class="kicker">05 / QUICK START</div>
+        <div class="kicker">06 / QUICK START</div>
         <h2>本机三分钟跑通闭环</h2>
         <p>一条脚本会起 Broker + 两个节点，生成 60s 测试片并提交任务；浏览器打开就能看到分片、租约、校验和结算。</p>
         <div class="hero-actions">
