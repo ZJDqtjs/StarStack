@@ -5,7 +5,8 @@ import json, re, sys, time, urllib.parse, urllib.request, http.cookiejar
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8799
 API = "http://127.0.0.1:%d" % PORT
-NAME = "演示用户"
+# 账号是邮箱：注册只收 email，显示名由服务端从邮箱前缀推导（这里会得到 "demo"）。
+EMAIL = "demo@starstack.local"
 PWD = "starstack123"
 # 重定向到文件时 Windows 的 stdout 会退回 GBK，中文变成乱码
 sys.stdout.reconfigure(encoding="utf-8")
@@ -28,10 +29,10 @@ def call(path, body=None, method=None, raw=None, headers=None):
 
 
 print("[1] 注册 / 登录")
-code, me = call("/api/auth/register", {"name": NAME, "password": PWD})
+code, me = call("/api/auth/register", {"email": EMAIL, "password": PWD})
 if code != 200:
     print("   注册不可用（%s），改为登录既有账户" % me.get("error", code))
-    code, me = call("/api/auth/login", {"name": NAME, "password": PWD})
+    code, me = call("/api/auth/login", {"email": EMAIL, "password": PWD})
 assert code == 200, me
 print("   %s id=%s 余额=%s" % (me["name"], me["id"], me["credits"]))
 

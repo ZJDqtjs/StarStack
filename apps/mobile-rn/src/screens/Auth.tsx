@@ -18,7 +18,7 @@ export default function Auth({ onDone }: { onDone: () => void }) {
 
   async function submit() {
     if (!name.trim() || !pwd) {
-      Alert.alert('提示', '请填写用户名和密码')
+      Alert.alert('提示', '请填写邮箱和密码')
       return
     }
     setBusy(true)
@@ -64,7 +64,7 @@ export default function Auth({ onDone }: { onDone: () => void }) {
             ))}
           </View>
 
-          <Field label="用户名" value={name} onChangeText={setName} placeholder="ASCII 用户名" />
+          <Field label="邮箱" value={name} onChangeText={setName} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" />
           <Field label="密码" value={pwd} onChangeText={setPwd} secureTextEntry placeholder="至少 8 位" />
           {register ? <Field label="邀请码" value={invite} onChangeText={setInvite} placeholder="公网档注册需要邀请码" /> : null}
 

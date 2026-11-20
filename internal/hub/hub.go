@@ -384,6 +384,11 @@ type Server struct {
 	gateway    *gatewayState
 	comfyHub   string // optional reverse-proxy target for the AI video share page
 	comfyUI    string // optional upstream ComfyUI server for the workflow workbench
+	// oauth is nil when no provider has a client id/secret; mail is nil when no
+	// SMTP server is configured. Both are optional: the console only offers the
+	// buttons the deployment actually supports.
+	oauth *oauthConfig
+	mail  *mailer
 	// Gateway ceilings are per-process configuration, not constants: vendor
 	// models routinely advertise 64K~128K contexts. Defaults keep old behaviour.
 	maxPromptTokens    int
@@ -411,6 +416,7 @@ func NewServer(dataDir, baseURL string, st *store.Store, pol Policy) *Server {
 		secrets: loadSecretBox(dataDir), gateway: newGatewayState(),
 		maxPromptTokens: DefaultGatewayMaxPromptTokens, maxTokens: DefaultGatewayMaxTokens,
 		voffers: map[string]*vm.Offer{}, vms: map[string]*vm.Instance{},
+		oauth: loadOAuthConfig(baseURL, pol.SignupInvite != ""), mail: loadMailer(),
 	}
 	// A broker reached over HTTPS must not send its session cookie in the clear
 	// on the next plaintext request.
@@ -654,8 +660,17 @@ func (s *Server) Handlers() http.Handler {
 	mux.HandleFunc("/api/auth/register", s.handleRegister)
 	mux.HandleFunc("/api/auth/login", s.handleLogin)
 	mux.HandleFunc("/api/auth/logout", s.handleLogout)
+	// 邮箱验证码（配置 SMTP 后才可用）、找回口令、第三方授权登录。
+	mux.HandleFunc("/api/auth/email/code", s.handleEmailCode)
+	mux.HandleFunc("/api/auth/reset", s.handlePasswordReset)
+	mux.HandleFunc("/api/auth/oauth/", s.handleOAuth)
 	mux.HandleFunc("/api/me", s.handleMe)
 	mux.HandleFunc("/api/me/recharge", s.handleRecharge)
+	// 登录方式的自我管理：改口令、绑/解绑邮箱与第三方账号。
+	mux.HandleFunc("/api/me/password", s.handleMyPassword)
+	mux.HandleFunc("/api/me/email", s.handleMyEmail)
+	mux.HandleFunc("/api/me/identities", s.handleIdentities)
+	mux.HandleFunc("/api/me/identities/", s.handleIdentityOp)
 	mux.HandleFunc("/api/pair", s.handlePair)
 	mux.HandleFunc("/api/pending", s.handlePending)
 	mux.HandleFunc("/api/nodes/launch", s.handleLaunchMint)

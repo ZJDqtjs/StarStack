@@ -81,10 +81,12 @@ export function AppProvider({ children }) {
     return () => { stop = true; clearInterval(iv); clearInterval(cv) }
   }, [signedIn])
 
-  const login = useCallback(async (name, password, invite, mode) => {
-    const payload = { name, password }
-    if (mode === 'reg') payload.invite = invite
-    const m = await post('/api/auth/' + (mode === 'reg' ? 'register' : 'login'), payload)
+  // mode: login | reg | reset。登录/注册成功后才写会话状态；「找回口令」只是
+  // 改完口令返回登录页，不自动登入。
+  const login = useCallback(async (mode, payload) => {
+    const path = mode === 'reg' ? 'register' : mode === 'reset' ? 'reset' : 'login'
+    const m = await post('/api/auth/' + path, payload || {})
+    if (mode === 'reset') return m
     // 后端同时下发 HttpOnly Cookie 和 token：Cookie 供线上同源使用，
     // token 供 exe 反代 / 鸿蒙绝对地址这类跨 origin 场景使用（Cookie 的 Domain 搬不过去）。
     if (m && m.token) setToken(m.token)

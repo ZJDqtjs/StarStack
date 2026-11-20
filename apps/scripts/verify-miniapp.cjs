@@ -85,7 +85,8 @@ ok('all page modules load');
   try {
     const st = await api.api.state();
     if (typeof st.policy !== 'object') fail('state has no policy');
-    const user = 'wx' + Date.now().toString().slice(-6);
+    // 账号是邮箱：注册只收 email，显示名由服务端从邮箱前缀推导。
+    const user = 'wx' + Date.now().toString().slice(-6) + '@starstack.local';
     const reg = await api.api.register(user, 'pass12345');
     if (!reg.token) fail('register returned no token');
     api.setToken(reg.token);

@@ -75,8 +75,9 @@ export function createApi({ baseUrl, getToken, request, upload }: ApiOptions) {
 
     // auth
     login: (name: string, password: string) => post('/api/auth/login', { name, password }),
-    register: (name: string, password: string, invite?: string) =>
-      post('/api/auth/register', { name, password, invite }),
+    // 账号是邮箱：注册只收 email，显示名由服务端从邮箱前缀推导。
+    register: (email: string, password: string, invite?: string) =>
+      post('/api/auth/register', { email, password, invite }),
     logout: () => post('/api/auth/logout', {}),
     me: () => get('/api/me'),
     state: () => get('/api/state'),

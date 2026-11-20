@@ -57,7 +57,8 @@ Page({
 
   async submit() {
     const { mode, name, pass, pass2, invite } = this.data
-    if (!name.trim()) return this.setData({ msg: '请输入用户名' })
+    // name 装的是邮箱：账号就是邮箱，注册不再有自定义用户名。
+    if (!name.trim()) return this.setData({ msg: '请输入邮箱' })
     if (mode === 'reg' && pass !== pass2) return this.setData({ msg: '两次密码不一致' })
     this.setData({ busy: true, msg: '正在校验…' })
     try {

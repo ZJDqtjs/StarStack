@@ -16,7 +16,7 @@ func TestBearerSessionAndCORS(t *testing.T) {
 	ts := httptest.NewServer(s.Handlers())
 	defer ts.Close()
 
-	body, _ := json.Marshal(map[string]string{"name": "mobile", "password": "pass12345"})
+	body, _ := json.Marshal(map[string]string{"email": "mobile@example.com", "password": "pass12345"})
 	res, err := http.Post(ts.URL+"/api/auth/register", "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)

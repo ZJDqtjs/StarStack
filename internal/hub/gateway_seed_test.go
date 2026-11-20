@@ -136,14 +136,27 @@ func TestPlatformAccountResolvesWithoutSeeding(t *testing.T) {
 
 	broker := httptest.NewServer(s.Handlers())
 	defer broker.Close()
+	// 注册已经只认邮箱，显示名由邮箱前缀推导：用 platform-x@... 注册不会失败，
+	// 但推导出的名字必须让开自营账户的保留名（自动加后缀），否则新账号会顶掉
+	// 官方徽章与对账端点。
 	res, err := http.Post(broker.URL+"/api/auth/register", "application/json",
-		strings.NewReader(`{"name":"platform-x","password":"testpass123"}`))
+		strings.NewReader(`{"email":"platform-x@test.local","password":"testpass123"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer res.Body.Close()
-	if res.StatusCode != 403 {
-		t.Fatalf("自营账户名应保留，不能被抢注：HTTP %d", res.StatusCode)
+	var reg struct {
+		Name string `json:"name"`
+	}
+	json.NewDecoder(res.Body).Decode(&reg)
+	if res.StatusCode != 200 {
+		t.Fatalf("邮箱注册不该因为显示名撞保留名而失败：HTTP %d", res.StatusCode)
+	}
+	if strings.EqualFold(reg.Name, "platform-x") {
+		t.Fatalf("自营账户名被抢注：%q", reg.Name)
+	}
+	if owner, err := s.st.UserByName("platform-x"); err != nil || owner.ID != u.ID {
+		t.Fatalf("保留名被改写：%v %v", owner, err)
 	}
 }
 

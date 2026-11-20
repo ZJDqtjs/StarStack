@@ -16,13 +16,14 @@ export default function Auth({ policy, onDone }: any) {
   const inviteRequired = !!(policy && policy.signup_invite_required)
 
   const go = async () => {
-    if (!name.trim()) return setMsg('请输入用户名')
+    // 账号是邮箱：注册只收 email，显示名由服务端从邮箱前缀推导。
+    if (!name.trim()) return setMsg('请输入邮箱')
     if (mode === 'reg' && pass !== pass2) return setMsg('两次密码不一致')
     setBusy(true)
     setMsg('正在校验…')
     try {
-      const payload: any = mode === 'reg' ? { name: name.trim(), password: pass, invite: invite.trim() } : { name: name.trim(), password: pass }
-      const r = mode === 'reg' ? await api.register(payload.name, payload.password, payload.invite) : await api.login(payload.name, payload.password)
+      const payload: any = mode === 'reg' ? { email: name.trim(), password: pass, invite: invite.trim() } : { email: name.trim(), password: pass }
+      const r = mode === 'reg' ? await api.register(payload.email, payload.password, payload.invite) : await api.login(payload.email, payload.password)
       if (r && r.token) store.set('ss-token', r.token)
       setMsg('')
       onDone(r)
@@ -53,8 +54,8 @@ export default function Auth({ policy, onDone }: any) {
             注册
           </button>
         </div>
-        <Field label="用户名">
-          <input className="in" value={name} onChange={(e) => setName(e.target.value)} placeholder="2-24 个字符" autoComplete="username" />
+        <Field label="邮箱">
+          <input className="in" value={name} onChange={(e) => setName(e.target.value)} placeholder="you@example.com" autoComplete="email" inputMode="email" />
         </Field>
         <Field label="密码">
           <input className="in" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="至少 8 位" autoComplete={mode === 'reg' ? 'new-password' : 'current-password'} />

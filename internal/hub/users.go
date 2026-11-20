@@ -106,13 +106,54 @@ func decodeJSON(r *http.Request, v any) error {
 
 // ---- accounts ----
 
+// startSession mints a session token, persists it and hands the browser the
+// HttpOnly cookie. The token also goes back in the JSON body for the Android
+// app and the mini program, which live on origins where SameSite=Lax cookies
+// are never sent.
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, u *store.User) (string, error) {
+	token := auth.RandomHex(32)
+	if err := s.st.PutSession(token, u.ID, sessionTTL, r.UserAgent()); err != nil {
+		return "", err
+	}
+	s.setSessionCookie(w, token)
+	return token, nil
+}
+
+// grantSignup applies the one-time signup credit and returns the new balance.
+// Password registration and third-party registration must grant the same thing,
+// otherwise the cheaper door becomes the way in.
+func (s *Server) grantSignup(u *store.User) float64 {
+	credit := s.policy.SignupCredit
+	if credit <= 0 {
+		return 0
+	}
+	bal, err := s.st.AddCredits(u.ID, credit)
+	if err != nil {
+		log.Printf("signup credit: %v", err)
+		return 0
+	}
+	s.st.Ledger(&store.Entry{TS: time.Now().Unix(), Kind: store.Recharge, UserID: u.ID,
+		Amount: credit, Balance: bal, Note: "新用户赠送额度"})
+	log.Printf("user %s (%s) granted %g signup credits", u.Name, u.ID, credit)
+	return bal
+}
+
+// handleRegister is email-only by policy: the address IS the account. There is
+// no self-chosen username any more, because a free-form name is a second,
+// unverified identifier — two people can pick the same one, an operator cannot
+// prove who owns it, and nothing can be recovered through it. The display name
+// shown in the console is derived from the address and only used for display.
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if !s.authAllowed(w, r) {
 		return
 	}
 	var req struct {
+		// Name is accepted and ignored so old clients get a clear answer
+		// ("请使用邮箱注册") instead of a decode error.
 		Name     string `json:"name"`
+		Email    string `json:"email"`
 		Password string `json:"password"`
+		Code     string `json:"code"`
 		Invite   string `json:"invite"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
@@ -124,25 +165,34 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, jsonErr("邀请码无效"), http.StatusForbidden)
 		return
 	}
-	name := strings.TrimSpace(req.Name)
-	if err := auth.ValidName(name); err != nil {
+	if strings.TrimSpace(req.Email) == "" {
+		http.Error(w, jsonErr("请使用邮箱注册：邮箱就是登录账号"), 400)
+		return
+	}
+	email, err := auth.ValidEmail(req.Email)
+	if err != nil {
 		http.Error(w, jsonErr(err.Error()), 400)
 		return
 	}
-	// The self-operated upstream owner is an ordinary account, but its name is
-	// reserved so nobody can pre-register it and claim the console's 官方 badge
-	// or the reconciliation endpoint.
-	if s.platformOwnerName != "" && strings.EqualFold(name, s.platformOwnerName) {
-		http.Error(w, jsonErr("该账户名已保留"), 403)
+	if s.emailTakenByOther(email, "") != nil {
+		http.Error(w, jsonErr("该邮箱已被使用"), http.StatusConflict)
 		return
 	}
 	if err := auth.ValidPassword(req.Password); err != nil {
 		http.Error(w, jsonErr(err.Error()), 400)
 		return
 	}
-	if _, err := s.st.UserByName(name); err == nil {
-		http.Error(w, jsonErr("用户名已存在"), 409)
-		return
+	// 显示名只是展示用：从邮箱前缀推出来，重名（或撞上平台保留名）就自动加后缀，
+	// 不让它成为注册失败的理由。
+	name := s.uniqueName(oauthBaseName(oauthProfile{Email: email}))
+	// The code is verified last, after every cheap rejection: a verification code
+	// is one-shot, so burning it on a request that was going to fail would force
+	// the user to ask for another one.
+	if s.mail != nil {
+		if err := s.verifyEmailCode(email, purposeSignup, req.Code); err != nil {
+			http.Error(w, jsonErr(err.Error()), 400)
+			return
+		}
 	}
 	salt := auth.NewSalt()
 	u := &store.User{
@@ -150,61 +200,82 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		PassHash: auth.Hash(req.Password, salt, auth.Iterations),
 		Salt:     hex.EncodeToString(salt), Iter: auth.Iterations,
 		Credits: 0, CreatedAt: time.Now().Unix(),
+		Email: email, EmailVerified: s.mail != nil,
 	}
 	if err := s.st.CreateUser(u); err != nil {
 		log.Printf("create user: %v", err)
 		http.Error(w, jsonErr("注册失败"), 500)
 		return
 	}
-	token := auth.RandomHex(32)
-	if err := s.st.PutSession(token, u.ID, sessionTTL, r.UserAgent()); err != nil {
+	token, err := s.startSession(w, r, u)
+	if err != nil {
 		http.Error(w, jsonErr("会话创建失败"), 500)
 		return
 	}
-	s.setSessionCookie(w, token)
-	credit := s.policy.SignupCredit
-	log.Printf("user %s (%s) registered, granted %g signup credits", u.Name, u.ID, credit)
-	if _, err := s.st.AddCredits(u.ID, credit); err != nil {
-		log.Printf("signup credit: %v", err)
-	}
-	bal, _ := s.st.Balance(u.ID)
-	if credit > 0 {
-		s.st.Ledger(&store.Entry{TS: time.Now().Unix(), Kind: store.Recharge, UserID: u.ID,
-			Amount: credit, Balance: bal, Note: "新用户赠送额度"})
-	}
-	writeJSON(w, map[string]any{"id": u.ID, "name": u.Name, "credits": bal, "token": token})
+	bal := s.grantSignup(u)
+	log.Printf("user %s (%s) registered, email=%q", u.Name, u.ID, u.Email)
+	writeJSON(w, map[string]any{"id": u.ID, "name": u.Name, "credits": bal, "token": token,
+		"email": u.Email, "email_verified": u.EmailVerified})
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !s.authAllowed(w, r) {
 		return
 	}
-	var req struct{ Name, Password string }
+	var req struct{ Name, Email, Password string }
 	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, `{"error":"请求格式错误"}`, 400)
 		return
 	}
-	u, err := s.st.UserByName(strings.TrimSpace(req.Name))
-	// Same response for unknown user and wrong password: no account enumeration.
-	if errors.Is(err, store.ErrNotFound) {
-		auth.Hash(req.Password, auth.NewSalt(), auth.Iterations)
-		http.Error(w, jsonErr("用户名或密码错误"), 401)
-		return
+	// 邮箱是登录标识。name 字段仍然收下，存的是同一个标识：老客户端（小程序 /
+	// 安卓）只发 name，改造前用用户名注册的老账号也只有 name 能进得来。
+	ident := strings.TrimSpace(req.Email)
+	if ident == "" {
+		ident = strings.TrimSpace(req.Name)
 	}
-	if err != nil {
+	var (
+		u   *store.User
+		err error
+	)
+	if strings.Contains(ident, "@") {
+		if e, verr := auth.ValidEmail(ident); verr == nil {
+			u, err = s.st.UserByEmail(e)
+		} else {
+			err = store.ErrNotFound
+		}
+	} else {
+		// 用户名只留给「这次改造之前注册、还没有邮箱」的老账号当过渡通道：
+		// 一旦账号有了邮箱，登录名就只剩邮箱，避免显示名变成第二套账号体系。
+		u, err = s.st.UserByName(ident)
+		if err == nil && u.Email != "" {
+			u, err = nil, store.ErrNotFound
+		}
+	}
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		http.Error(w, jsonErr("登录失败"), 500)
 		return
 	}
-	if !auth.Match(req.Password, u.Salt, u.PassHash, u.Iter) {
-		http.Error(w, jsonErr("用户名或密码错误"), 401)
+	// Same response for unknown user and wrong password: no account enumeration.
+	if err != nil {
+		auth.Hash(req.Password, auth.NewSalt(), auth.Iterations)
+		http.Error(w, jsonErr("邮箱或口令不正确"), 401)
 		return
 	}
-	token := auth.RandomHex(32)
-	if err := s.st.PutSession(token, u.ID, sessionTTL, r.UserAgent()); err != nil {
+	if u.PassHash == "" {
+		// Accounts born from a third-party login have no password to match.
+		// Saying so is not enumeration — the caller already knows the name.
+		http.Error(w, jsonErr("该账户通过第三方登录创建，请用第三方账号登录，或在「设置」里设置口令"), 403)
+		return
+	}
+	if !auth.Match(req.Password, u.Salt, u.PassHash, u.Iter) {
+		http.Error(w, jsonErr("邮箱或口令不正确"), 401)
+		return
+	}
+	token, err := s.startSession(w, r, u)
+	if err != nil {
 		http.Error(w, jsonErr("会话创建失败"), 500)
 		return
 	}
-	s.setSessionCookie(w, token)
 	log.Printf("user %s logged in", u.Name)
 	writeJSON(w, map[string]any{"id": u.ID, "name": u.Name, "credits": u.Credits, "token": token})
 }
@@ -227,9 +298,17 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	mine, _ := s.st.NodesByOwner(u.ID)
 	bal, _ := s.st.Balance(u.ID)
+	// 登录方式的摘要：/api/state 每秒轮询，不放这里；这个端点只在启动时取一次。
+	linked := []string{}
+	if ids, err := s.st.OAuthIdentitiesByUser(u.ID); err == nil {
+		for _, b := range ids {
+			linked = append(linked, b.Provider)
+		}
+	}
 	writeJSON(w, map[string]any{
 		"signed_in": true, "id": u.ID, "name": u.Name, "credits": bal,
-		"nodes": len(mine),
+		"nodes": len(mine), "email": u.Email, "email_verified": u.EmailVerified,
+		"has_password": u.PassHash != "", "providers": linked,
 	})
 }
 

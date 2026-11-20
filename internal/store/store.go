@@ -26,7 +26,35 @@ CREATE TABLE IF NOT EXISTS users(
   salt        TEXT NOT NULL,
   iter        INTEGER NOT NULL,
   credits     REAL NOT NULL DEFAULT 0,
-  created_at  INTEGER NOT NULL);
+  created_at  INTEGER NOT NULL,
+  -- 邮箱是用户名之外的第二个登录标识：注册时可填，填了就同时用于找回口令。
+  -- 通过第三方登录创建、又没有自己设过口令的账号，pass_hash 为空字符串。
+  email          TEXT NOT NULL DEFAULT '',
+  email_verified INTEGER NOT NULL DEFAULT 0);
+
+-- 第三方身份（GitHub / Gitee / Google …）。一对 (provider, subject) 只对应一个
+-- 平台账号；同一账号可以绑多个第三方，绑定的目的是下次一键登录落到同一个人。
+CREATE TABLE IF NOT EXISTS oauth_identities(
+  provider    TEXT NOT NULL,
+  subject     TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  login       TEXT NOT NULL DEFAULT '',
+  email       TEXT NOT NULL DEFAULT '',
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY(provider, subject));
+CREATE INDEX IF NOT EXISTS idx_oauth_user ON oauth_identities(user_id);
+
+-- 邮箱验证码：只在配置了 SMTP 时产生。存的是 sha256(email|purpose|code)，
+-- 不是明文；行里有尝试次数上限，过期即失效，避免 6 位数字被在线枚举。
+CREATE TABLE IF NOT EXISTS email_codes(
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  email      TEXT NOT NULL,
+  purpose    TEXT NOT NULL,
+  hash       TEXT NOT NULL,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_email_code ON email_codes(email, purpose, created_at);
 
 CREATE TABLE IF NOT EXISTS sessions(
   token       TEXT PRIMARY KEY,
@@ -406,6 +434,8 @@ ALTER TABLE ledger ADD COLUMN source TEXT NOT NULL DEFAULT '';
 ALTER TABLE service_offers ADD COLUMN auto_share INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE service_offers ADD COLUMN node_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE service_offers ADD COLUMN scene TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;
 `
 
 // Indexes on columns introduced by columnMigrations must be created after the
@@ -413,6 +443,9 @@ ALTER TABLE service_offers ADD COLUMN scene TEXT NOT NULL DEFAULT '';
 // yet when schema runs, and SQLite rejects CREATE INDEX on a missing column.
 const postMigrationIndexes = `
 CREATE INDEX IF NOT EXISTS idx_node_device ON nodes(device_id, owner_id);
+-- 部分唯一索引：空邮箱表示「没绑邮箱」，可以有任意多行，但不能有两个账号
+-- 声称同一个邮箱（邮箱是登录标识，重复就无法判断该登进谁）。
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email ON users(email) WHERE email <> '';
 `
 
 func Open(path string) (*Store, error) {
@@ -476,33 +509,67 @@ type User struct {
 	Iter      int    `json:"-"`
 	Credits   float64
 	CreatedAt int64
+	// Email is empty until the account binds one; EmailVerified stays false when
+	// the deployment has no SMTP server to prove ownership with.
+	Email         string `json:"email,omitempty"`
+	EmailVerified bool   `json:"email_verified,omitempty"`
 }
 
+const userCols = `id,name,pass_hash,salt,iter,credits,created_at,email,email_verified`
+
 func (s *Store) CreateUser(u *User) error {
-	_, err := s.db.Exec(`INSERT INTO users(id,name,pass_hash,salt,iter,credits,created_at)
-		VALUES(?,?,?,?,?,?,?)`, u.ID, u.Name, u.PassHash, u.Salt, u.Iter, u.Credits, u.CreatedAt)
+	_, err := s.db.Exec(`INSERT INTO users(id,name,pass_hash,salt,iter,credits,created_at,email,email_verified)
+		VALUES(?,?,?,?,?,?,?,?,?)`, u.ID, u.Name, u.PassHash, u.Salt, u.Iter, u.Credits, u.CreatedAt,
+		normalizeEmail(u.Email), b2i(u.EmailVerified))
 	return err
 }
 
-func (s *Store) UserByName(name string) (*User, error) {
+func scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	u := &User{}
-	err := s.db.QueryRow(`SELECT id,name,pass_hash,salt,iter,credits,created_at FROM users WHERE name=?`, name).
-		Scan(&u.ID, &u.Name, &u.PassHash, &u.Salt, &u.Iter, &u.Credits, &u.CreatedAt)
+	var verified int
+	err := row.Scan(&u.ID, &u.Name, &u.PassHash, &u.Salt, &u.Iter, &u.Credits, &u.CreatedAt,
+		&u.Email, &verified)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
-	return u, err
+	if err != nil {
+		return nil, err
+	}
+	u.EmailVerified = verified != 0
+	return u, nil
+}
+
+func (s *Store) UserByName(name string) (*User, error) {
+	return scanUser(s.db.QueryRow(`SELECT `+userCols+` FROM users WHERE name=?`, name))
 }
 
 func (s *Store) User(id string) (*User, error) {
-	u := &User{}
-	err := s.db.QueryRow(`SELECT id,name,pass_hash,salt,iter,credits,created_at FROM users WHERE id=?`, id).
-		Scan(&u.ID, &u.Name, &u.PassHash, &u.Salt, &u.Iter, &u.Credits, &u.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	return u, err
+	return scanUser(s.db.QueryRow(`SELECT `+userCols+` FROM users WHERE id=?`, id))
 }
+
+// UserByEmail looks an account up by its login email. Emails are stored and
+// compared lower-cased so "Alice@Example.com" and "alice@example.com" are one
+// account, not two.
+func (s *Store) UserByEmail(email string) (*User, error) {
+	return scanUser(s.db.QueryRow(`SELECT `+userCols+` FROM users WHERE email=?`, normalizeEmail(email)))
+}
+
+// SetUserEmail rebinds an account's login email. The unique index on users.email
+// is what enforces "one account per address"; callers turn its error into a 409.
+func (s *Store) SetUserEmail(userID, email string, verified bool) error {
+	_, err := s.db.Exec(`UPDATE users SET email=?, email_verified=? WHERE id=?`,
+		normalizeEmail(email), b2i(verified), userID)
+	return err
+}
+
+// SetUserPassword is used both by the password-reset flow and by an account that
+// was born from a third-party login and later wants a password of its own.
+func (s *Store) SetUserPassword(userID, hash, salt string, iter int) error {
+	_, err := s.db.Exec(`UPDATE users SET pass_hash=?, salt=?, iter=? WHERE id=?`, hash, salt, iter, userID)
+	return err
+}
+
+func normalizeEmail(e string) string { return strings.ToLower(strings.TrimSpace(e)) }
 
 // AddCredits applies a signed delta and returns the new balance.
 func (s *Store) AddCredits(userID string, delta float64) (float64, error) {
@@ -545,6 +612,14 @@ func (s *Store) Session(token string) (string, error) {
 
 func (s *Store) DropSession(token string) error {
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE token=?`, token)
+	return err
+}
+
+// DropUserSessions revokes every session of one account. A password reset or a
+// newly bound third-party identity changes who can get in, so whatever device
+// was already holding a session has to prove it again.
+func (s *Store) DropUserSessions(userID string) error {
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id=?`, userID)
 	return err
 }
 
