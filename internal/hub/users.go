@@ -138,11 +138,18 @@ func (s *Server) grantSignup(u *store.User) float64 {
 	return bal
 }
 
+// handleRegister is email-only by policy: the address IS the account. There is
+// no self-chosen username any more, because a free-form name is a second,
+// unverified identifier — two people can pick the same one, an operator cannot
+// prove who owns it, and nothing can be recovered through it. The display name
+// shown in the console is derived from the address and only used for display.
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if !s.authAllowed(w, r) {
 		return
 	}
 	var req struct {
+		// Name is accepted and ignored so old clients get a clear answer
+		// ("请使用邮箱注册") instead of a decode error.
 		Name     string `json:"name"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -158,59 +165,30 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, jsonErr("邀请码无效"), http.StatusForbidden)
 		return
 	}
-	// 邮箱先校验格式：邮箱注册时它既是登录标识也是找回口令的地址，写错了就等于
-	// 把一个打不开的门牌钉在自己账号上。
-	email := ""
-	if strings.TrimSpace(req.Email) != "" {
-		e, err := auth.ValidEmail(req.Email)
-		if err != nil {
-			http.Error(w, jsonErr(err.Error()), 400)
-			return
-		}
-		email = e
-		if s.emailTakenByOther(email, "") != nil {
-			http.Error(w, jsonErr("该邮箱已被使用"), http.StatusConflict)
-			return
-		}
+	if strings.TrimSpace(req.Email) == "" {
+		http.Error(w, jsonErr("请使用邮箱注册：邮箱就是登录账号"), 400)
+		return
 	}
-	name := strings.TrimSpace(req.Name)
-	derived := false
-	if name == "" {
-		if email == "" {
-			http.Error(w, jsonErr("请填写用户名或邮箱"), 400)
-			return
-		}
-		name, derived = oauthBaseName(oauthProfile{Email: email}), true
-	}
-	if err := auth.ValidName(name); err != nil {
+	email, err := auth.ValidEmail(req.Email)
+	if err != nil {
 		http.Error(w, jsonErr(err.Error()), 400)
 		return
 	}
-	// The self-operated upstream owner is an ordinary account, but its name is
-	// reserved so nobody can pre-register it and claim the console's 官方 badge
-	// or the reconciliation endpoint.
-	if s.platformOwnerName != "" && strings.EqualFold(name, s.platformOwnerName) {
-		http.Error(w, jsonErr("该账户名已保留"), 403)
+	if s.emailTakenByOther(email, "") != nil {
+		http.Error(w, jsonErr("该邮箱已被使用"), http.StatusConflict)
 		return
 	}
 	if err := auth.ValidPassword(req.Password); err != nil {
 		http.Error(w, jsonErr(err.Error()), 400)
 		return
 	}
-	if _, err := s.st.UserByName(name); err == nil {
-		if !derived {
-			http.Error(w, jsonErr("用户名已存在"), 409)
-			return
-		}
-		// An email-derived name is a convenience, not a choice: on a collision
-		// give it a suffix instead of failing a signup the user cannot fix
-		// without inventing a name they never wanted.
-		name = s.uniqueName(name)
-	}
+	// 显示名只是展示用：从邮箱前缀推出来，重名（或撞上平台保留名）就自动加后缀，
+	// 不让它成为注册失败的理由。
+	name := s.uniqueName(oauthBaseName(oauthProfile{Email: email}))
 	// The code is verified last, after every cheap rejection: a verification code
-	// is one-shot, so burning it on a request that was going to fail on a taken
-	// username would force the user to ask for another one.
-	if email != "" && s.mail != nil {
+	// is one-shot, so burning it on a request that was going to fail would force
+	// the user to ask for another one.
+	if s.mail != nil {
 		if err := s.verifyEmailCode(email, purposeSignup, req.Code); err != nil {
 			http.Error(w, jsonErr(err.Error()), 400)
 			return
@@ -222,7 +200,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		PassHash: auth.Hash(req.Password, salt, auth.Iterations),
 		Salt:     hex.EncodeToString(salt), Iter: auth.Iterations,
 		Credits: 0, CreatedAt: time.Now().Unix(),
-		Email: email, EmailVerified: email != "" && s.mail != nil,
+		Email: email, EmailVerified: s.mail != nil,
 	}
 	if err := s.st.CreateUser(u); err != nil {
 		log.Printf("create user: %v", err)
@@ -249,10 +227,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"请求格式错误"}`, 400)
 		return
 	}
-	// 用户名与邮箱都是登录标识；哪个填了用哪个。老客户端只发 name，不受影响。
-	ident := strings.TrimSpace(req.Name)
+	// 邮箱是登录标识。name 字段仍然收下，存的是同一个标识：老客户端（小程序 /
+	// 安卓）只发 name，改造前用用户名注册的老账号也只有 name 能进得来。
+	ident := strings.TrimSpace(req.Email)
 	if ident == "" {
-		ident = strings.TrimSpace(req.Email)
+		ident = strings.TrimSpace(req.Name)
 	}
 	var (
 		u   *store.User
@@ -265,7 +244,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			err = store.ErrNotFound
 		}
 	} else {
+		// 用户名只留给「这次改造之前注册、还没有邮箱」的老账号当过渡通道：
+		// 一旦账号有了邮箱，登录名就只剩邮箱，避免显示名变成第二套账号体系。
 		u, err = s.st.UserByName(ident)
+		if err == nil && u.Email != "" {
+			u, err = nil, store.ErrNotFound
+		}
 	}
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		http.Error(w, jsonErr("登录失败"), 500)
@@ -274,7 +258,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// Same response for unknown user and wrong password: no account enumeration.
 	if err != nil {
 		auth.Hash(req.Password, auth.NewSalt(), auth.Iterations)
-		http.Error(w, jsonErr("用户名或密码错误"), 401)
+		http.Error(w, jsonErr("邮箱或口令不正确"), 401)
 		return
 	}
 	if u.PassHash == "" {
@@ -284,7 +268,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.Match(req.Password, u.Salt, u.PassHash, u.Iter) {
-		http.Error(w, jsonErr("用户名或密码错误"), 401)
+		http.Error(w, jsonErr("邮箱或口令不正确"), 401)
 		return
 	}
 	token, err := s.startSession(w, r, u)

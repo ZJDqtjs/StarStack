@@ -211,8 +211,9 @@ func TestOAuthLinksVerifiedEmailButNotUnverified(t *testing.T) {
 		t.Fatalf("verified email did not link: got %s want %s", got, reg.ID)
 	}
 
-	// Unverified address: the provider only repeats what the user typed, so it
-	// must never hand over an existing account.
+	// Unverified address: the provider only repeats what the user typed, so the
+	// flow must neither hand over an existing account nor mint a new one — an
+	// account without a provable mailbox is exactly what this policy forbids.
 	s2 := newTestServer(t, DefaultPolicy())
 	srv2 := fakeOAuth(t, map[string]any{"id": "s-2", "login": "impostor", "email": "victim@example.com"},
 		nil)
@@ -220,17 +221,19 @@ func TestOAuthLinksVerifiedEmailButNotUnverified(t *testing.T) {
 	ts2 := httptest.NewServer(s2.Handlers())
 	defer ts2.Close()
 
-	body = `{"name":"victim","email":"victim@example.com","password":"password123"}`
+	body = `{"email":"victim@example.com","password":"password123"}`
 	res, err = http.Post(ts2.URL+"/api/auth/register", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	res.Body.Close()
 
-	sess2 := oauthLogin(t, ts2, "google", "")
-	victim, _ := s2.st.UserByName("victim")
-	if got := meID(t, ts2, sess2.Value); got == victim.ID {
-		t.Fatal("an unverified provider email took over an existing account")
+	if sess2 := oauthLogin(t, ts2, "google", ""); sess2 != nil {
+		t.Fatal("an unverified provider email produced a session")
+	}
+	victim, _ := s2.st.UserByEmail("victim@example.com")
+	if victim == nil || victim.ID == "" {
+		t.Fatal("the pre-existing account disappeared")
 	}
 }
 
@@ -241,7 +244,7 @@ func TestOAuthBindAndUnbind(t *testing.T) {
 	ts := httptest.NewServer(s.Handlers())
 	defer ts.Close()
 
-	body := `{"name":"binder-acct","password":"password123"}`
+	body := `{"email":"binder-acct@example.com","password":"password123"}`
 	res, err := http.Post(ts.URL+"/api/auth/register", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)

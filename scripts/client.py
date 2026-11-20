@@ -28,10 +28,13 @@ class Client:
         return 200, json.loads(t) if t.startswith(("{", "[")) else t
 
     def login(self, name=None, pwd=None):
+        # 账号是邮箱。传进来的是短名就补成本地演示域名；中文默认名在这里换成一个
+        # 固定 ASCII 地址，显示名仍由服务端从邮箱前缀推导。
         name, pwd = name or NAME, pwd or PWD
-        code, me = self.call("/api/auth/register", {"name": name, "password": pwd})
+        email = name if "@" in name else "demo@starstack.local"
+        code, me = self.call("/api/auth/register", {"email": email, "password": pwd})
         if code != 200:
-            code, me = self.call("/api/auth/login", {"name": name, "password": pwd})
+            code, me = self.call("/api/auth/login", {"email": email, "password": pwd})
         if code != 200:
             raise SystemExit("登录失败：%s" % me)
         return me

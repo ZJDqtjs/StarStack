@@ -25,13 +25,14 @@ else
 fi
 
 # 任务接口要求登录：先用演示账户拿一个会话 Cookie，再提交。
-# 用户名/口令保持 ASCII —— Windows 的 curl 会按本地代码页发送请求体，中文会乱码。
+# 账号是邮箱，注册只收 email；演示地址保持 ASCII —— Windows 的 curl 会按本地代码页
+# 发送请求体，中文会乱码。显示名由邮箱前缀自动推导成 "demo"。
 JAR=./run/cookies.txt
 echo "[4/4] login + submitting job: ./samples/input.mp4"
 curl -s -c $JAR -X POST "http://127.0.0.1:$PORT/api/auth/register" \
-  -H 'Content-Type: application/json' -d '{"name":"demo","password":"demo1234"}' >/dev/null
+  -H 'Content-Type: application/json' -d '{"email":"demo@starstack.local","password":"demo1234"}' >/dev/null
 curl -s -c $JAR -X POST "http://127.0.0.1:$PORT/api/auth/login" \
-  -H 'Content-Type: application/json' -d '{"name":"demo","password":"demo1234"}' >/dev/null
+  -H 'Content-Type: application/json' -d '{"email":"demo@starstack.local","password":"demo1234"}' >/dev/null
 # 演示账户可能在上一次运行里花光了预扣点，这里补一次值
 curl -s -b $JAR -X POST "http://127.0.0.1:$PORT/api/me/recharge" \
   -H 'Content-Type: application/json' -d '{"amount":200}' >/dev/null

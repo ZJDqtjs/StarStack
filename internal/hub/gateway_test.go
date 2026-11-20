@@ -15,7 +15,8 @@ import (
 // exercises the same signup credit and session path the console uses.
 func registerAndCookie(t *testing.T, base, name string) (*http.Cookie, string) {
 	t.Helper()
-	body, _ := json.Marshal(map[string]string{"name": name, "password": "testpass123"})
+	// 账号是邮箱：用例里的短名直接当邮箱前缀用，显示名仍是这个名字。
+	body, _ := json.Marshal(map[string]string{"email": name + "@test.local", "password": "testpass123"})
 	res, err := http.Post(base+"/api/auth/register", "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		t.Fatalf("register %s: %v", name, err)

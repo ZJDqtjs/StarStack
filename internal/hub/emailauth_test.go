@@ -50,18 +50,29 @@ func TestEmailRegistrationAndLogin(t *testing.T) {
 		t.Fatal("an address was reported verified without an SMTP server")
 	}
 
-	// Both identifiers must reach the same account.
-	if code, out := postBody(t, ts.URL+"/api/auth/login",
-		`{"email":"mail.user@example.com","password":"password123"}`); code != 200 || out["name"] != "mailuser" {
-		t.Fatalf("login by email: %d %v", code, out)
+	// The display name was not sent by the client: it is derived from the
+	// mailbox local part, and it is not a second login identifier.
+	if out["name"] != "mail-user" {
+		t.Fatalf("display name %v, want the sanitised local part", out["name"])
 	}
 	if code, out := postBody(t, ts.URL+"/api/auth/login",
-		`{"name":"mailuser","password":"password123"}`); code != 200 {
-		t.Fatalf("login by name: %d %v", code, out)
+		`{"email":"mail.user@example.com","password":"password123"}`); code != 200 {
+		t.Fatalf("login by email: %d %v", code, out)
+	}
+	if code, _ := postBody(t, ts.URL+"/api/auth/login",
+		`{"name":"mail-user","password":"password123"}`); code != 401 {
+		t.Fatalf("display name still worked as a login name: HTTP %d", code)
 	}
 	if code, _ := postBody(t, ts.URL+"/api/auth/login",
 		`{"name":"mail.user@example.com","password":"wrongpass1"}`); code != 401 {
 		t.Fatalf("wrong password returned %d", code)
+	}
+
+	// A request that carries only a username is refused: there is no such thing
+	// as a self-chosen account name any more.
+	if code, _ := postBody(t, ts.URL+"/api/auth/register",
+		`{"name":"legacy-only","password":"password123"}`); code != 400 {
+		t.Fatalf("username-only registration: HTTP %d", code)
 	}
 
 	// A second account on the same mailbox would make "log in by email"
@@ -234,7 +245,8 @@ func TestBindEmailWithoutSMTP(t *testing.T) {
 	ts := httptest.NewServer(s.Handlers())
 	defer ts.Close()
 
-	code, out := postBody(t, ts.URL+"/api/auth/register", `{"name":"binder2","password":"password123"}`)
+	code, out := postBody(t, ts.URL+"/api/auth/register",
+		`{"email":"binder2@example.com","password":"password123"}`)
 	if code != 200 {
 		t.Fatalf("register: %d %v", code, out)
 	}

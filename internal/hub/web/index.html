@@ -1026,7 +1026,7 @@ tr.tap{cursor:pointer}
         <button id="t-login" class="on" type="button">登录</button>
         <button id="t-reg" type="button">注册</button>
       </div>
-      <label for="name">用户名</label><input id="name" autocomplete="username" placeholder="2-24 个字符">
+      <label for="name">邮箱</label><input id="name" type="email" autocomplete="email" placeholder="you@example.com">
       <label for="pass">密码</label><input id="pass" type="password" autocomplete="current-password" placeholder="至少 8 位">
       <div id="reg2" style="display:none">
         <label for="pass2">确认密码</label><input id="pass2" type="password" autocomplete="new-password">
@@ -2370,12 +2370,13 @@ function setMode(m){
   $('#authmsg').textContent='';
 }
 $('#go').onclick=async()=>{
-  const name=$('#name').value.trim(),pass=$('#pass').value;
-  if(!name||!pass){$('#authmsg').textContent='请填写用户名和密码';return}
+  // 账号是邮箱：注册只收 email，显示名由服务端从邮箱前缀推导。
+  const email=$('#name').value.trim(),pass=$('#pass').value;
+  if(!email||!pass){$('#authmsg').textContent='请填写邮箱和密码';return}
   if(mode==='reg'&&pass!==$('#pass2').value){$('#authmsg').textContent='两次密码不一致';return}
   $('#go').disabled=true;$('#authmsg').textContent='正在计算口令哈希…';
   try{
-    const payload={name,password:pass};
+    const payload={email,password:pass};
     if(mode==='reg')payload.invite=$('#invite').value.trim();
     ME=await post('/api/auth/'+(mode==='reg'?'register':'login'),payload);
     $('#authmsg').textContent='';$('#pass').value='';$('#pass2').value='';

@@ -12,8 +12,8 @@
     </view>
 
     <label class="field">
-      <text class="field-label">用户名</text>
-      <input class="in" value="{{name}}" data-k="name" bindinput="onInput" placeholder="2-24 个字符" />
+      <text class="field-label">邮箱{{mode === 'reg' ? '（登录账号）' : ''}}</text>
+      <input class="in" value="{{name}}" data-k="name" bindinput="onInput" placeholder="you@example.com" type="text" />
     </label>
     <label class="field">
       <text class="field-label">密码</text>

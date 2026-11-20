@@ -7,7 +7,7 @@ import { BROKER, f2, href, post } from '../api.js'
 export default function Auth() {
   const { policy, login } = useApp()
   const [mode, setMode] = useState('login')
-  const [name, setName] = useState('')
+  // 邮箱就是账号：注册不再有自定义用户名，显示名由邮箱前缀自动生成。
   const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
   const [pass2, setPass2] = useState('')
@@ -64,18 +64,16 @@ export default function Auth() {
       finally { setBusy(false) }
       return
     }
-    if (mode === 'login') {
-      if (!name.trim() || !pass) { setMsg('请填写用户名/邮箱和口令'); return }
-    } else {
-      if ((!name.trim() && !email.trim()) || !pass) { setMsg('请填写用户名或邮箱，以及口令'); return }
+    if (!email.trim() || !pass) { setMsg('请填写邮箱和口令'); return }
+    if (mode === 'reg') {
       if (pass !== pass2) { setMsg('两次口令不一致'); return }
-      if (needCode && email.trim() && !code.trim()) { setMsg('请填写邮箱验证码'); return }
+      if (needCode && !code.trim()) { setMsg('请填写邮箱验证码'); return }
     }
     setBusy(true); setMsg('正在计算口令哈希…')
     try {
       const payload = mode === 'reg'
-        ? { name: name.trim(), email: email.trim(), password: pass, code: code.trim(), invite: invite.trim() }
-        : { name: name.trim(), password: pass }
+        ? { email: email.trim(), password: pass, code: code.trim(), invite: invite.trim() }
+        : { email: email.trim(), password: pass }
       await login(mode, payload)
       setMsg(''); setPass(''); setPass2(''); setCode('')
     } catch (e) { setMsg('失败：' + e) }
@@ -98,7 +96,9 @@ export default function Auth() {
           <h1>{mode === 'login' ? '登录你的账户' : mode === 'reg' ? '创建账户' : '找回口令'}</h1>
           <p>{mode === 'reset'
             ? '用注册邮箱接收验证码，重置后所有设备需要重新登录。'
-            : '一个账户，既能提交任务，也能把闲置机器接入算力池。'}</p>
+            : mode === 'reg'
+              ? '用邮箱注册：邮箱就是登录账号，不再需要自定义用户名。'
+              : '一个账户，既能提交任务，也能把闲置机器接入算力池。'}</p>
         </div>
 
         {mode !== 'reset' && (
@@ -108,7 +108,7 @@ export default function Auth() {
           </div>
         )}
 
-        {sameOrigin && providers.length > 0 && mode === 'login' && (
+        {sameOrigin && providers.length > 0 && mode !== 'reset' && (
           <>
             <div className="oauth-row">
               {providers.map(p => (
@@ -121,25 +121,12 @@ export default function Auth() {
           </>
         )}
 
-        {mode !== 'reset' && (
-          <>
-            <label>{mode === 'login' ? '用户名或邮箱' : '用户名'}</label>
-            <input value={name} onChange={e => setName(e.target.value)}
-              autoComplete="username"
-              placeholder={mode === 'login' ? '用户名 / 邮箱' : '2-24 个字符，留空则用邮箱前缀'} />
-          </>
-        )}
+        <label>邮箱{mode === 'reg' ? '（登录账号）' : ''}</label>
+        <input value={email} onChange={e => setEmail(e.target.value)} autoComplete="email"
+          inputMode="email" placeholder="you@example.com"
+          onKeyDown={e => { if (e.key === 'Enter') submit() }} />
 
-        {mode !== 'login' && (
-          <>
-            <label>邮箱{mode === 'reg' ? '（可选，用于登录与找回口令）' : ''}</label>
-            <input value={email} onChange={e => setEmail(e.target.value)} autoComplete="email"
-              placeholder="you@example.com"
-              onKeyDown={e => { if (e.key === 'Enter' && mode === 'reset') submit() }} />
-          </>
-        )}
-
-        {mode !== 'login' && needCode && email.trim() && (
+        {mode === 'reg' && needCode && email.trim() && (
           <>
             <label>邮箱验证码</label>
             <div className="code-row">
@@ -186,7 +173,9 @@ export default function Auth() {
           口令以 PBKDF2-HMAC-SHA256（20 万次迭代 + 随机盐）存储，服务端不保存明文；会话为 HttpOnly Cookie，有效期 30 天。
           {policy && policy.signup_credit > 0 && <>新用户注册赠送 <code>{f2(policy.signup_credit)}</code> 算力点{policy.recharge ? '。' : '；本部署关闭自助充值。'}</>}
           {inviteRequired && '本部署注册需要邀请码。'}
-          {providers.length > 0 && sameOrigin && '第三方账号只用于证明「你是你」，平台账号仍是唯一身份，随时可在设置里解绑。'}
+          {'邮箱即账号，登录名不支持自定义；显示名由邮箱前缀自动生成。'}
+          {providers.length > 0 && sameOrigin && '第三方登录会自动带上该账号已验证的邮箱并绑定到你名下，平台账号仍是唯一身份，随时可在设置里解绑。'}
+          {mode === 'login' && '改造前用用户名注册的老账号，仍可用原用户名登录一次，登录后在「设置 → 登录方式」里绑定邮箱即可。'}
         </div>
       </div>
     </div>

@@ -18,9 +18,10 @@ mkdir -p ft
 start_stack "$PORT" "$DATA" ft
 
 # data/ 是刚建出来的，这里注册出的演示账户带赠送点数；任务接口要求带会话提交。
+# 账号是邮箱：注册只收 email，显示名自动从邮箱前缀推导。
 JAR=./ft/cookies.txt
 curl -s -c $JAR -X POST "http://127.0.0.1:$PORT/api/auth/register" \
-  -H 'Content-Type: application/json' -d '{"name":"demo","password":"demo1234"}' >/dev/null
+  -H 'Content-Type: application/json' -d '{"email":"demo@starstack.local","password":"demo1234"}' >/dev/null
 JOB=$(curl -s -b $JAR -X POST "http://127.0.0.1:$PORT/api/jobs" \
   -F "path=./samples/input.mp4" -F "vcodec=libx264" -F "preset=slow" -F "q=24" \
   -F "height=1080" -F "segs=6" -F "audio=1" | python -c "import json,sys;print(json.load(sys.stdin)['id'])")

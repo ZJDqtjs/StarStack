@@ -92,8 +92,8 @@ export default function Settings() {
             <div className="login-methods">
               <div className="login-row">
                 <div className="lr-main">
-                  <b>邮箱</b>
-                  <span>{ids.email ? ids.email + (ids.email_verified ? ' · 已验证' : ' · 未验证（本部署未开启邮件验证）') : '未绑定：绑定后可用邮箱登录、找回口令'}</span>
+                  <b>登录账号（邮箱）</b>
+                  <span>{ids.email ? ids.email + (ids.email_verified ? ' · 已验证' : ' · 未验证（本部署未开启邮件验证）') : '历史账号尚未绑定邮箱：绑定后邮箱即登录账号'}</span>
                 </div>
                 <div className="lr-actions">
                   {ids.email && <Btn variant="ghost" tiny onClick={dropEmail}>解绑</Btn>}
@@ -140,7 +140,8 @@ export default function Settings() {
               <Btn tiny disabled={busy} onClick={savePassword}>{ids.has_password ? '修改口令' : '设置口令'}</Btn>
             </div>
             <div className="hint">
-              邮箱与第三方账号都是登录方式，平台账号本身不变：余额、节点和任务不会因为解绑而丢失。
+              邮箱就是登录账号，不支持自定义用户名；上方的「{me ? me.name : '显示名'}」只是展示名，由邮箱前缀自动生成。
+              第三方账号是另一种登录方式，平台账号本身不变：余额、节点和任务不会因为解绑而丢失。
               至少保留一种可用的登录方式，服务端会拒绝把最后一种也解绑掉。
             </div>
           </>

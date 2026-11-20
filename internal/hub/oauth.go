@@ -347,6 +347,13 @@ func (s *Server) loginOAuth(w http.ResponseWriter, r *http.Request, prov *oauthP
 		}
 	}
 	if u == nil {
+		if !prof.EmailVerified || prof.Email == "" {
+			// 邮箱就是账号，所以没有「已验证邮箱」的第三方身份既不能建号也不能
+			// 并入别人的号：否则它既没有一个可用来找回的地址，也无法证明归属。
+			s.oauthFail(w, r, st.Next, prov.Label+" 没有返回已验证的邮箱。请先在 "+
+				prov.Label+" 里验证主邮箱再登录；也可以先用邮箱注册，再到「设置」里绑定 "+prov.Label+"。")
+			return
+		}
 		if s.oauth == nil || !s.oauth.signup {
 			s.oauthFail(w, r, st.Next, "本站未开放第三方注册，请先用邮箱注册，再到「设置」里绑定")
 			return
@@ -368,9 +375,16 @@ func (s *Server) loginOAuth(w http.ResponseWriter, r *http.Request, prov *oauthP
 	}); err != nil {
 		log.Printf("oauth link %s: %v", prov.ID, err)
 	}
+	// 老账号（这次改造之前用用户名注册、没有邮箱的）第一次用第三方登录时补上
+	// 邮箱。已有邮箱的账号不覆盖：那是他自己的登录标识，换成第三方那边的地址会
+	// 让原来记着旧邮箱的人登不进来。
 	if u.Email == "" && prof.EmailVerified && prof.Email != "" {
-		if err := s.st.SetUserEmail(u.ID, prof.Email, true); err != nil {
-			log.Printf("oauth email %s: %v", u.ID, err)
+		if s.emailTakenByOther(prof.Email, u.ID) == nil {
+			if err := s.st.SetUserEmail(u.ID, prof.Email, true); err != nil {
+				log.Printf("oauth email %s: %v", u.ID, err)
+			}
+		} else {
+			log.Printf("oauth email %s: %q already belongs to another account; kept empty", u.ID, prof.Email)
 		}
 	}
 	if _, err := s.startSession(w, r, u); err != nil {
@@ -624,12 +638,14 @@ func oauthBaseName(prof oauthProfile) string {
 }
 
 // uniqueName keeps the display name free of collisions: ValidName caps it at 24
-// characters, so the suffix is cut before the prefix is.
+// characters, so the suffix is cut before the prefix is. The reserved platform
+// account name counts as taken: a mailbox like admin10086@example.com must not
+// be able to mint the 官方 账户 by registering.
 func (s *Server) uniqueName(base string) string {
 	if err := auth.ValidName(base); err != nil {
 		base = "user"
 	}
-	if _, err := s.st.UserByName(base); err != nil {
+	if s.nameFree(base) {
 		return base
 	}
 	for i := 0; i < 20; i++ {
@@ -640,11 +656,19 @@ func (s *Server) uniqueName(base string) string {
 			runes = runes[:keep]
 		}
 		cand := string(runes) + suffix
-		if _, err := s.st.UserByName(cand); err != nil {
+		if s.nameFree(cand) {
 			return cand
 		}
 	}
 	return "user-" + auth.RandomHex(6)
+}
+
+func (s *Server) nameFree(name string) bool {
+	if s.platformOwnerName != "" && strings.EqualFold(name, s.platformOwnerName) {
+		return false
+	}
+	_, err := s.st.UserByName(name)
+	return err != nil
 }
 
 // ---- account endpoints ----
