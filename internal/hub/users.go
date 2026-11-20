@@ -106,13 +106,47 @@ func decodeJSON(r *http.Request, v any) error {
 
 // ---- accounts ----
 
+// startSession mints a session token, persists it and hands the browser the
+// HttpOnly cookie. The token also goes back in the JSON body for the Android
+// app and the mini program, which live on origins where SameSite=Lax cookies
+// are never sent.
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, u *store.User) (string, error) {
+	token := auth.RandomHex(32)
+	if err := s.st.PutSession(token, u.ID, sessionTTL, r.UserAgent()); err != nil {
+		return "", err
+	}
+	s.setSessionCookie(w, token)
+	return token, nil
+}
+
+// grantSignup applies the one-time signup credit and returns the new balance.
+// Password registration and third-party registration must grant the same thing,
+// otherwise the cheaper door becomes the way in.
+func (s *Server) grantSignup(u *store.User) float64 {
+	credit := s.policy.SignupCredit
+	if credit <= 0 {
+		return 0
+	}
+	bal, err := s.st.AddCredits(u.ID, credit)
+	if err != nil {
+		log.Printf("signup credit: %v", err)
+		return 0
+	}
+	s.st.Ledger(&store.Entry{TS: time.Now().Unix(), Kind: store.Recharge, UserID: u.ID,
+		Amount: credit, Balance: bal, Note: "新用户赠送额度"})
+	log.Printf("user %s (%s) granted %g signup credits", u.Name, u.ID, credit)
+	return bal
+}
+
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if !s.authAllowed(w, r) {
 		return
 	}
 	var req struct {
 		Name     string `json:"name"`
+		Email    string `json:"email"`
 		Password string `json:"password"`
+		Code     string `json:"code"`
 		Invite   string `json:"invite"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
@@ -124,7 +158,30 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, jsonErr("邀请码无效"), http.StatusForbidden)
 		return
 	}
+	// 邮箱先校验格式：邮箱注册时它既是登录标识也是找回口令的地址，写错了就等于
+	// 把一个打不开的门牌钉在自己账号上。
+	email := ""
+	if strings.TrimSpace(req.Email) != "" {
+		e, err := auth.ValidEmail(req.Email)
+		if err != nil {
+			http.Error(w, jsonErr(err.Error()), 400)
+			return
+		}
+		email = e
+		if s.emailTakenByOther(email, "") != nil {
+			http.Error(w, jsonErr("该邮箱已被使用"), http.StatusConflict)
+			return
+		}
+	}
 	name := strings.TrimSpace(req.Name)
+	derived := false
+	if name == "" {
+		if email == "" {
+			http.Error(w, jsonErr("请填写用户名或邮箱"), 400)
+			return
+		}
+		name, derived = oauthBaseName(oauthProfile{Email: email}), true
+	}
 	if err := auth.ValidName(name); err != nil {
 		http.Error(w, jsonErr(err.Error()), 400)
 		return
@@ -141,8 +198,23 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.st.UserByName(name); err == nil {
-		http.Error(w, jsonErr("用户名已存在"), 409)
-		return
+		if !derived {
+			http.Error(w, jsonErr("用户名已存在"), 409)
+			return
+		}
+		// An email-derived name is a convenience, not a choice: on a collision
+		// give it a suffix instead of failing a signup the user cannot fix
+		// without inventing a name they never wanted.
+		name = s.uniqueName(name)
+	}
+	// The code is verified last, after every cheap rejection: a verification code
+	// is one-shot, so burning it on a request that was going to fail on a taken
+	// username would force the user to ask for another one.
+	if email != "" && s.mail != nil {
+		if err := s.verifyEmailCode(email, purposeSignup, req.Code); err != nil {
+			http.Error(w, jsonErr(err.Error()), 400)
+			return
+		}
 	}
 	salt := auth.NewSalt()
 	u := &store.User{
@@ -150,61 +222,76 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		PassHash: auth.Hash(req.Password, salt, auth.Iterations),
 		Salt:     hex.EncodeToString(salt), Iter: auth.Iterations,
 		Credits: 0, CreatedAt: time.Now().Unix(),
+		Email: email, EmailVerified: email != "" && s.mail != nil,
 	}
 	if err := s.st.CreateUser(u); err != nil {
 		log.Printf("create user: %v", err)
 		http.Error(w, jsonErr("注册失败"), 500)
 		return
 	}
-	token := auth.RandomHex(32)
-	if err := s.st.PutSession(token, u.ID, sessionTTL, r.UserAgent()); err != nil {
+	token, err := s.startSession(w, r, u)
+	if err != nil {
 		http.Error(w, jsonErr("会话创建失败"), 500)
 		return
 	}
-	s.setSessionCookie(w, token)
-	credit := s.policy.SignupCredit
-	log.Printf("user %s (%s) registered, granted %g signup credits", u.Name, u.ID, credit)
-	if _, err := s.st.AddCredits(u.ID, credit); err != nil {
-		log.Printf("signup credit: %v", err)
-	}
-	bal, _ := s.st.Balance(u.ID)
-	if credit > 0 {
-		s.st.Ledger(&store.Entry{TS: time.Now().Unix(), Kind: store.Recharge, UserID: u.ID,
-			Amount: credit, Balance: bal, Note: "新用户赠送额度"})
-	}
-	writeJSON(w, map[string]any{"id": u.ID, "name": u.Name, "credits": bal, "token": token})
+	bal := s.grantSignup(u)
+	log.Printf("user %s (%s) registered, email=%q", u.Name, u.ID, u.Email)
+	writeJSON(w, map[string]any{"id": u.ID, "name": u.Name, "credits": bal, "token": token,
+		"email": u.Email, "email_verified": u.EmailVerified})
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !s.authAllowed(w, r) {
 		return
 	}
-	var req struct{ Name, Password string }
+	var req struct{ Name, Email, Password string }
 	if err := decodeJSON(r, &req); err != nil {
 		http.Error(w, `{"error":"请求格式错误"}`, 400)
 		return
 	}
-	u, err := s.st.UserByName(strings.TrimSpace(req.Name))
+	// 用户名与邮箱都是登录标识；哪个填了用哪个。老客户端只发 name，不受影响。
+	ident := strings.TrimSpace(req.Name)
+	if ident == "" {
+		ident = strings.TrimSpace(req.Email)
+	}
+	var (
+		u   *store.User
+		err error
+	)
+	if strings.Contains(ident, "@") {
+		if e, verr := auth.ValidEmail(ident); verr == nil {
+			u, err = s.st.UserByEmail(e)
+		} else {
+			err = store.ErrNotFound
+		}
+	} else {
+		u, err = s.st.UserByName(ident)
+	}
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		http.Error(w, jsonErr("登录失败"), 500)
+		return
+	}
 	// Same response for unknown user and wrong password: no account enumeration.
-	if errors.Is(err, store.ErrNotFound) {
+	if err != nil {
 		auth.Hash(req.Password, auth.NewSalt(), auth.Iterations)
 		http.Error(w, jsonErr("用户名或密码错误"), 401)
 		return
 	}
-	if err != nil {
-		http.Error(w, jsonErr("登录失败"), 500)
+	if u.PassHash == "" {
+		// Accounts born from a third-party login have no password to match.
+		// Saying so is not enumeration — the caller already knows the name.
+		http.Error(w, jsonErr("该账户通过第三方登录创建，请用第三方账号登录，或在「设置」里设置口令"), 403)
 		return
 	}
 	if !auth.Match(req.Password, u.Salt, u.PassHash, u.Iter) {
 		http.Error(w, jsonErr("用户名或密码错误"), 401)
 		return
 	}
-	token := auth.RandomHex(32)
-	if err := s.st.PutSession(token, u.ID, sessionTTL, r.UserAgent()); err != nil {
+	token, err := s.startSession(w, r, u)
+	if err != nil {
 		http.Error(w, jsonErr("会话创建失败"), 500)
 		return
 	}
-	s.setSessionCookie(w, token)
 	log.Printf("user %s logged in", u.Name)
 	writeJSON(w, map[string]any{"id": u.ID, "name": u.Name, "credits": u.Credits, "token": token})
 }
@@ -227,9 +314,17 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	mine, _ := s.st.NodesByOwner(u.ID)
 	bal, _ := s.st.Balance(u.ID)
+	// 登录方式的摘要：/api/state 每秒轮询，不放这里；这个端点只在启动时取一次。
+	linked := []string{}
+	if ids, err := s.st.OAuthIdentitiesByUser(u.ID); err == nil {
+		for _, b := range ids {
+			linked = append(linked, b.Provider)
+		}
+	}
 	writeJSON(w, map[string]any{
 		"signed_in": true, "id": u.ID, "name": u.Name, "credits": bal,
-		"nodes": len(mine),
+		"nodes": len(mine), "email": u.Email, "email_verified": u.EmailVerified,
+		"has_password": u.PassHash != "", "providers": linked,
 	})
 }
 

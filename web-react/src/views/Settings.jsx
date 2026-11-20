@@ -2,13 +2,58 @@ import React, { useEffect, useState } from 'react'
 import { useApp } from '../store.jsx'
 import { nav } from '../App.jsx'
 import { Btn, Card, Stat, Tag } from '../ui.jsx'
-import { api, f2, getBroker, setBroker, BROKER } from '../api.js'
+import { api, f2, getBroker, setBroker, post, href, BROKER } from '../api.js'
 import { BUILD, BUILD_LABEL } from '../build.js'
 
 export default function Settings() {
-  const { me, workers, jobs, advanced, setAdvanced, toast } = useApp()
+  const { me, workers, jobs, advanced, setAdvanced, toast, confirm } = useApp()
   const [vmCount, setVmCount] = useState(0)
   const [brokerIn, setBrokerIn] = useState(getBroker())
+  // 登录方式：邮箱 / 口令 / 已绑定的第三方。只在进入设置页时取一次。
+  const [ids, setIds] = useState(null)
+  const [emailIn, setEmailIn] = useState('')
+  const [emailCode, setEmailCode] = useState('')
+  const [codeSent, setCodeSent] = useState(false)
+  const [pwOld, setPwOld] = useState('')
+  const [pwNew, setPwNew] = useState('')
+  const [busy, setBusy] = useState(false)
+  const loadIds = () => api('/api/me/identities').then(setIds).catch(() => {})
+  useEffect(() => { loadIds() }, [])
+  const saveEmail = async () => {
+    if (!emailIn.trim()) { toast('请填写邮箱', 'bad'); return }
+    setBusy(true)
+    try {
+      const r = await post('/api/me/email', { email: emailIn.trim(), code: emailCode.trim() })
+      if (r && r.need_code) {
+        setCodeSent(true); toast('验证码已发送到 ' + emailIn.trim(), 'ok'); return
+      }
+      setCodeSent(false); setEmailCode(''); setEmailIn(''); loadIds()
+      toast(r && r.email_verified ? '邮箱已绑定并验证' : '邮箱已绑定（本部署未开启验证）', 'ok')
+    } catch (e) { toast(String(e), 'bad', '绑定失败') } finally { setBusy(false) }
+  }
+  const dropEmail = async () => {
+    try {
+      await api('/api/me/email', { method: 'DELETE' }); loadIds(); toast('邮箱已解绑', 'ok')
+    } catch (e) { toast(String(e), 'bad', '解绑失败') }
+  }
+  const bindProvider = p => {
+    const next = encodeURIComponent('/#/settings')
+    window.location.href = href('/api/auth/oauth/' + p.id + '/start?bind=1&next=' + next)
+  }
+  const unbindProvider = async p => {
+    if (!(await confirm(`解绑 ${p.label}？之后只能用其它方式登录。`))) return
+    try {
+      await api('/api/me/identities/' + p.id, { method: 'DELETE' }); loadIds(); toast('已解绑', 'ok')
+    } catch (e) { toast(String(e), 'bad', '解绑失败') }
+  }
+  const savePassword = async () => {
+    if (!pwNew) { toast('请填写新口令', 'bad'); return }
+    setBusy(true)
+    try {
+      await post('/api/me/password', { old: pwOld, new: pwNew })
+      setPwOld(''); setPwNew(''); loadIds(); toast('口令已保存', 'ok')
+    } catch (e) { toast(String(e), 'bad', '保存失败') } finally { setBusy(false) }
+  }
   // exe 里不能把前端切到绝对地址：同源反代由 WPF 主进程负责，前端只管通知它换目标。
   const inWebView2 = typeof window !== 'undefined' && !!window.chrome?.webview
   useEffect(() => { api('/api/vm/instances').then(d => setVmCount((d.instances || []).length)).catch(() => {}) }, [])
@@ -40,6 +85,66 @@ export default function Settings() {
         <div className="me-links" style={{ marginTop: 16 }}>
           {links.map(([v, t, d]) => <button key={v} className="me-link" onClick={() => nav(v)}><b>{t}</b><span>{d}</span></button>)}
         </div>
+      </Card>
+      <Card kicker="Sign-in" title="登录方式" side={<Tag>{ids ? (ids.providers || []).filter(p => p.bound).length + ' 个第三方' : '—'}</Tag>}>
+        {!ids ? <div className="hint" style={{ marginTop: 0 }}>正在读取…</div> : (
+          <>
+            <div className="login-methods">
+              <div className="login-row">
+                <div className="lr-main">
+                  <b>邮箱</b>
+                  <span>{ids.email ? ids.email + (ids.email_verified ? ' · 已验证' : ' · 未验证（本部署未开启邮件验证）') : '未绑定：绑定后可用邮箱登录、找回口令'}</span>
+                </div>
+                <div className="lr-actions">
+                  {ids.email && <Btn variant="ghost" tiny onClick={dropEmail}>解绑</Btn>}
+                </div>
+              </div>
+              <div className="login-row">
+                <div className="lr-main">
+                  <b>账号口令</b>
+                  <span>{ids.has_password ? '已设置。修改需要原口令' : '未设置：第三方登录创建的账号需要先设一个口令才能解绑唯一登录方式'}</span>
+                </div>
+              </div>
+              {(ids.providers || []).map(p => (
+                <div className="login-row" key={p.id}>
+                  <div className="lr-main">
+                    <b>{p.label}</b>
+                    <span>{p.bound ? '已绑定' + (p.login ? '：' + p.login : '') : '未绑定'}</span>
+                  </div>
+                  <div className="lr-actions">
+                    {p.bound
+                      ? <Btn variant="ghost" tiny onClick={() => unbindProvider(p)}>解绑</Btn>
+                      : <Btn variant="ghost" tiny onClick={() => bindProvider(p)}>绑定</Btn>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="login-form">
+              <input className="in" value={emailIn} onChange={e => setEmailIn(e.target.value)}
+                placeholder={ids.email ? '换绑到新邮箱 you@example.com' : '绑定邮箱 you@example.com'} />
+              {codeSent && (
+                <input className="in" style={{ maxWidth: 130 }} value={emailCode} inputMode="numeric" maxLength={6}
+                  onChange={e => setEmailCode(e.target.value)} placeholder="验证码" />
+              )}
+              <Btn tiny disabled={busy} onClick={saveEmail}>{codeSent ? '提交验证码' : '绑定邮箱'}</Btn>
+            </div>
+
+            <div className="login-form">
+              {ids.has_password && (
+                <input className="in" type="password" value={pwOld} onChange={e => setPwOld(e.target.value)}
+                  autoComplete="current-password" placeholder="原口令" />
+              )}
+              <input className="in" type="password" value={pwNew} onChange={e => setPwNew(e.target.value)}
+                autoComplete="new-password" placeholder={ids.has_password ? '新口令（至少 8 位）' : '设置口令（至少 8 位）'} />
+              <Btn tiny disabled={busy} onClick={savePassword}>{ids.has_password ? '修改口令' : '设置口令'}</Btn>
+            </div>
+            <div className="hint">
+              邮箱与第三方账号都是登录方式，平台账号本身不变：余额、节点和任务不会因为解绑而丢失。
+              至少保留一种可用的登录方式，服务端会拒绝把最后一种也解绑掉。
+            </div>
+          </>
+        )}
       </Card>
       <Card kicker="Preferences" title="界面设置">
         <label className="check" style={{ marginTop: 0 }}>
