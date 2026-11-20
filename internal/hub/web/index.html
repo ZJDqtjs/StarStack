@@ -652,6 +652,25 @@ tr.tap{cursor:pointer}
 .security{margin-top:18px;padding-top:14px;border-top:1px solid var(--hair);
   font:400 11.5px/1.7 var(--sans);color:var(--mute)}
 #authmsg:not(:empty){color:var(--bad);font-size:12.5px;margin-top:12px}
+/* 第三方登录入口：按钮排在口令表单之前，中间用一条带字的细线隔开 */
+.oauth-row{display:flex;flex-direction:column;gap:8px;margin-bottom:2px}
+.oauth-btn{height:38px;border:1px solid var(--hair);border-radius:var(--r-ctl);background:var(--card);
+  color:var(--ink);font:600 12.5px var(--sans);cursor:pointer;transition:background .14s,border-color .14s}
+.oauth-btn:hover{background:var(--soft);border-color:var(--accent)}
+.oauth-sep{display:flex;align-items:center;gap:10px;margin:14px 0 12px;color:var(--mute);font-size:11px}
+.oauth-sep::before,.oauth-sep::after{content:"";flex:1;height:1px;background:var(--hair)}
+.linkbtn{border:0;background:transparent;padding:0;color:var(--accent);font:500 12px var(--sans);cursor:pointer}
+.linkbtn:hover{text-decoration:underline}
+/* 设置页的登录方式清单 */
+.login-methods{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.login-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 13px;
+  border:1px solid var(--hair);border-radius:var(--r-ctl);background:var(--soft)}
+.login-row .lr-main{flex:1;min-width:150px}
+.login-row .lr-main b{display:block;font-size:12.5px;color:var(--ink)}
+.login-row .lr-main span{font-size:11.5px;color:var(--mute)}
+.login-row .lr-actions{display:flex;gap:8px;flex-wrap:wrap}
+.login-form{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.login-form input{flex:1;min-width:170px}
 
 /* ---------- dashboard ---------- */
 .home-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;
@@ -1026,7 +1045,13 @@ tr.tap{cursor:pointer}
         <button id="t-login" class="on" type="button">登录</button>
         <button id="t-reg" type="button">注册</button>
       </div>
-      <label for="name">邮箱</label><input id="name" type="email" autocomplete="email" placeholder="you@example.com">
+      <div id="oauthrow" class="oauth-row" style="display:none"></div>
+      <div id="oauthsep" class="oauth-sep" style="display:none"><span>或使用账号口令</span></div>
+      <label for="name" id="namelabel">邮箱</label>
+      <input id="name" type="text" autocomplete="email" placeholder="you@example.com">
+      <div class="hint" id="legacyline" style="margin:-2px 0 12px">
+        <button type="button" class="linkbtn" id="legacytoggle">改造前注册的老账号？用用户名登录</button>
+      </div>
       <label for="pass">密码</label><input id="pass" type="password" autocomplete="current-password" placeholder="至少 8 位">
       <div id="reg2" style="display:none">
         <label for="pass2">确认密码</label><input id="pass2" type="password" autocomplete="new-password">
@@ -2102,6 +2127,22 @@ tr.tap{cursor:pointer}
     </div>
   </div>
   <div class="card">
+    <h2><span class="kicker">Sign-in</span>登录方式</h2>
+    <div id="login-methods" class="login-methods"><div class="hint" style="margin-top:0">正在读取…</div></div>
+    <div class="login-form">
+      <input id="bind-email" placeholder="绑定 / 换绑邮箱 you@example.com" autocomplete="email">
+      <input id="bind-code" placeholder="验证码" inputmode="numeric" maxlength="6" style="display:none;max-width:160px">
+      <button class="btn sm" id="bind-email-btn" type="button">绑定邮箱</button>
+    </div>
+    <div class="login-form">
+      <input id="set-pass-old" type="password" placeholder="原口令（没有可不填）" autocomplete="current-password">
+      <input id="set-pass" type="password" placeholder="设置 / 修改口令（至少 8 位）" autocomplete="new-password">
+      <button class="btn sm ghost" id="set-pass-btn" type="button">保存口令</button>
+    </div>
+    <div class="hint" id="login-hint">邮箱就是登录账号，不支持自定义用户名；上方「账户概览」里的名字只是展示名，由邮箱前缀自动生成。
+      改造前注册的老账号可以继续用原用户名登录，绑上邮箱后以邮箱为准。</div>
+  </div>
+  <div class="card">
     <h2><span class="kicker">Preferences</span>界面设置</h2>
     <label class="check" style="margin-top:0"><input type="checkbox" id="advtoggle" style="width:auto">
       <span><b>显示高级选项</b><br>编码器、硬件要求、分片数、服务端路径</span></label>
@@ -2318,6 +2359,8 @@ function activate(v,tab){
   paintActive(true);
   if(v==='nodes'||v==='wallet'||v==='home')loadContribution(true);
   if(v==='messages')loadConversations(true);
+  // 登录方式清单只在进设置页时取一次（/api/state 每秒轮询，不放那里）
+  if(v==='settings')loadIdentities();
   window.scrollTo({top:0});
 }
 window.addEventListener('hashchange',()=>{const r=parseHash();activate(r.v,r.tab)});
@@ -2359,13 +2402,25 @@ syncThemeBtn();
 
 /* ---------------- 登录 / 注册 ---------------- */
 let mode='login';
+// 账号是邮箱；legacyID 只改标签与提示文字（服务端对没有邮箱的老账号本来就接受用户名），
+// 让改造前注册的测试账号知道该往这个框里填什么。
+let legacyID=false;
 $('#t-login').onclick=()=>setMode('login');
 $('#t-reg').onclick=()=>setMode('reg');
+$('#legacytoggle').onclick=()=>{
+  legacyID=!legacyID;
+  $('#namelabel').textContent=legacyID?'用户名（老账号）':'邮箱';
+  $('#name').placeholder=legacyID?'改造前注册的用户名':'you@example.com';
+  $('#legacytoggle').textContent=legacyID?'改用邮箱登录':'改造前注册的老账号？用用户名登录';
+};
 function setMode(m){
   mode=m;
   $('#t-login').classList.toggle('on',m==='login');
   $('#t-reg').classList.toggle('on',m==='reg');
   $('#reg2').style.display=m==='reg'?'block':'none';
+  // 注册只认邮箱：老账号入口在注册页没有意义，藏起来避免误导
+  $('#legacyline').style.display=m==='reg'?'none':'block';
+  if(m==='reg'&&legacyID)$('#legacytoggle').click();
   $('#go').textContent=m==='reg'?'注册并登录':'登录';
   $('#authmsg').textContent='';
 }
@@ -2376,7 +2431,9 @@ $('#go').onclick=async()=>{
   if(mode==='reg'&&pass!==$('#pass2').value){$('#authmsg').textContent='两次密码不一致';return}
   $('#go').disabled=true;$('#authmsg').textContent='正在计算口令哈希…';
   try{
-    const payload={email,password:pass};
+    // 老账号走 name 字段（服务端只对「还没有邮箱」的账号接受这条路）；
+    // 注册永远发 email。
+    const payload=(legacyID&&mode==='login')?{name:email,password:pass}:{email,password:pass};
     if(mode==='reg')payload.invite=$('#invite').value.trim();
     ME=await post('/api/auth/'+(mode==='reg'?'register':'login'),payload);
     $('#authmsg').textContent='';$('#pass').value='';$('#pass2').value='';
@@ -2385,6 +2442,12 @@ $('#go').onclick=async()=>{
   finally{$('#go').disabled=false}
 };
 $('#pass').addEventListener('keydown',e=>{if(e.key==='Enter')$('#go').click()});
+// 授权登录是整页跳转：next 指回当前页，回来时 Cookie 已经建好。
+$('#oauthrow').addEventListener('click',e=>{
+  const b=e.target.closest('[data-oauth]');if(!b)return;
+  const next=location.pathname+location.search+location.hash;
+  location.href='/api/auth/oauth/'+encodeURIComponent(b.dataset.oauth)+'/start?next='+encodeURIComponent(next);
+});
 $('#logout').onclick=async()=>{await post('/api/auth/logout',{});location.reload()};
 
 function enter(){
@@ -2404,6 +2467,16 @@ function enter(){
 function applyPolicy(){
   if(!POL)return;
   const inviteRequired=!!POL.signup_invite_required;
+  // 第三方登录：部署里配了哪家就出现哪个按钮，没配就完全不出现。
+  const oauth=POL.oauth_providers||[];
+  const orow=$('#oauthrow'), osep=$('#oauthsep');
+  if(oauth.length){
+    orow.innerHTML=oauth.map(p=>'<button type="button" class="oauth-btn" data-oauth="'+esc(p.id)+
+      '">使用 '+esc(p.label)+' 继续</button>').join('');
+    orow.style.display='flex';osep.style.display='flex';
+  }else{
+    orow.innerHTML='';orow.style.display='none';osep.style.display='none';
+  }
   $('#invitebox').style.display=inviteRequired?'block':'none';
   $('#invite').required=inviteRequired;
   $('#signupnote').innerHTML=(inviteRequired?'本部署注册需要邀请码。':'')
@@ -2565,6 +2638,69 @@ $('#advtoggle').addEventListener('change',async e=>{
   applyMode();quote();
   toast(ADV?'高级选项已开启':'已回到简洁模式','ok');
 });
+
+/* ---------------- 登录方式：邮箱 / 口令 / 第三方 ---------------- */
+let LOGIN_IDS=null;
+async function loadIdentities(){
+  const box=$('#login-methods');if(!box)return;
+  let id;
+  try{id=await api('/api/me/identities')}
+  catch(e){box.innerHTML='<div class="hint" style="margin-top:0">读取失败：'+esc(e)+'</div>';return}
+  LOGIN_IDS=id;
+  const rows=[
+    '<div class="login-row"><div class="lr-main"><b>登录账号（邮箱）</b><span>'+
+      (id.email?esc(id.email)+(id.email_verified?' · 已验证':' · 未验证（本部署未开启邮件验证）')
+        :'历史账号尚未绑定邮箱：绑定后邮箱即登录账号')+
+      '</span></div></div>',
+    '<div class="login-row"><div class="lr-main"><b>账号口令</b><span>'+
+      (id.has_password?'已设置':'未设置')+'</span></div></div>'
+  ];
+  (id.providers||[]).forEach(p=>{
+    rows.push('<div class="login-row"><div class="lr-main"><b>'+esc(p.label)+'</b><span>'+
+      (p.bound?'已绑定'+(p.login?'：'+esc(p.login):''):'未绑定')+
+      '</span></div><div class="lr-actions">'+
+      (p.bound?'<button class="btn ghost tiny" type="button" data-unbind="'+esc(p.id)+'">解绑</button>'
+        :'<button class="btn ghost tiny" type="button" data-bind="'+esc(p.id)+'">绑定</button>')+
+      '</div></div>');
+  });
+  box.innerHTML=rows.join('');
+  $('#bind-code').style.display=(POL&&POL.email_verification)?'block':'none';
+}
+$('#login-methods').addEventListener('click',async e=>{
+  const ub=e.target.closest('[data-unbind]'),bd=e.target.closest('[data-bind]');
+  if(bd){
+    location.href='/api/auth/oauth/'+encodeURIComponent(bd.dataset.bind)+
+      '/start?bind=1&next='+encodeURIComponent('/#/settings');
+    return;
+  }
+  if(!ub)return;
+  if(!window.confirm('解绑后只能用其它方式登录，继续？'))return;
+  try{
+    await api('/api/me/identities/'+encodeURIComponent(ub.dataset.unbind),{method:'DELETE'});
+    toast('已解绑','ok');loadIdentities();
+  }catch(err){toast(String(err),'bad','解绑失败')}
+});
+$('#bind-email-btn').onclick=async()=>{
+  const email=$('#bind-email').value.trim(),code=($('#bind-code').value||'').trim();
+  if(!email){toast('请填写邮箱','bad');return}
+  try{
+    const r=await post('/api/me/email',{email,code});
+    // 部署配了 SMTP 时第一次只发码，第二次带上码才真正绑定
+    if(r&&r.need_code){toast('验证码已发到 '+email,'ok');$('#bind-code').style.display='block';return}
+    $('#bind-email').value='';$('#bind-code').value='';
+    toast(r&&r.email_verified?'邮箱已绑定并验证':'邮箱已绑定','ok');
+    loadIdentities();
+  }catch(err){toast(String(err),'bad','绑定失败')}
+};
+$('#set-pass-btn').onclick=async()=>{
+  const pw=$('#set-pass').value,old=$('#set-pass-old').value;
+  if(!pw){toast('请填写新口令','bad');return}
+  try{
+    await post('/api/me/password',{old,new:pw});
+    $('#set-pass').value='';$('#set-pass-old').value='';
+    toast('口令已保存','ok');loadIdentities();
+  }catch(err){toast(String(err),'bad','保存失败')}
+};
 /* ---------------- 渲染 / 编排：共享工作台 ---------------- */
 // 同一份任务表单在渲染与编排页之间移动，避免两套字段互相打架
 function mountWorkbench(svc){

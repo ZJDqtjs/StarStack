@@ -184,6 +184,33 @@ func TestPasswordResetInvalidatesSessions(t *testing.T) {
 	}
 }
 
+// TestLegacyUsernameLogin is the compatibility guarantee for accounts created
+// before the email-only rule: they have email=” and must keep logging in with
+// the exact same credentials they always used.
+func TestLegacyUsernameLogin(t *testing.T) {
+	s := newTestServer(t, DefaultPolicy())
+	ts := httptest.NewServer(s.Handlers())
+	defer ts.Close()
+
+	salt := auth.NewSalt()
+	legacy := &store.User{
+		ID: "u-legacy", Name: "dormdemo",
+		PassHash: auth.Hash("oldpassword", salt, auth.Iterations),
+		Salt:     hexOf(salt), Iter: auth.Iterations, CreatedAt: time.Now().Unix(),
+	}
+	if err := s.st.CreateUser(legacy); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := postBody(t, ts.URL+"/api/auth/login",
+		`{"name":"dormdemo","password":"oldpassword"}`); code != 200 {
+		t.Fatalf("legacy username login: HTTP %d %v", code, out)
+	}
+	// An empty identifier is not a wildcard for "any account with no email".
+	if code, _ := postBody(t, ts.URL+"/api/auth/login", `{"name":"","password":"oldpassword"}`); code != 401 {
+		t.Fatalf("empty identifier: HTTP %d", code)
+	}
+}
+
 func TestIdentitiesAndPasswordForOAuthAccount(t *testing.T) {
 	s := newTestServer(t, DefaultPolicy())
 	ts := httptest.NewServer(s.Handlers())
