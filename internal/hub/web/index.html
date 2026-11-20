@@ -654,8 +654,10 @@ tr.tap{cursor:pointer}
 #authmsg:not(:empty){color:var(--bad);font-size:12.5px;margin-top:12px}
 /* 第三方登录入口：按钮排在口令表单之前，中间用一条带字的细线隔开 */
 .oauth-row{display:flex;flex-direction:column;gap:8px;margin-bottom:2px}
-.oauth-btn{height:38px;border:1px solid var(--hair);border-radius:var(--r-ctl);background:var(--card);
+.oauth-btn{height:40px;display:flex;align-items:center;justify-content:center;gap:9px;
+  border:1px solid var(--hair2);border-radius:var(--r-ctl);background:var(--card);
   color:var(--ink);font:600 12.5px var(--sans);cursor:pointer;transition:background .14s,border-color .14s}
+.oauth-btn svg{width:16px;height:16px;flex:0 0 16px}
 .oauth-btn:hover{background:var(--soft);border-color:var(--accent)}
 .oauth-sep{display:flex;align-items:center;gap:10px;margin:14px 0 12px;color:var(--mute);font-size:11px}
 .oauth-sep::before,.oauth-sep::after{content:"";flex:1;height:1px;background:var(--hair)}
@@ -1046,6 +1048,7 @@ tr.tap{cursor:pointer}
         <button id="t-reg" type="button">注册</button>
       </div>
       <div id="oauthrow" class="oauth-row" style="display:none"></div>
+      <div class="hint" id="oauthhint" style="display:none;margin:8px 0 0"></div>
       <div id="oauthsep" class="oauth-sep" style="display:none"><span>或使用账号口令</span></div>
       <label for="name" id="namelabel">邮箱</label>
       <input id="name" type="text" autocomplete="email" placeholder="you@example.com">
@@ -2464,18 +2467,29 @@ function enter(){
 }
 
 /* ---------------- 部署策略门控 ---------------- */
+// 第三方按钮的图标：内联 SVG，二进制里自带，不引外链字体或 CDN。
+const OAUTH_ICON={
+  github:'<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .8a11.2 11.2 0 0 0-3.5 21.8c.6.1.8-.2.8-.5v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.3 11.3 0 0 1 6 0C17 4.5 18 4.8 18 4.8c.6 1.6.2 2.8.1 3.1a4.5 4.5 0 0 1 1.2 3.1c0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.2 11.2 0 0 0 12 .8Z"/></svg>',
+  gitee:'<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm3.6 6.2-4.2 1.1a1.6 1.6 0 0 0-1.1 1.1l-.5 1.8h4.7c.4 0 .7.4.7.8l-.7 4.2a1.6 1.6 0 0 1-1.6 1.4H7.5c-.4 0-.7-.4-.6-.8l1.3-8.7A2.6 2.6 0 0 1 10.8 6l4.1-.1c.7 0 1.1.8.7 1.3Z"/></svg>',
+  google:'<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7 0-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.4 3-7.3Z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.7-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.4 14a6 6 0 0 1 0-3.8V7.6H3.1a10 10 0 0 0 0 8.9L6.4 14Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.1 7.6L6.4 10C7.2 7.7 9.4 6 12 6Z"/></svg>'
+};
 function applyPolicy(){
   if(!POL)return;
   const inviteRequired=!!POL.signup_invite_required;
   // 第三方登录：部署里配了哪家就出现哪个按钮，没配就完全不出现。
   const oauth=POL.oauth_providers||[];
-  const orow=$('#oauthrow'), osep=$('#oauthsep');
+  const orow=$('#oauthrow'), osep=$('#oauthsep'), ohint=$('#oauthhint');
   if(oauth.length){
-    orow.innerHTML=oauth.map(p=>'<button type="button" class="oauth-btn" data-oauth="'+esc(p.id)+
-      '">使用 '+esc(p.label)+' 继续</button>').join('');
+    orow.innerHTML=oauth.map(p=>'<button type="button" class="oauth-btn" data-oauth="'+esc(p.id)+'">'+
+      (OAUTH_ICON[p.id]||'')+'<span>使用 '+esc(p.label)+' 登录</span></button>').join('');
     orow.style.display='flex';osep.style.display='flex';
+    // 没注册过的人点一下就直接建号：把这件事写在按钮下面，别让人以为只有老用户能用。
+    ohint.textContent=POL.oauth_signup
+      ?'首次用第三方账号授权会自动创建星栈账号（邮箱取该账号的已验证邮箱），无需另外注册。'
+      :'第三方登录仅用于已有账号；第一次来请先用邮箱注册，再到「设置 → 登录方式」绑定。';
+    ohint.style.display='block';
   }else{
-    orow.innerHTML='';orow.style.display='none';osep.style.display='none';
+    orow.innerHTML='';orow.style.display='none';osep.style.display='none';ohint.style.display='none';
   }
   $('#invitebox').style.display=inviteRequired?'block':'none';
   $('#invite').required=inviteRequired;

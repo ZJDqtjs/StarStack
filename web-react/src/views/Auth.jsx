@@ -3,6 +3,35 @@ import { useApp } from '../store.jsx'
 import { Btn, StarMark } from '../ui.jsx'
 import { BROKER, f2, href, post } from '../api.js'
 
+// 第三方按钮的图标：内联 SVG，不引外链字体或 CDN。不认识的 provider 用首字母兜底。
+function OAuthIcon({ id }) {
+  if (id === 'github') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="currentColor" d="M12 .8a11.2 11.2 0 0 0-3.5 21.8c.6.1.8-.2.8-.5v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.3 11.3 0 0 1 6 0C17 4.5 18 4.8 18 4.8c.6 1.6.2 2.8.1 3.1a4.5 4.5 0 0 1 1.2 3.1c0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.2 11.2 0 0 0 12 .8Z" />
+      </svg>
+    )
+  }
+  if (id === 'google') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="#4285F4" d="M21.6 12.2c0-.7 0-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.4 3-7.3Z" />
+        <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.7-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z" />
+        <path fill="#FBBC05" d="M6.4 14a6 6 0 0 1 0-3.8V7.6H3.1a10 10 0 0 0 0 8.9L6.4 14Z" />
+        <path fill="#EA4335" d="M12 6c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.1 7.6L6.4 10C7.2 7.7 9.4 6 12 6Z" />
+      </svg>
+    )
+  }
+  if (id === 'gitee') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm3.6 6.2-4.2 1.1a1.6 1.6 0 0 0-1.1 1.1l-.5 1.8h4.7c.4 0 .7.4.7.8l-.7 4.2a1.6 1.6 0 0 1-1.6 1.4H7.5c-.4 0-.7-.4-.6-.8l1.3-8.7A2.6 2.6 0 0 1 10.8 6l4.1-.1c.7 0 1.1.8.7 1.3Z" />
+      </svg>
+    )
+  }
+  return <span className="oauth-initial">{String(id).slice(0, 1).toUpperCase()}</span>
+}
+
 // 登录页的三种模式：登录 / 注册 / 找回口令。第三方登录是独立入口，不占标签页。
 export default function Auth() {
   const { policy, login } = useApp()
@@ -113,9 +142,15 @@ export default function Auth() {
             <div className="oauth-row">
               {providers.map(p => (
                 <button key={p.id} type="button" className="oauth-btn" disabled={busy} onClick={() => go(p.id)}>
-                  使用 {p.label} 继续
+                  <OAuthIcon id={p.id} />
+                  <span>使用 {p.label} 登录</span>
                 </button>
               ))}
+            </div>
+            <div className="hint" style={{ margin: '8px 0 0' }}>
+              {policy && policy.oauth_signup
+                ? '首次用第三方账号授权会自动创建星栈账号（邮箱取该账号的已验证邮箱），无需另外注册。'
+                : '第三方登录仅用于已有账号；第一次来请先用邮箱注册，再到「设置 → 登录方式」绑定。'}
             </div>
             <div className="oauth-sep"><span>或使用账号口令</span></div>
           </>
