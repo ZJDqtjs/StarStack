@@ -15,6 +15,19 @@ try {
   Copy-Item (Join-Path (Get-Location) 'native/StarStackDesktopModule.h') $dir -Force
   Copy-Item (Join-Path (Get-Location) 'native/StarStackDesktopModule.cpp') $dir -Force
 
+  # 窗口标题：模板写死成 "StarStackDesktop"，任务栏上看着像工程名。
+  # 只换 Title，ComponentName 必须保持与 app.json 的 name 一致，不能动。
+  $cpp = Join-Path $dir 'StarStackDesktop.cpp'
+  if (Test-Path $cpp) {
+    $code = [IO.File]::ReadAllText($cpp)
+    if ($code -match 'appWindow\.Title\(L"StarStackDesktop"\)') {
+      $code = $code.Replace('appWindow.Title(L"StarStackDesktop")', 'appWindow.Title(L"星栈算力")')
+      # 带 BOM 写回，MSVC 才能正确识别中文字面量
+      [IO.File]::WriteAllText($cpp, $code, [Text.UTF8Encoding]::new($true))
+      Write-Host '窗口标题已改为「星栈算力」'
+    }
+  }
+
   $xml = [IO.File]::ReadAllText($vcx.FullName)
   # 模板工程开了预编译头（Use），而本模块自己带 include，不引 pch.h；
   # 不显式 NotUsing 会报 C1010: unexpected end of file while looking for precompiled header。

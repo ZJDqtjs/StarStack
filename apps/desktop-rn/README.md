@@ -86,7 +86,7 @@ npx react-native bundle --platform windows --dev false `
   /p:TargetPlatformVersion=10.0.26100.0 /p:WindowsTargetPlatformVersion=10.0.26100.0
 ```
 
-结论：**JS 层本机可编译；原生层交给 CI 已经能出包**（见下节）。
+结论：**JS 层本机可编译；原生层交给 CI 出包，本机已验证 exe 能起窗口**（见下节）。
 
 ## CI 构建（已验证通过）
 
@@ -108,6 +108,7 @@ npx react-native bundle --platform windows --dev false `
 | `PlatformToolset=v145` + `PlatformToolsetVersion=145` | `react-native-svg` 的 `RNSVG.vcxproj` 硬写 `v143` + `ApplicationType=Windows Store`，runner 没装 v143 的 UWP 生成工具 → `MSB8020` |
 | `WindowsTargetPlatformVersion` / `TargetPlatformVersion` = 26100 | `@react-native-async-storage` 的工程钉的是 22621，runner 上只有 26100 → `MSB8036` |
 | `WindowsAppSDKVerifyTransitiveDependencies=false` | 该包的 WindowsAppSDK 传递依赖校验直接报 error（官方给的开关） |
+| `WindowsPackageType=None` + `WindowsAppSDKSelfContained=true` | 模板默认按 MSIX 打包；直接双击 exe 会因为没有包身份在启动 3 秒后 fail-fast（0xC0000409）。改免安装 + 自带 WinAppSDK 运行时后，解压即用、用户不需要预装 Windows App Runtime（产物 61 MB / 307 个文件） |
 
 另外 `scripts/apply-native.ps1` 现在会给 `StarStackDesktopModule.cpp` 加
 `<PrecompiledHeader>NotUsing</PrecompiledHeader>` —— 模板工程开了预编译头，本模块自带 include，
