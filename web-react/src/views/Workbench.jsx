@@ -89,17 +89,20 @@ export default function Workbench({ svc }) {
   // ---- 编译向导：当前项目类型 / 候选节点 ----
   const proj = det ? ((projId && PROJECTS.find(p => p.id === projId)) || (projId === 'custom' ? CUSTOM_PROJECT : det.proj)) : null
   const platOpt = platformOf(platform)
+  const needs = (proj && proj.needs) || []
+  const needsKey = needs.join(',')
   const cands = (kind === 'build' ? workers.filter(w => w.online && hasBuildRt(w)) : []).map(w => {
     const m = platMatch(w, platform)
     const free = Math.max(0, (w.slots || 0) - (w.active || 0))
-    return { w, m, free, price: Number(w.price) || 0, rate: rate(w) }
+    const have = (w.runtimes || []).map(r => String(r.name || '').toLowerCase())
+    return { w, m, free, price: Number(w.price) || 0, rate: rate(w), missing: needs.filter(n => !have.includes(n)) }
   }).filter(c => c.m !== false)
   const maxP = Math.max(1, ...cands.map(c => c.price))
-  const score = c => sortBy === 'price' ? -c.price : sortBy === 'trust' ? c.rate : sortBy === 'free' ? c.free
-    : (c.free > 0 ? 1 : 0) * 2 + c.rate * 1.5 - (c.price / maxP) + (c.m === true ? 0.3 : 0) + (c.w.mine ? 0.2 : 0)
+  const score = c => (c.missing.length ? -100 : 0) + (sortBy === 'price' ? -c.price : sortBy === 'trust' ? c.rate : sortBy === 'free' ? c.free
+    : (c.free > 0 ? 1 : 0) * 2 + c.rate * 1.5 - (c.price / maxP) + (c.m === true ? 0.3 : 0) + (c.w.mine ? 0.2 : 0))
   cands.sort((a, b) => score(b) - score(a))
   const shown = place === 'official' ? cands.filter(c => c.w.official) : cands
-  const best = shown[0]
+  const best = shown.find(c => !c.missing.length)
   // 实际派发的节点：商店里的指定 > 官方/市场里手选 > 官方自动取第一名；自动模式不指定
   const effNode = target || (place === 'auto' ? '' : (pick && shown.some(c => c.w.id === pick) ? pick : (best ? best.w.id : '')))
 
@@ -148,17 +151,21 @@ export default function Workbench({ svc }) {
     if (+g('min_mem') > 0) r.min_mem_mb = +g('min_mem')
     if (+g('max_price') > 0) r.max_price = +g('max_price')
     if (g('runtime')) r.runtime = g('runtime')
-    if (kind === 'build') { if (platOpt.arch) r.arch = platOpt.arch } else if (g('arch')) r.arch = g('arch')
+    if (kind === 'build') {
+      if (platOpt.arch) r.arch = platOpt.arch
+      if (platOpt.os) r.goos = platOpt.os
+      if (needsKey) r.toolchains = needsKey.split(',')
+    } else if (g('arch')) r.arch = g('arch')
     if (effNode) r.node_id = effNode
     return r
-  }, [g, effNode, kind, platOpt.arch])
+  }, [g, effNode, kind, platOpt.arch, platOpt.os, needsKey])
 
   // 估价（debounce）
   useEffect(() => {
     const t = setTimeout(async () => {
-      if (kind === 'build') { setEst({ build: true }); setEstErr(''); return }
       if (kind !== 'transcode') {
         let units = 1
+        if (kind === 'build') { if (!file) { setEst(null); setEstErr(''); return }; units = 10 }
         if (kind === 'blender') { units = (+g('to') || 0) - (+g('from') || 0) + 1; if (!(units > 0)) { setEst(null); setEstErr('填写起止帧后按帧数估算'); return } }
         try {
           const e = await api('/api/estimate?duration=' + units + '&kind=' + kind + '&vcodec=libx264&req=' + encodeURIComponent(JSON.stringify(reqFromForm())))
@@ -205,7 +212,7 @@ export default function Workbench({ svc }) {
     } catch (err) { setMsg('打包失败：' + (err.message || err)) }
     finally { e.target.value = '' }
   }
-  const clearFile = () => { fileRef.current.value = ''; setFile(null); setFolderInfo(''); setDet(null); setProjId(''); if (kind === 'transcode') { setDur(0); const el = formRef.current.querySelector('[name=duration]'); if (el) el.value = '0' } bump() }
+  const clearFile = () => { fileRef.current.value = ''; setFile(null); setFolderInfo(''); setDet(null); setProjId(''); setPlatform('any'); setPick(''); cmdTouched.current = false; if (kind === 'build' && formRef.current) { const el = formRef.current.querySelector('[name=command]'); if (el) el.value = '' } if (kind === 'transcode') { setDur(0); const el = formRef.current.querySelector('[name=duration]'); if (el) el.value = '0' } bump() }
 
   const submit = async e => {
     e.preventDefault()
@@ -267,7 +274,7 @@ export default function Workbench({ svc }) {
       <div className="kpis">
         <Kpi label="在线节点" value={on.length} icon="◉" />
         <Kpi label="空闲槽位" value={free} icon="▦" />
-        <Kpi label="最低单价" value={min === null ? '—' : f2(min) + ' 点/秒'} icon="◈" />
+        <Kpi label="最低单价" value={min === null ? '—' : f2(min) + (svc === 'build' ? ' 点/分钟' : ' 点/秒')} icon="◈" />
         <Kpi action={<Btn ghost tiny onClick={() => nav('market')}>去市场看卖家 →</Btn>} />
       </div>
       {target && svc !== 'build' && (
@@ -366,24 +373,25 @@ export default function Workbench({ svc }) {
                       ))}
                     </div>
                     {place === 'auto' && (
-                      <div className="hint" style={{ marginTop: 8 }}>{best ? <>将优先派给 <b>{best.w.name || best.w.id}</b> · {f2(best.price)} 点/分钟，其余节点作为备选。</> : '当前没有匹配该平台的在线编译节点，任务会排队等待。'}</div>
+                      <div className="hint" style={{ marginTop: 8 }}>{best ? <>将优先派给 <b>{best.w.name || best.w.id}</b> · {f2(best.price)} 点/分钟，其余节点作为备选。</> : '当前没有满足平台与工具链的在线编译节点，任务会排队等待。'}</div>
                     )}
                     {place !== 'auto' && (
                       <>
                         <div className="wb-sorts">{Object.keys(SORTS).map(k => <button type="button" key={k} className={sortBy === k ? 'on' : ''} onClick={() => setSortBy(k)}>{SORTS[k]}</button>)}
                           <Btn ghost tiny type="button" onClick={() => nav('pool')}>看算力市场 →</Btn></div>
                         <div className="wb-cands">
-                          {shown.length ? shown.slice(0, 6).map((c, i) => {
+                          {shown.length ? shown.slice(0, 6).map(c => {
                             const on = effNode === c.w.id
+                            const bad = c.missing.length > 0
                             return (
-                              <button type="button" key={c.w.id} className={'wb-cand' + (on ? ' on' : '')} onClick={() => { setPick(c.w.id); bump() }}>
+                              <button type="button" key={c.w.id} disabled={bad} className={'wb-cand' + (on ? ' on' : '') + (bad ? ' off' : '')} onClick={() => { setPick(c.w.id); bump() }}>
                                 <span className="wb-cand-r" />
-                                <span className="wb-cand-n"><b>{c.w.name || c.w.id}</b>{i === 0 && <Tag tone="on">推荐</Tag>}{c.w.mine && <Tag tone="mine">我的</Tag>}{c.w.official && <Tag>官方</Tag>}
-                                  <small>{c.w.os || '系统未知'}{c.w.arch ? ' / ' + c.w.arch : ''} · {c.w.cpus || '?'} 核{c.w.mem_mb ? ' · ' + Math.round(c.w.mem_mb / 1024) + 'GB' : ''}{c.m === null ? ' · 架构未上报' : ''}</small></span>
+                                <span className="wb-cand-n"><b>{c.w.name || c.w.id}</b>{best && best.w.id === c.w.id && <Tag tone="on">推荐</Tag>}{c.w.mine && <Tag tone="mine">我的</Tag>}{c.w.official && <Tag>官方</Tag>}
+                                  <small>{c.w.os || '系统未知'} · {c.w.cpus || '?'} 核{c.w.mem_mb ? ' · ' + Math.round(c.w.mem_mb / 1024) + 'GB' : ''}{bad ? ' · 缺少 ' + c.missing.join(' / ') : ''}</small></span>
                                 <span className="wb-cand-m"><b className="num">{f2(c.price)}</b> 点/分钟<small>空闲 {c.free} · 成功率 {Math.round(c.rate * 100)}%</small></span>
                               </button>
                             )
-                          }) : <div className="wb-warn">{place === 'official' ? '暂无官方节点上线（节点需带 official 标记），可切换到“服务市场”。' : '没有匹配该平台的在线编译节点，可换平台或稍后再试。'}</div>}
+                          }) : <div className="wb-warn">{place === 'official' ? '暂无官方节点上线（官方节点 = 平台账号名下的节点），可切换到“服务市场”。' : '没有匹配该平台的在线编译节点，可换平台或稍后再试。'}</div>}
                         </div>
                       </>
                     )}

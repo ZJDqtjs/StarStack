@@ -54,6 +54,13 @@ type Req struct {
 	// constraint like any other: the scheduler will leave the job queued rather
 	// than quietly place it somewhere else.
 	NodeID string `json:"node_id,omitempty"`
+	// GOOS pins the operating system ("windows" / "linux" / "darwin"); Arch alone
+	// cannot tell a Windows amd64 box from a Linux one. Toolchains lists build
+	// tools (java, android-sdk, dotnet, go ...) the node must have advertised as
+	// runtimes; a compile job that needs the Android SDK must not land on a
+	// machine that only has Go.
+	GOOS       string   `json:"goos,omitempty"`
+	Toolchains []string `json:"toolchains,omitempty"`
 	// ComfyCheckpoint / ComfyLoRAs constrain ComfyUI pool dispatch to nodes
 	// whose reported local ComfyUI actually has those model files installed.
 	ComfyCheckpoint string   `json:"comfy_checkpoint,omitempty"`
@@ -325,6 +332,14 @@ func (w *Worker) meets(r Req, vcodec string) bool {
 	}
 	if r.Arch != "" && w.Arch != r.Arch {
 		return false
+	}
+	if r.GOOS != "" && !strings.HasPrefix(strings.ToLower(w.OS), strings.ToLower(r.GOOS)) {
+		return false
+	}
+	for _, tc := range r.Toolchains {
+		if !w.hasRuntime(tc) {
+			return false
+		}
 	}
 	if r.NeedGPU && len(w.GPUs) == 0 {
 		return false
@@ -2264,6 +2279,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 				"speed": wd.Speed, "ok": wd.OK, "bad": wd.Bad, "online": wd.online(),
 				"since": time.Since(wd.seen).Seconds(), "price": wd.Price, "mine": mine,
 				"paused": wd.Paused,
+				// official = the node belongs to the platform account (same notion
+				// as official upstreams); display and matching hint, not a privilege
+				"official": wd.OwnerID != "" && wd.OwnerID == s.platformOwnerID,
 				// who a node belongs to is private; whether it belongs to anyone at all
 				// is what tells the console to keep it out of the 待认领 list
 				"claimed": wd.OwnerID != "",

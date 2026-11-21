@@ -398,11 +398,14 @@ func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dur, _ := strconv.ParseFloat(r.URL.Query().Get("duration"), 64)
+	kind := r.URL.Query().Get("kind")
+	if kind == render.KindBuild && dur <= 0 {
+		dur = 10 // a build has no clip length; the hold is priced on ten wall-clock minutes
+	}
 	if dur <= 0 {
 		http.Error(w, jsonErr("缺少 duration"), 400)
 		return
 	}
-	kind := r.URL.Query().Get("kind")
 	if kind == "transcode" {
 		kind = ""
 	}
@@ -430,6 +433,10 @@ func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
 		Free  int     `json:"free_slots"`
 		GPU   string  `json:"gpu"`
 		Mine  bool    `json:"mine"`
+		OS       string `json:"os"`
+		Arch     string `json:"arch"`
+		Official bool   `json:"official"`
+		OKRate   float64 `json:"ok_rate"`
 	}
 	needReq, needVCodec := jobReq(probe)
 	var cands []cand
@@ -442,9 +449,14 @@ func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
 		if len(wd.GPUs) > 0 {
 			gpu = wd.GPUs[0].Name
 		}
+		rate := 0.9
+		if wd.OK+wd.Bad > 0 {
+			rate = float64(wd.OK) / float64(wd.OK+wd.Bad)
+		}
 		cands = append(cands, cand{ID: wd.ID, Name: wd.Name, Price: wd.Price,
 			Speed: wd.Speed, Free: wd.Slots - s.activeLocked(wd), GPU: gpu,
-			Mine: wd.OwnerID == u.ID})
+			Mine: wd.OwnerID == u.ID, OS: wd.OS, Arch: wd.Arch,
+			Official: wd.OwnerID != "" && wd.OwnerID == s.platformOwnerID, OKRate: round4(rate)})
 		if lowest == 0 || wd.Price < lowest {
 			lowest = wd.Price
 		}
@@ -462,6 +474,9 @@ func (s *Server) handleEstimate(w http.ResponseWriter, r *http.Request) {
 	}
 	if kind == render.KindComfy {
 		unit = "次"
+	}
+	if kind == render.KindBuild {
+		unit = "分钟"
 	}
 	out := map[string]any{
 		"duration": dur, "hold": hold, "hold_price": holdPrice, "hold_basis": basis,

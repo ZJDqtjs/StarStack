@@ -1002,3 +1002,4 @@ tr.tap{cursor:pointer}
 .wb-placed b{color:var(--accent)}
 .wb-adv-tight{margin-top:16px}
 .wb-adv summary em{margin-left:6px;font:400 11px var(--mono);font-style:normal;color:var(--mute);max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wb-cand.off{opacity:.5;cursor:not-allowed}

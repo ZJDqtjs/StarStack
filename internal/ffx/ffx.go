@@ -693,24 +693,47 @@ func DetectRuntimes(ctx context.Context) []Runtime {
 	if v := FFmpegVersion(ctx); v != "" {
 		rs = append(rs, Runtime{Name: "ffmpeg", Version: v, Path: Ffmpeg})
 	}
-	for _, spec := range []struct{ bin, name string }{
-		{"blender", "blender"}, {"nvcc", "cuda"}, {"docker", "docker"}, {"python", "python"},
+	for _, spec := range []struct {
+		bin, name string
+		args      []string
+	}{
+		{"blender", "blender", nil}, {"nvcc", "cuda", nil}, {"docker", "docker", nil}, {"python", "python", nil},
+		// build toolchains: advertised so a compile job can be matched to a
+		// machine that can actually run it (Req.Toolchains)
+		{"go", "go", []string{"version"}}, {"dotnet", "dotnet", nil}, {"cargo", "cargo", nil},
+		{"cmake", "cmake", nil}, {"node", "node", nil}, {"mvn", "mvn", nil}, {"git", "git", nil},
+		{"java", "java", []string{"-version"}}, {"gradle", "gradle", nil},
 	} {
 		p, err := exec.LookPath(spec.bin)
 		if err != nil {
 			continue
 		}
+		args := spec.args
+		if args == nil {
+			args = []string{"--version"}
+		}
 		c2, cancel := context.WithTimeout(ctx, 4*time.Second)
-		out, err := exec.CommandContext(c2, p, "--version").CombinedOutput()
+		out, err := exec.CommandContext(c2, p, args...).CombinedOutput()
 		cancel()
 		ver := ""
 		if err == nil {
 			ver = firstLine(out)
-			if i := strings.IndexByte(ver, ' '); i > 0 {
+			if f := strings.Fields(ver); spec.name == "go" && len(f) >= 3 {
+				ver = f[2]
+			} else if i := strings.IndexByte(ver, ' '); i > 0 {
 				ver = ver[i+1:]
 			}
 		}
 		rs = append(rs, Runtime{Name: spec.name, Version: ver, Path: p})
+	}
+	// The Android SDK is a directory, not a binary on PATH.
+	for _, env := range []string{"ANDROID_HOME", "ANDROID_SDK_ROOT"} {
+		if dir := os.Getenv(env); dir != "" {
+			if st, err := os.Stat(dir); err == nil && st.IsDir() {
+				rs = append(rs, Runtime{Name: "android-sdk", Version: "", Path: dir})
+				break
+			}
+		}
 	}
 	return rs
 }

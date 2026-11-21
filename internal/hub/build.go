@@ -79,7 +79,10 @@ func (s *Server) handleCreateBuild(w http.ResponseWriter, r *http.Request) {
 	// keeping the requirement explicit also stops a transcoding-only node from
 	// being scored for it.
 	req.Runtime = "build"
-
+	if len(req.Toolchains) > 8 {
+		http.Error(w, jsonErr("工具链要求过多"), 400)
+		return
+	}
 	f, hdr, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, jsonErr("请上传源码 zip"), 400)

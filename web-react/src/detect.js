@@ -1,4 +1,4 @@
-// 编排页：从源码 zip 的文件清单自动识别项目类型，给出默认命令 / 产物目录 / 推荐平台。
+﻿// 编排页：从源码 zip 的文件清单自动识别项目类型，给出默认命令 / 产物目录 / 推荐平台。
 // 只读 zip 中央目录（文件名），不解压，大文件也是毫秒级。
 
 export async function listZipNames(file) {
@@ -39,25 +39,25 @@ const unixLike = plat => plat === 'linux-x64' || plat === 'linux-arm64' || plat 
 
 // 项目类型表（顺序即优先级）。cmd(plat, names) 返回默认编译命令
 export const PROJECTS = [
-  { id: 'apk', label: 'Android 应用', artifact: 'APK / AAB', badge: 'APK', tone: '#16a34a', rec: 'any',
+  { id: 'apk', label: 'Android 应用', artifact: 'APK / AAB', badge: 'APK', tone: '#16a34a', rec: 'any', needs: ['java', 'android-sdk'],
     test: n => n.has('androidmanifest.xml'), why: 'AndroidManifest.xml',
     cmd: (p, n) => (n.has('gradlew') ? (unixLike(p) ? './gradlew assembleRelease' : 'gradlew.bat assembleRelease') : 'gradle assembleRelease'), output: 'app/build/outputs' },
-  { id: 'exe', label: 'Windows 程序 (.NET)', artifact: 'EXE / MSI', badge: 'EXE', tone: '#2563eb', rec: 'win-x64',
+  { id: 'exe', label: 'Windows 程序 (.NET)', artifact: 'EXE / MSI', badge: 'EXE', tone: '#2563eb', rec: 'win-x64', needs: ['dotnet'],
     test: n => n.ext('.sln') || n.ext('.csproj'), why: '.sln / .csproj',
     cmd: () => 'dotnet publish -c Release -o out', output: 'out' },
-  { id: 'go', label: 'Go 程序', artifact: '可执行文件', badge: 'GO', tone: '#0891b2', rec: 'any',
+  { id: 'go', label: 'Go 程序', artifact: '可执行文件', badge: 'GO', tone: '#0891b2', rec: 'any', needs: ['go'],
     test: n => n.has('go.mod'), why: 'go.mod',
     cmd: () => 'go build -o out/ ./...', output: 'out' },
-  { id: 'rust', label: 'Rust 程序', artifact: '可执行文件', badge: 'RS', tone: '#c2410c', rec: 'any',
+  { id: 'rust', label: 'Rust 程序', artifact: '可执行文件', badge: 'RS', tone: '#c2410c', rec: 'any', needs: ['cargo'],
     test: n => n.has('cargo.toml'), why: 'Cargo.toml',
     cmd: () => 'cargo build --release', output: 'target/release' },
-  { id: 'java', label: 'Java 项目 (Maven)', artifact: 'JAR / WAR', badge: 'JAR', tone: '#b45309', rec: 'any',
+  { id: 'java', label: 'Java 项目 (Maven)', artifact: 'JAR / WAR', badge: 'JAR', tone: '#b45309', rec: 'any', needs: ['java', 'mvn'],
     test: n => n.has('pom.xml'), why: 'pom.xml',
     cmd: () => 'mvn -B package', output: 'target' },
-  { id: 'cmake', label: 'C / C++ 工程', artifact: '可执行文件 / 库', badge: 'C++', tone: '#7c3aed', rec: 'any',
+  { id: 'cmake', label: 'C / C++ 工程', artifact: '可执行文件 / 库', badge: 'C++', tone: '#7c3aed', rec: 'any', needs: ['cmake'],
     test: n => n.has('cmakelists.txt'), why: 'CMakeLists.txt',
     cmd: p => 'cmake -B build && cmake --build build' + (unixLike(p) ? '' : ' --config Release'), output: 'build' },
-  { id: 'node', label: 'Node.js / 前端', artifact: '静态站点 / 应用', badge: 'JS', tone: '#ca8a04', rec: 'any',
+  { id: 'node', label: 'Node.js / 前端', artifact: '静态站点 / 应用', badge: 'JS', tone: '#ca8a04', rec: 'any', needs: ['node'],
     test: n => n.has('package.json'), why: 'package.json',
     cmd: () => 'npm install && npm run build', output: 'dist' },
   { id: 'script', label: '自定义脚本', artifact: '任意产物', badge: 'PS1', tone: '#475569', rec: 'any',
@@ -73,9 +73,11 @@ export function detectProject(names) {
   const first = list[0].split('/')[0]
   const strip = list.every(s => s.indexOf('/') > 0 && s.split('/')[0] === first)
   const paths = strip ? list.map(s => s.slice(first.length + 1)) : list
-  const shallow = paths.filter(s => s.split('/').length <= 3)
+  // Android 的 AndroidManifest.xml 在 app/src/main/ 下，层级较深，所以放宽到 5 层，同时跳过依赖目录
+  const shallow = paths.filter(s => s.split('/').length <= 5 && !/(^|\/)(node_modules|\.git|build|dist|vendor)\//.test(s))
   const bases = new Set(shallow.map(s => s.split('/').pop()))
   const n = { has: b => bases.has(b), ext: e => shallow.some(s => s.endsWith(e)) }
   const hit = PROJECTS.find(p => p.test(n))
   return { proj: hit || CUSTOM_PROJECT, names: n, count: list.length }
 }
+
