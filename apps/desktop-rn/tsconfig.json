@@ -20,5 +20,19 @@
       "@react-native-async-storage/async-storage": ["./node_modules/@react-native-async-storage/async-storage"]
     }
   },
-  "include": ["index.js", "App.tsx", "src", "../mobile-rn/src"]
+  // 只收桌面端真正用到的共享文件：../mobile-rn/src 里的 platform-expo.tsx 与 native/
+  // 依赖 expo-*（桌面工程不装 Expo），整目录 include 会把它们也拉进来编，CI 直接 TS2307。
+  "include": [
+    "index.js",
+    "App.tsx",
+    "src",
+    "../mobile-rn/src/screens",
+    "../mobile-rn/src/api",
+    "../mobile-rn/src/ui",
+    "../mobile-rn/src/theme.tsx",
+    "../mobile-rn/src/ctx.tsx",
+    "../mobile-rn/src/session.ts",
+    "../mobile-rn/src/platform.tsx",
+    "../mobile-rn/src/agent.ts"
+  ]
 }
