@@ -162,10 +162,12 @@ function checkDeprecatedBleed() {
     }
   }
 
+  // 桌面端现在只发 RNW 原生包（apps/desktop-rn）；release.yml 必须真的调用那份工作流，
+  // 否则下载页会把桌面那张卡标成「该版本未包含」。
   if (exists('.github/workflows/release.yml')) {
     const rel = read('.github/workflows/release.yml')
-    if (!rel.includes('web-react-dist')) {
-      warnings.push('release.yml 没有构建 web-react 产物（web-react-dist），exe 会拿不到内嵌网页')
+    if (!rel.includes('desktop-rn.yml')) {
+      problems.push('release.yml 没有复用 .github/workflows/desktop-rn.yml：桌面端产物不会进 Release')
     }
   }
 

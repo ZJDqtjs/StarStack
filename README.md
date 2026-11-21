@@ -79,7 +79,7 @@ go build -o bin/starstack-worker ./cmd/worker
 | 内嵌控制台 | `:8787/` | `go:embed` 单页，二进制自带，零构建 |
 | React 星舷控制台 | `cd web-react && npm i && npm run dev` → `:5174` | 全视图路由 + 总览仪表盘 |
 | 管理控制台 | `cd web-react && npm run dev:admin` → `:5175` | 独立 `admin.html`、独立认证，管理面走 `/api/admin/*` |
-| Windows 桌面 | `StarStack.Desktop.exe` | WPF + WebView2 套壳，内嵌 `web-react/dist` |
+| Windows 桌面 | `StarStack-Desktop-RN.zip` | `apps/desktop-rn`，RNW 原生渲染（已内嵌 JS bundle），CI 构建 |
 | Android | `StarStack-RN.apk` | `apps/mobile-rn`，RN 界面 + Kotlin 前台 Service（同时是算力节点） |
 | 鸿蒙 / 小程序 | 见 [apps/README.md](apps/README.md) | 鸿蒙是 ArkWeb 壳（内嵌同一份 dist）；小程序是原生 WXML |
 
@@ -138,7 +138,7 @@ internal/ffx, render     切片 / 转码 / 拼接、Blender 与时间线解析
 internal/vm, vmhost      IPv6 云主机契约与 QEMU Agent
 internal/store           SQLite 持久化
 web-react/               React 星舷控制台 + 独立管理控制台
-apps/                    RN 安卓 / Windows 桌面壳 / 鸿蒙壳 / 微信小程序
+apps/                    RN 安卓 / RNW 桌面 / 鸿蒙壳 / 微信小程序
 deploy/, scripts/        部署件与验收脚本
 docs/                    对接文档、运营备忘、开题报告、实测归档
 ```

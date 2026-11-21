@@ -51,83 +51,15 @@ jobs:
           path: dist/dl/*
           if-no-files-found: error
 
-  # ── 2. Web 控制台产物：桌面端与安卓共用同一份 React 构建 ────────
-  # ── 2. Web 控制台产物：桌面端内嵌的就是这一份 ──────────────────
-  # 曾经构建的是 apps/mobile（Capacitor 时代，已废弃）。现在唯一 UI 源是 web-react，
-  # 桌面 exe 与鸿蒙 rawfile 都从它的 dist 取。
-  build-web:
-    name: Web 控制台产物（web-react）
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web-react/package-lock.json
-      - name: npm ci + vite build
-        run: |
-          npm ci --prefix web-react
-          npm run build --prefix web-react
-          test -f web-react/dist/index.html
-          test -f web-react/dist/build.json
-      - uses: actions/upload-artifact@v4
-        with:
-          name: web-react-dist
-          path: web-react/dist/
-          if-no-files-found: error
-
-  # ── 3. Windows 桌面：自包含单文件 exe ──────────────────────────
-  # WPF + WebView2 只能在 Windows 上构建；csproj 把 web-react/dist 内嵌进 exe。
-  build-desktop:
-    name: Windows 桌面单文件 exe
-    needs: build-web
-    runs-on: windows-latest
-    continue-on-error: true
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-react-dist
-          path: web-react/dist
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-      # exe 内嵌的是 web-react-dist 这一份快照。artifact 缺构建戳说明拿到的不是本次
-      # 构建产物，宁可不发版，也不要把上一版的网页封进"新" exe。
-      - name: 校验内嵌网页带构建戳
-        shell: pwsh
-        run: |
-          $stamp = 'web-react/dist/build.json'
-          if (-not (Test-Path $stamp)) { throw "web-react-dist 缺少 $stamp，拒绝打包旧网页" }
-          Get-Content $stamp
-      - name: dotnet publish（自包含单文件）
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist/dl | Out-Null
-          dotnet publish apps/desktop/StarStack.Desktop.csproj -c Release -r win-x64 `
-            --self-contained true -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false `
-            -o dist-desktop
-          if ($LASTEXITCODE -ne 0) { throw 'dotnet publish 失败' }
-          Copy-Item dist-desktop/StarStack.Desktop.exe dist/dl/StarStack.Desktop.exe
-          Get-Item dist/dl/StarStack.Desktop.exe | Select-Object Name, Length
-      - uses: actions/upload-artifact@v4
-        with:
-          name: assets-desktop
-          path: dist/dl/*
-          if-no-files-found: warn
-
-  # ── 4. Windows 桌面：RNW 原生端（实验，复用 desktop-rn.yml） ───
-  # 旧的 WPF 套壳（apps/desktop）已作为交付形态下线；这里出的是 RNW 0.84 的原生 exe。
-  # 用 reusable workflow 而不是把步骤抄一遍：本地 Win10 编不出来，CI 是唯一验证入口。
+  # ── 2. Windows 桌面：RNW 原生端（复用 desktop-rn.yml） ─────────
+  # 旧的 WPF + WebView2 套壳（apps/desktop）已停止发布，下载页也换成 RNW 包：
+  # 桌面端只出这一个原生包，不再有"同一台机器两个 Windows 客户端"的歧义。
+  # 本地 Win10 编不出来（VS 2026 的 UWP VC 组件装不齐），windows-latest 是唯一验证入口。
   build-desktop-rn:
     name: Windows 桌面 RN 端（RNW）
     uses: ./.github/workflows/desktop-rn.yml
 
-  # ── 5. Android：RN 原生端（Expo prebuild + Gradle） ────────────
+  # ── 3. Android：RN 原生端（Expo prebuild + Gradle） ────────────
   # 手机端唯一形态是 apps/mobile-rn（RN 界面 + Kotlin 前台 Service，同时是算力节点）。
   # 老的 Capacitor 包（apps/android + apps/mobile）已废弃停发：界面旧、还和 RN 包同名，
   # 两个包一起发出去只会让人下错。
@@ -195,14 +127,32 @@ jobs:
           path: dist/dl/StarStack-RN.apk
           if-no-files-found: error
 
-  # ── 5. 小程序 / 鸿蒙源码包 ────────────────────────────────────
+  # ── 4. 小程序 / 鸿蒙源码包 ────────────────────────────────────
   # 小程序没有可安装文件（appid 是 touristappid 测试号）；鸿蒙 HAP 需要
   # DevEco Studio 5.x + 华为账号签名，CI 里构建不出来。因此发布源码包。
+  #
+  # 鸿蒙包里的 JS 产物在 CI 里预生成：`npm run harmony` 输出 hermes_bundle.hbc，
+  # Index.ets 的发布态就是读这个 rawfile。以前只在本地打过，源码包里缺这个文件、
+  # 用户不配 Metro 打开就是白屏。
   build-sources:
     name: 小程序 / 鸿蒙源码包
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/harmony-rn/package-lock.json
+      - name: 生成鸿蒙 HBC bundle
+        working-directory: apps/harmony-rn
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run harmony
+          hbc=harmony/entry/src/main/resources/rawfile/hermes_bundle.hbc
+          test -s "$hbc" || { echo '::error::hermes_bundle.hbc 没生成'; exit 1; }
+          ls -lh "$hbc"
       - name: 打包源码
         run: |
           set -euo pipefail
@@ -215,6 +165,9 @@ jobs:
           # 后者留给还在用 DevEco 5.x 的旧工程做对照。
           (cd apps && zip -qr ../dist/dl/starstack-harmony-source.zip harmony-rn \
             -x '*/oh_modules/*' '*/node_modules/*' '*/build/*' '*/.hvigor/*' '*.log')
+          # 源码包里必须带预生成的 HBC，否则装好 HAP 也是白屏
+          unzip -l dist/dl/starstack-harmony-source.zip | grep -q 'hermes_bundle.hbc' \
+            || { echo '::error::鸿蒙源码包缺少 hermes_bundle.hbc'; exit 1; }
           ls -lh dist/dl
       - uses: actions/upload-artifact@v4
         with:
@@ -222,12 +175,12 @@ jobs:
           path: dist/dl/*
           if-no-files-found: error
 
-  # ── 6. 汇总发布 ───────────────────────────────────────────────
-  # 重工具链的四个 job 允许失败；只有 Go 门禁失败才阻断发布。
+  # ── 5. 汇总发布 ───────────────────────────────────────────────
+  # 重工具链的三个 job 允许失败；只有 Go 门禁失败才阻断发布。
   # 缺哪端资产，页面会把它标成「该版本未包含」，不会给出死链。
   publish:
     name: 汇总发布 GitHub Release
-    needs: [build-go, build-desktop, build-desktop-rn, build-android, build-sources]
+    needs: [build-go, build-desktop-rn, build-android, build-sources]
     if: ${{ always() && needs.build-go.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -249,7 +202,7 @@ jobs:
           set -euo pipefail
           cd dist/dl
           missing=0
-          for f in StarStack.Desktop.exe StarStack-Desktop-RN.zip StarStack-RN.apk \
+          for f in StarStack-Desktop-RN.zip StarStack-RN.apk \
                    starstack-server-linux-amd64 \
                    starstack-miniapp-source.zip starstack-harmony-source.zip; do
             if [ ! -f "$f" ]; then
@@ -277,20 +230,21 @@ jobs:
           generate_release_notes: true
           body: |
             由 `.github/workflows/release.yml` 自动构建：Go 六平台节点 + Linux Broker、
-            Windows 桌面单文件 exe、Windows RNW 原生端、Android 安装包、
-            微信小程序与 HarmonyOS 源码包。
+            Windows RNW 原生端、Android 安装包、微信小程序与 HarmonyOS 源码包。
 
             - `SHA256SUMS.txt` 覆盖本版全部文件，用 `sha256sum -c SHA256SUMS.txt` 校验。
             - 微信小程序包是**源码**，用微信开发者工具「导入项目」打开（`touristappid` 为测试号）。
-            - HarmonyOS 包是**源码**，需 DevEco Studio 5.x（API 12+）+ 华为账号自动签名。
+            - HarmonyOS 包是**源码**，需 DevEco Studio 5.x（API 12+）+ 华为账号自动签名；
+              其中的 `hermes_bundle.hbc` 已由 CI 预生成，同步进 DevEco 后可直接出 HAP。
             - **Windows RNW（`StarStack-Desktop-RN.zip`）**：`react-native-windows` 原生桌面端
               （不是 WebView 套壳），release 变体已内嵌 JS bundle，解压后双击
               `StarStackDesktop.exe` 即可；需要与 `starstack-worker.exe` 放同目录才能开本机节点。
+              旧的 WPF + WebView2 套壳（`StarStack.Desktop.exe`）已停止发布。
             - **Android（`StarStack-RN.apk`）**：RN + Kotlin 前台服务同一份安装包，release 变体已内嵌
               JS bundle，装上就能跑、不需要 Metro；arm64-v8a，minSdk 24。签名沿用工程内的 debug
               keystore（内测/自用），上架应用商店前必须换正式签名。
-            - Windows 桌面依赖 .NET 8；若本版缺少对应文件，说明该构建步骤失败，
-              构建方式见 `apps/README.md`。欢迎页会把缺失资产标为「该版本未包含」。
+            - 若本版缺少某个文件，说明该构建步骤失败，构建方式见 `apps/README.md`。
+              欢迎页会把缺失资产标为「该版本未包含」。
 
             完整说明：https://home.starstack.run/
 

@@ -7,7 +7,9 @@
 - `harmony-rn/` — **鸿蒙原生端**（RNOH 0.84.6 + ArkTS 长时任务），复用同一套页面。
 - `miniapp/` — 原生微信小程序，覆盖需求方的 5 个页面 + 登录 + 星舷助手。
 - `shared/` — 接口客户端、类型约定、状态文案、格式化函数与 Agent 意图引擎。
-- `desktop/`（WPF+WebView2）与 `harmony/`（ArkWeb）— 目前仍在出货的两个壳，内嵌 `web-react/dist`，自身不含业务 UI。
+- `desktop/`（WPF+WebView2）— **已停止发布**（2026-11-21），源码保留作对照；桌面端交付形态换成
+  `desktop-rn/`（RNW 原生，CI 出 `StarStack-Desktop-RN.zip`）。
+- `harmony/`（ArkWeb）— 仍在出货的鸿蒙壳，内嵌 `web-react/dist`，自身不含业务 UI。
 
 > Capacitor 时代那套（`mobile/` 界面、`android/` 工程、`capacitor.config.ts`）已于 2026-11-20 删除，
 > 只在 git 历史里可查。手机端唯一形态是 `mobile-rn/`。
@@ -50,7 +52,8 @@ web 改了不会自动流过去，而且不会报错。所以每份产物自带�
 apps/
   shared/            api.js / constants.js / format.js / agent.js（ESM，仅小程序用 sync:core 打包）
   mobile-rn/         RN 安卓端：src/screens 全套页面 + modules/starstack-node（Kotlin 前台服务）
-  desktop/           WPF + WebView2，csproj 编译期把 web-react/dist 嵌入 exe
+  desktop/           WPF + WebView2 套壳（已停止发布，仅作对照）
+  desktop-rn/        RNW 原生桌面端（当前桌面交付形态，CI 构建）
   harmony/           ArkTS 壳，rawfile/web 内嵌 web-react/dist 的副本
   miniapp/           原生小程序；utils/core.js 由 shared/ 打包生成
   scripts/           verify-miniapp.cjs（Node 侧校验小程序）、sync-harmony.cjs（同步鸿蒙产物）
@@ -125,19 +128,14 @@ node scripts/verify-console-sync.cjs
 - 缺环境自动补齐：同意编译的启动包会同时带 `--auto-provision`（安装 .NET SDK 等）；任务脚本也可自行引导安装（参考本次桌面端 `build.cmd` 安装 .NET SDK 到 `%LOCALAPPDATA%\starstack-sdk`）。
 - 产物：`GET /download/<job-id>`，zip 内含 `build.log`。
 
-本次桌面端就是用这条链路构建的：源码包 → 1145 节点 → `dotnet publish` → `result.zip` → 在本机安装。
+早期桌面端就是用这条链路构建的：源码包 → 1145 节点 → `dotnet publish` → `result.zip` → 在本机安装。
 
 ### 桌面端产物形态
 
-`desktop/build.cmd` 现在发布**自包含单文件**：
-
-```
-dotnet publish StarStack.Desktop.csproj -c Release -r win-x64 \
-  --self-contained true -p:PublishSingleFile=true \
-  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
-```
-
-产物目录里只有一个 `StarStack.Desktop.exe`（约 70–90 MB），**双击即可运行**，不需要预装 .NET 运行时，也不需要先解压一堆 DLL。`install.bat` / `install.ps1` 只在需要开始菜单快捷方式和固定安装目录时使用，属于备选。
+桌面端交付形态已换成 `desktop-rn/`（RNW 原生），由 `.github/workflows/desktop-rn.yml` 在
+`windows-latest` 上编译，产出 `StarStack-Desktop-RN.zip`（约 21 MB，解压即用）。
+旧的 WPF 套壳 `desktop/build.cmd` 仍保留源码（`dotnet publish` 自包含单文件，
+产物约 70–90 MB），但已不再随 Release 发布。
 
 ## Linux 支持
 

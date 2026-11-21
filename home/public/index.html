@@ -599,7 +599,7 @@
       <div class="download-legend">
         <h3>各端获取方式 · 先把限制说清楚</h3>
         <div class="legend-grid">
-          <div><b>Windows 桌面</b><span>自包含单文件 <code>StarStack.Desktop.exe</code>，双击即用、无需 .NET 运行时，约 70–90 MB。内嵌 React 控制台，不依赖远程网页。</span></div>
+          <div><b>Windows 桌面</b><span><code>StarStack-Desktop-RN.zip</code>，解压后双击 <code>StarStackDesktop.exe</code>。React Native for Windows 原生渲染（不是 WebView 套壳），已内嵌 JS bundle，约 21 MB；把 <code>starstack-worker.exe</code> 放进同目录即可开本机节点。</span></div>
           <div><b>Android</b><span><code>release</code> 变体，已内嵌 JS bundle，装上就能跑、不需要 Metro；arm64-v8a、minSdk 24。签名沿用工程内的 debug keystore（内测自用），需允许「未知来源」安装。</span></div>
           <div><b>微信小程序</b><span>提供<b>源码包</b>而非安装包：微信里没有「下载安装小程序」这回事。用微信开发者工具「导入项目」打开，<code>touristappid</code> 是测试号；正式发布需域名备案与合法域名配置。</span></div>
           <div><b>HarmonyOS NEXT</b><span>提供<b>源码包</b>：ArkTS 壳需要 DevEco Studio 5.x（API 12+）与华为账号自动签名，仓库未提供已签名 HAP。Web 控制台资源已内嵌在 <code>rawfile/web</code>。</span></div>
@@ -616,12 +616,12 @@
         <div>
           <h3>源码构建（可选）</h3>
           <ul class="client-list">
-            <li><b>Windows 桌面</b> <code>apps/desktop/build.cmd</code> → <code>out/StarStack.Desktop.exe</code></li>
+            <li><b>Windows 桌面</b> <code>npm run windows:init</code> → <code>npm run windows</code>（<code>apps/desktop-rn</code>，需 VS 2026 + C++ 工作负载）</li>
             <li><b>Android</b> <code>cd apps/mobile-rn</code> → <code>npx expo prebuild</code> → <code>gradlew :app:assembleRelease</code></li>
             <li><b>小程序</b> 解压源码包，微信开发者工具导入 <code>apps/miniapp</code></li>
             <li><b>鸿蒙</b> DevEco Studio 5.x 打开 <code>apps/harmony</code>（不是仓库根目录）</li>
           </ul>
-          <p class="hint">桌面与鸿蒙壳内嵌的都是 <code>web-react/dist</code> 这一份 React 产物，Android 是独立的 RN 界面，详见仓库 <code>apps/README.md</code>。</p>
+          <p class="hint">桌面与 Android 都是 RN 原生界面（共用 <code>apps/mobile-rn/src</code> 的页面），鸿蒙壳内嵌 <code>web-react/dist</code>，详见仓库 <code>apps/README.md</code>。</p>
         </div>
       </div>
     </div>
