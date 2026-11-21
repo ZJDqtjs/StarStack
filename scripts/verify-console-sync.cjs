@@ -2,16 +2,16 @@
 /**
  * 多端契约检查（按 L0 能力清单，不按视图数量）。
  *
- * 前提（2026-11-15 修订）：
+ * 前提（2026-11-20 修订）：
  *   - web-react 是唯一全功能控制台；
- *   - 手机端（Android）用 apps/mobile-rn（RN + Kotlin 前台 Service，同时是算力节点），
- *     鸿蒙同理不再走 Capacitor 时代那套；
- *   - apps/mobile + apps/android(Capacitor) 已废弃，但 exe 与鸿蒙壳仍在内嵌它的产物。
+ *   - 手机端（Android）用 apps/mobile-rn（RN + Kotlin 前台 Service，同时是算力节点）；
+ *   - exe（apps/desktop，WPF+WebView2）与鸿蒙壳（apps/harmony，ArkWeb）内嵌的都是
+ *     web-react/dist；Capacitor 时代那套（apps/mobile、apps/android、capacitor.config.ts）
+ *     已从仓库删除，只在 git 历史里。
  *
- * 本脚本守三件事：
+ * 本脚本守两件事：
  *   1. L0 交易主链（登录/余额/提交/进度/下载/账单）在所有「在用端」上不能断。
- *   2. 废弃 UI 不能继续给交付形态供血（exe 内嵌路径、鸿蒙 rawfile、Capacitor 工程、发布流水线）。
- *   3. 各端产物必须带构建戳，否则无法判断壳里的网页是哪一版。
+ *   2. 各端产物必须带构建戳，否则无法判断壳里的网页是哪一版。
  *
  * 用法：
  *   node scripts/verify-console-sync.cjs
@@ -106,13 +106,6 @@ const CLIENTS = [
     status: 'active',
     role: 'Broker 自带自检页',
   },
-  {
-    id: 'mobile',
-    name: 'apps/mobile',
-    roots: ['apps/mobile/src/views', 'apps/mobile/src/App.tsx'],
-    status: 'deprecated',
-    role: '已废弃（Capacitor 时代产物，无交付形态引用）',
-  },
 ]
 
 const TOKEN_RE = /\/api\/[a-zA-Z0-9_/-]+|\/download\/[a-zA-Z0-9_-]*/g
@@ -151,51 +144,26 @@ const matrix = CLIENTS.map((c) => {
   return { client: c, cells, covered: cells.filter(Boolean).length }
 })
 
-// ── 2. 废弃 UI 是否仍在给交付形态供血 ──────────────────────────
+// ── 2. 交付形态的界面来源是否唯一 ──────────────────────────────
 function checkDeprecatedBleed() {
   const csproj = read('apps/desktop/StarStack.Desktop.csproj')
   const embedsWebReact = csproj.includes('web-react\\dist') || csproj.includes('web-react/dist')
-  if (csproj.includes('..\\mobile\\dist') || csproj.includes('../mobile/dist')) {
-    problems.push(
-      'desktop 仍内嵌 ..\\mobile\\dist —— 那是已废弃的 UI。exe 必须内嵌 web-react/dist。'
-    )
-  } else if (!embedsWebReact) {
-    problems.push('desktop csproj 既没内嵌 mobile/dist 也没内嵌 web-react/dist：exe 的界面来源不明')
+  if (!embedsWebReact) {
+    problems.push('desktop csproj 没内嵌 web-react/dist：exe 的界面来源不明')
   }
   if (!csproj.includes('build.json')) {
     problems.push('desktop csproj 缺少 build.json 门禁，旧产物会被静默打进 exe')
   }
 
-  if (exists('apps/capacitor.config.ts')) {
-    const cap = read('apps/capacitor.config.ts')
-    if (cap.includes("webDir: 'mobile/dist'")) {
-      warnings.push(
-        'capacitor.config.ts 仍指向 mobile/dist。Capacitor 已废弃：要么删掉该工程，' +
-          '要么把 webDir 改到 web-react/dist，否则误跑 apk 脚本会产出废弃界面。'
-      )
-    }
-  }
-
   if (exists('apps/scripts/sync-harmony.cjs')) {
     const sh = read('apps/scripts/sync-harmony.cjs')
-    if (sh.includes("'mobile', 'dist'")) {
-      problems.push(
-        'sync-harmony.cjs 仍从 mobile/dist 同步到鸿蒙 rawfile —— 鸿蒙会拿到废弃界面。' +
-          '应改为 web-react/dist 后重跑 npm run sync:harmony。'
-      )
-    } else if (!sh.includes("'web-react', 'dist'")) {
-      problems.push('sync-harmony.cjs 的同步源既不是 mobile/dist 也不是 web-react/dist，请确认')
+    if (!sh.includes("'web-react', 'dist'")) {
+      problems.push('sync-harmony.cjs 的同步源不是 web-react/dist，鸿蒙壳会拿到来源不明的界面')
     }
   }
 
   if (exists('.github/workflows/release.yml')) {
     const rel = read('.github/workflows/release.yml')
-    if (rel.includes('assembleDebug') || rel.includes('apk.sh')) {
-      warnings.push(
-        'release.yml 仍在构建 Capacitor APK 并随 Release 发布 —— 这是废弃的安卓包，' +
-          '与 RN 的 APK 同名，用户会下错。'
-      )
-    }
     if (!rel.includes('web-react-dist')) {
       warnings.push('release.yml 没有构建 web-react 产物（web-react-dist），exe 会拿不到内嵌网页')
     }
@@ -247,7 +215,6 @@ function checkEmbeddedDist() {
 }
 
 checkDeprecatedBleed()
-checkBuildStamp('apps/vite.config.ts')
 checkBuildStamp('web-react/vite.config.js')
 checkEmbeddedDist()
 
@@ -271,7 +238,6 @@ for (const row of matrix) {
   )
 }
 console.log('-'.repeat(66))
-console.log('* 已废弃：不再被任何交付形态内嵌，保留仅作历史对照')
 console.log('')
 
 for (const w of warnings) console.log(`[WARN] ${w}`)

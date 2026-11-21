@@ -1,4 +1,4 @@
-// Shared by the Android app (React + Capacitor) and the WeChat mini program.
+// Shared contract for the WeChat mini program (bundled into miniapp/utils/core.js).
 // The platform supplies a transport and token storage; everything else — paths,
 // payload shapes, error unwrapping — lives here so the two clients cannot drift.
 

@@ -10,8 +10,8 @@ if (-not [System.IO.Path]::IsPathRooted($OutDir)) {
 $OutDir = [System.IO.Path]::GetFullPath($OutDir)
 Push-Location $PSScriptRoot
 try {
-  Write-Host '== 1/3 构建网页资源（apps/mobile/dist）=='
-  npm --prefix .. run build
+  Write-Host '== 1/3 构建网页资源（web-react/dist，csproj 内嵌的就是它）=='
+  npm --prefix ../../web-react run build
   if ($LASTEXITCODE -ne 0) { throw '网页资源构建失败' }
 
   if (Test-Path $OutDir) { Remove-Item $OutDir -Recurse -Force }

@@ -617,11 +617,11 @@
           <h3>源码构建（可选）</h3>
           <ul class="client-list">
             <li><b>Windows 桌面</b> <code>apps/desktop/build.cmd</code> → <code>out/StarStack.Desktop.exe</code></li>
-            <li><b>Android</b> <code>cd apps &amp;&amp; npm run apk</code>，或 <code>apps/android/apk.sh</code></li>
+            <li><b>Android</b> <code>cd apps/mobile-rn</code> → <code>npx expo prebuild</code> → <code>gradlew :app:assembleRelease</code></li>
             <li><b>小程序</b> 解压源码包，微信开发者工具导入 <code>apps/miniapp</code></li>
             <li><b>鸿蒙</b> DevEco Studio 5.x 打开 <code>apps/harmony</code>（不是仓库根目录）</li>
           </ul>
-          <p class="hint">四端默认共用同一套 <code>apps/mobile</code> React 产物与后端接口，详见仓库 <code>apps/README.md</code>。</p>
+          <p class="hint">桌面与鸿蒙壳内嵌的都是 <code>web-react/dist</code> 这一份 React 产物，Android 是独立的 RN 界面，详见仓库 <code>apps/README.md</code>。</p>
         </div>
       </div>
     </div>

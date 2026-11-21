@@ -121,8 +121,8 @@ PUT https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/workers/domains
 
 | 端 | Release 资产 | 形态 | 怎么构建 |
 |---|---|---|---|
-| Windows 桌面 | `StarStack.Desktop.exe` | 安装包（自包含单文件，约 70–90 MB） | `windows-latest` + .NET 8 跑 `dotnet publish`；csproj 把 `apps/mobile/dist` 内嵌进 exe，双击即用 |
-| Android | `StarStack.apk` | 安装包（debug，未签名上架） | `npx cap sync android` 同步 Web 资源后，复用仓库 `apps/android/apk.sh`（自动备 JDK 17 + Android SDK）跑 `assembleDebug` |
+| Windows 桌面 | `StarStack.Desktop.exe` | 安装包（自包含单文件，约 70–90 MB） | `windows-latest` + .NET 8 跑 `dotnet publish`；csproj 把 `web-react/dist` 内嵌进 exe，双击即用 |
+| Android | `StarStack-RN.apk` | 安装包（release，内嵌 JS bundle） | `apps/mobile-rn` 跑 `expo prebuild` + `gradlew :app:assembleRelease`（JDK 17 + Android SDK/NDK） |
 | 微信小程序 | `starstack-miniapp-source.zip` | **源码包** | 直接打包 `apps/miniapp`；`appid` 是 `touristappid` 测试号，需用微信开发者工具「导入项目」 |
 | HarmonyOS NEXT | `starstack-harmony-source.zip` | **源码包** | 直接打包 `apps/harmony`（ArkTS 壳 + 已内嵌的 `rawfile/web`）；HAP 需 DevEco Studio 5.x + 华为账号自动签名，CI 构建不了 |
 | 算力节点 | 6 个 `starstack-worker-*` + `starstack-server-linux-amd64` | Go 静态二进制 | 纯交叉编译，最快最稳 |

@@ -35,12 +35,10 @@ deploy/comfy-split/orchestrator-state*.json
 
 # 前端依赖与原生构建产物
 apps/node_modules/
-apps/android/.gradle/
-apps/android/build/
-apps/android/app/build/
-apps/android/local.properties
-apps/android/.idea/
-apps/android/capacitor-cordova-android-plugins/build/
+apps/mobile-rn/node_modules/
+apps/mobile-rn/android/
+apps/desktop-rn/node_modules/
+apps/harmony-rn/node_modules/
 # WPF 的中间产物：dotnet build 会生成 x64/Debug 的 obj，进库只会让 diff 变噪音
 apps/desktop/obj/
 

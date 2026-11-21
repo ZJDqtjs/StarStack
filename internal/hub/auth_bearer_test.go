@@ -57,7 +57,7 @@ func TestBearerSessionAndCORS(t *testing.T) {
 		t.Fatalf("anonymous request looked signed in: %v", got)
 	}
 
-	// Preflight for the Capacitor origin.
+	// Preflight for a WebView-shell origin (exe / 鸿蒙 rawfile / 小程序 webview).
 	req, _ := http.NewRequest("OPTIONS", ts.URL+"/api/me", nil)
 	req.Header.Set("Origin", "https://localhost")
 	req.Header.Set("Access-Control-Request-Headers", "authorization,content-type")
