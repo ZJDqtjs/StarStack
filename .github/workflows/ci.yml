@@ -79,6 +79,30 @@ jobs:
           node -e "const s=require('./web-react/dist/build.json'); if(!s.sha||!s.time) throw new Error('web-react 产物缺构建戳'); console.log('web-react 戳:', s.sha, s.time)"
           test -f web-react/dist/index.html
 
+  # 鸿蒙源码包里要带预生成的 HBC（Index.ets 的发布态只认 rawfile 里的 hermes_bundle.hbc）。
+  # 这条链路依赖 RN 0.84 的 hermesc（在 hermes-compiler 包里，CLI 默认路径找不到，
+  # 所以 package.json 的 harmony 脚本显式传了 --hermesc-dir）。
+  # 在 PR 上先跑一遍，避免发版时才发现打不出 bundle。
+  harmony:
+    name: 鸿蒙 HBC bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/harmony-rn/package-lock.json
+      - name: npm ci + bundle-harmony
+        working-directory: apps/harmony-rn
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run harmony
+          hbc=harmony/entry/src/main/resources/rawfile/hermes_bundle.hbc
+          test -s "$hbc" || { echo '::error::hermes_bundle.hbc 没生成'; exit 1; }
+          ls -lh "$hbc"
+
   deploy-home:
     name: 部署欢迎页到 Cloudflare Workers
     needs: [go, site]

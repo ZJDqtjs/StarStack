@@ -1,11 +1,15 @@
 // Windows 平台实现：所有原生能力走 windows/ 里的 StarStackDesktop TurboModule。
-// JS 侧只定义契约，C# 模块（native/StarStackDesktopModule.cs）负责文件对话框、
-// 带 Bearer 下载与 starstack-worker.exe 子进程。
-import { NativeEventEmitter, NativeModules } from 'react-native'
+// JS 侧只定义契约，C++ 模块（native/StarStackDesktopModule.cpp）负责文件对话框、
+// 带 Bearer 下载与 starstack-worker.exe 子进程（含 stderr 状态解析）。
+//
+// 事件走 DeviceEventEmitter：原生侧是用 RCTDeviceEventEmitter 发的，
+// `new NativeEventEmitter(Native)` 要求模块自己实现 addListener/removeListeners，
+// 本模块没有，用它拿不到任何回调。
+import { DeviceEventEmitter, NativeModules } from 'react-native'
+import { api } from '../../mobile-rn/src/api'
 import type { NodeStatus, Platform } from '../../mobile-rn/src/platform'
 
 const Native = NativeModules.StarStackDesktop as any
-const events = Native ? new NativeEventEmitter(Native) : null
 
 const missing = (what: string): never => {
   throw new Error(`${what}需要 Windows 原生模块：先在节点 84 生成 windows/ 并重新构建桌面端`)
@@ -68,11 +72,23 @@ export const winPlatform: Platform = {
     },
     async status() {
       if (!Native?.nodeStatus) return parseStatus(null)
-      return parseStatus(await Native.nodeStatus())
+      const st = parseStatus(await Native.nodeStatus())
+      // 收益只有 Broker 知道（worker 日志里没有），用 /api/contribution 按 nodeId 补齐；
+      // 断网/未登录时保持 0，不影响其它字段。
+      if (st.nodeId) {
+        try {
+          const c: any = await api.contribution()
+          const mine = (c?.nodes || []).find((n: any) => n.id === st.nodeId)
+          if (mine && mine.earned != null) st.earned = Number(mine.earned) || 0
+        } catch {
+          // 忽略：节点卡片照常显示运行相位
+        }
+      }
+      return st
     },
     subscribe(cb) {
-      const sub = events?.addListener('StarStackNodeStatus', (raw: any) => cb(parseStatus(raw)))
-      return () => sub?.remove()
+      const sub = DeviceEventEmitter.addListener('StarStackNodeStatus', (raw: any) => cb(parseStatus(raw)))
+      return () => sub.remove()
     },
   },
 }

@@ -16,11 +16,24 @@ try {
   Copy-Item (Join-Path (Get-Location) 'native/StarStackDesktopModule.cpp') $dir -Force
 
   $xml = [IO.File]::ReadAllText($vcx.FullName)
+  # 模板工程开了预编译头（Use），而本模块自己带 include，不引 pch.h；
+  # 不显式 NotUsing 会报 C1010: unexpected end of file while looking for precompiled header。
   if ($xml -notmatch 'StarStackDesktopModule\.cpp') {
     $xml = $xml.Replace(
       '<ClCompile Include="AutolinkedNativeModules.g.cpp" />',
       '<ClCompile Include="AutolinkedNativeModules.g.cpp" />' + "`r`n" +
-      '    <ClCompile Include="StarStackDesktopModule.cpp" />'
+      '    <ClCompile Include="StarStackDesktopModule.cpp">' + "`r`n" +
+      '      <PrecompiledHeader>NotUsing</PrecompiledHeader>' + "`r`n" +
+      '    </ClCompile>'
+    )
+  }
+  else {
+    # 已经加过（自闭合写法）：补齐预编译头设置
+    $xml = $xml.Replace(
+      '<ClCompile Include="StarStackDesktopModule.cpp" />',
+      '<ClCompile Include="StarStackDesktopModule.cpp">' + "`r`n" +
+      '      <PrecompiledHeader>NotUsing</PrecompiledHeader>' + "`r`n" +
+      '    </ClCompile>'
     )
   }
   if ($xml -notmatch 'StarStackDesktopModule\.h') {

@@ -139,9 +139,8 @@ Broker 侧已登记 android 平台：`mintLaunch` 不会再把它改回 windows�
 | `internal/ffx/ffx.go` | 新增 `RemuxMKV`（`-c copy` 重封装，不动编码帧） |
 | `internal/hub/android_node_test.go` | 回归测试：只有移动端能跨编码器家族，桌面不能互相顶替 |
 
-## 与现有 `apps/mobile` 的关系
+## 与旧 Capacitor 版的关系
 
-`apps/mobile` 是 Capacitor 套壳版（React + Vite + WebView），**已废弃**（2026-11-15）：
-`apps/capacitor.config.ts` 的 `webDir` 已改指 `web-react/dist`，release.yml 不再构建 Capacitor APK。
-手机端唯一形态是本工程（RN + Kotlin 前台 Service，同时是常驻算力节点）。
-两者共用同一套后端协议与 `apps/shared/` 的接口约定。
+Capacitor 套壳版（`apps/mobile` + `apps/android`）已于 2026-11-20 整条删除，只在 git 历史里。
+手机端唯一形态是本工程（RN + Kotlin 前台 Service，同时是常驻算力节点），
+与小程序共用 `apps/shared/` 的接口约定。

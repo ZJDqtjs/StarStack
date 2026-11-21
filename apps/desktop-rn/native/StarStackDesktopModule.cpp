@@ -282,16 +282,37 @@ void StarStackDesktop::NodeStart(
                      L" --price " + std::to_wstring(price) + L" --slots " + std::to_wstring(static_cast<int>(slots)) +
                      L" --work " + Quote(work.wstring());
 
+  // worker 的统计与相位都在 stderr 上（Go 的 log 默认走 stderr），
+  // 起进程时把 stderr 接进管道，后台线程解析后推给页面。
+  SECURITY_ATTRIBUTES sa{};
+  sa.nLength = sizeof(sa);
+  sa.bInheritHandle = TRUE;
+  HANDLE readPipe = nullptr;
+  HANDLE writePipe = nullptr;
+  if (!CreatePipe(&readPipe, &writePipe, &sa, 0)) {
+    promise.Reject("无法创建节点日志管道");
+    return;
+  }
+  SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
+
   STARTUPINFOW si{};
   si.cb = sizeof(si);
+  si.dwFlags = STARTF_USESTDHANDLES;
+  si.hStdOutput = writePipe;
+  si.hStdError = writePipe;
+  si.hStdInput = nullptr;
+
   PROCESS_INFORMATION pi{};
   DWORD createFlags = CREATE_NO_WINDOW | CREATE_SUSPENDED;
   std::vector<wchar_t> mutableCmd(cmd.begin(), cmd.end());
   mutableCmd.push_back(L'\0');
-  if (!CreateProcessW(nullptr, mutableCmd.data(), nullptr, nullptr, FALSE, createFlags, nullptr, work.c_str(), &si, &pi)) {
+  if (!CreateProcessW(nullptr, mutableCmd.data(), nullptr, nullptr, TRUE, createFlags, nullptr, work.c_str(), &si, &pi)) {
+    CloseHandle(readPipe);
+    CloseHandle(writePipe);
     promise.Reject("启动 starstack-worker 失败");
     return;
   }
+  CloseHandle(writePipe); // 父进程留着写端会让 ReadFile 永远等不到 EOF
 
   HANDLE job = CreateJobObjectW(nullptr, nullptr);
   if (job) {
@@ -305,16 +326,27 @@ void StarStackDesktop::NodeStart(
   m_process = pi.hProcess;
   m_pid = pi.dwProcessId;
   m_nodeId = id;
-  m_lastError.clear();
-  m_served = 0;
-  m_earned = 0;
+  m_stopping = false;
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_lastError.clear();
+    m_phase = "registering";
+    m_segId.clear();
+    m_encoder.clear();
+    m_lastLine.clear();
+    m_served = 0;
+    m_earned = 0;
+  }
   ResumeThread(pi.hThread);
   CloseHandle(pi.hThread);
+  StartPump(readPipe);
   EmitStatus();
   promise.Resolve();
 }
 
 void StarStackDesktop::NodeStop(winrt::Microsoft::ReactNative::ReactPromise<void> promise) noexcept {
+  m_stopping = true;
+  StopPump();
   if (m_job) {
     TerminateJobObject(m_job, 0);
     CloseHandle(m_job);
@@ -328,6 +360,11 @@ void StarStackDesktop::NodeStop(winrt::Microsoft::ReactNative::ReactPromise<void
   }
   m_pid = 0;
   m_nodeId.clear();
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_phase = "idle";
+    m_segId.clear();
+  }
   EmitStatus();
   promise.Resolve();
 }
@@ -337,6 +374,121 @@ void StarStackDesktop::NodeStatus(
   promise.Resolve(StatusValue());
 }
 
+StarStackDesktop::~StarStackDesktop() {
+  // 模块析构时泵线程必须停掉，否则 std::thread 在 joinable 状态下析构会 std::terminate
+  m_stopping = true;
+  StopPump();
+}
+
+void StarStackDesktop::StartPump(void *readPipe) noexcept {
+  StopPump();
+  m_readPipe = static_cast<HANDLE>(readPipe);
+  m_pumpRunning = true;
+  m_pump = std::thread([this]() { PumpLoop(); });
+}
+
+void StarStackDesktop::StopPump() noexcept {
+  // 注意：这里不碰 m_stopping。标志由调用方决定（NodeStop/析构 = 主动停；
+  // NodeStart 重启前先清掉，否则新线程一进循环就退出）。
+  if (m_readPipe) {
+    // 关掉读端让阻塞中的 ReadFile 立刻返回，线程才能退出
+    CloseHandle(m_readPipe);
+    m_readPipe = nullptr;
+  }
+  if (m_pump.joinable()) {
+    m_pump.join();
+  }
+  m_pumpRunning = false;
+}
+
+void StarStackDesktop::PumpLoop() noexcept {
+  char buf[4096];
+  std::string pending;
+  HANDLE pipe = m_readPipe;
+  while (pipe && !m_stopping.load()) {
+    DWORD read = 0;
+    if (!ReadFile(pipe, buf, sizeof(buf), &read, nullptr) || read == 0) break;
+    pending.append(buf, read);
+    size_t pos = 0;
+    while ((pos = pending.find('\n')) != std::string::npos) {
+      std::string line = pending.substr(0, pos);
+      pending.erase(0, pos + 1);
+      if (!line.empty() && line.back() == '\r') line.pop_back();
+      HandleLine(line);
+    }
+  }
+  if (!pending.empty()) HandleLine(pending);
+
+  m_pumpRunning = false;
+  // 不是页面点「停止」而是进程自己退出的，把退出码带回去，别让卡片一直显示运行中
+  if (!m_stopping.load()) {
+    DWORD code = 0;
+    bool exited = m_process && GetExitCodeProcess(m_process, &code) && code != STILL_ACTIVE;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (exited && m_lastError.empty()) {
+      m_lastError = L"节点进程已退出（exit code " + std::to_wstring(code) + L"）";
+      m_phase = "error";
+    } else if (m_phase != "error") {
+      m_phase = "idle";
+    }
+    m_segId.clear();
+  }
+  PostEmit();
+}
+
+void StarStackDesktop::HandleLine(std::string const &line) noexcept {
+  if (line.empty()) return;
+  bool changed = false;
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_lastLine = line;
+
+    if (line.rfind("node ", 0) == 0 && line.find(" online:") != std::string::npos) {
+      // node <id> online: os/arch cpus=.. mem=..MB gpus=[..] slots=.. price=.. encoders=[a b c]
+      m_phase = "polling";
+      m_lastError.clear();
+      auto at = line.find("encoders=[");
+      if (at != std::string::npos) {
+        auto end = line.find(']', at);
+        if (end != std::string::npos) m_encoder = line.substr(at + 10, end - at - 10);
+      }
+      changed = true;
+    } else if (line.rfind("seg ", 0) == 0 && line.find(" done in ") != std::string::npos) {
+      m_served += 1;
+      m_phase = "polling";
+      m_segId.clear();
+      changed = true;
+    } else if (line.rfind("seg ", 0) == 0 && line.find(" FAILED: ") != std::string::npos) {
+      m_phase = "error";
+      m_lastError = ToWide(line.substr(line.find(" FAILED: ") + 9));
+      changed = true;
+    } else if (line.rfind("seg ", 0) == 0 && line.find(" -> ") != std::string::npos) {
+      // seg <id> (job <job> #<n>) 1.5-4.5s -> libx264
+      auto sp = line.find(' ', 4);
+      m_segId = line.substr(4, sp == std::string::npos ? std::string::npos : sp - 4);
+      m_phase = "transcoding";
+      m_encoder = line.substr(line.find(" -> ") + 4);
+      m_lastError.clear();
+      changed = true;
+    } else if (line.find("claim failed:") != std::string::npos ||
+               line.find("claim error ") != std::string::npos ||
+               line.find("re-register:") != std::string::npos) {
+      m_phase = "error";
+      m_lastError = ToWide(line);
+      changed = true;
+    }
+  }
+  if (changed) PostEmit();
+}
+
+void StarStackDesktop::PostEmit() noexcept {
+  try {
+    m_context.UIDispatcher().Post([this]() { EmitStatus(); });
+  } catch (...) {
+    // 页面已销毁 / 上下文失效：丢掉一次状态更新无害
+  }
+}
+
 bool StarStackDesktop::IsRunning() const noexcept {
   if (!m_process) return false;
   DWORD code = 0;
@@ -344,18 +496,19 @@ bool StarStackDesktop::IsRunning() const noexcept {
   return code == STILL_ACTIVE;
 }
 
-winrt::Microsoft::ReactNative::JSValue StarStackDesktop::StatusValue() const noexcept {
+winrt::Microsoft::ReactNative::JSValue StarStackDesktop::StatusValue() noexcept {
   React::JSValueObject obj;
   bool running = IsRunning();
+  std::lock_guard<std::mutex> lock(m_mutex);
   obj["running"] = running;
   obj["nodeId"] = ToUtf8(m_nodeId);
-  obj["phase"] = running ? "polling" : "idle";
-  obj["segId"] = "";
+  obj["phase"] = running ? m_phase : (m_phase == "error" ? "error" : "idle");
+  obj["segId"] = m_segId;
   obj["pct"] = 0.0;
   obj["lastError"] = ToUtf8(m_lastError);
   obj["served"] = m_served;
   obj["earned"] = m_earned;
-  obj["encoder"] = "";
+  obj["encoder"] = m_encoder;
   return React::JSValue(std::move(obj));
 }
 

@@ -18,6 +18,11 @@ const html = read(path.join(pub, 'index.html'));
 const css = read(path.join(pub, 'styles.css'));
 const js = read(path.join(pub, 'app.js'));
 const releaseYml = read(path.join(root, '.github', 'workflows', 'release.yml'));
+// 桌面端的构建步骤在独立的可复用工作流里（release.yml 只负责调用它），
+// 所以产物名的检查要连这份文件一起看。
+const rnwPath = path.join(root, '.github', 'workflows', 'desktop-rn.yml');
+const rnwYml = fs.existsSync(rnwPath) ? read(rnwPath) : '';
+const releaseAndRnw = releaseYml + '\n' + rnwYml;
 
 // 1. 本地资源
 const localRefs = new Set();
@@ -38,9 +43,10 @@ const platforms = [
   ['darwin', 'amd64'], ['darwin', 'arm64']
 ];
 const clientAssets = [
-  'StarStack.Desktop.exe',
-  // 安卓包名用 RN 版本：Capacitor 那套（旧 StarStack.apk）已废弃停发，
-  // 见 .github/workflows/release.yml 第 4 节。
+  // 桌面端只发 RNW 原生包：旧的 WPF 套壳 StarStack.Desktop.exe 已停止发布，
+  // 见 .github/workflows/release.yml 第 2 节。
+  'StarStack-Desktop-RN.zip',
+  // 安卓包名用 RN 版本：Capacitor 那套（旧 StarStack.apk）已废弃停发。
   'StarStack-RN.apk',
   'starstack-miniapp-source.zip',
   'starstack-harmony-source.zip'
@@ -76,10 +82,13 @@ for (const token of [
   'starstack-server-linux-amd64',
   ...builtClientAssets,
   '> SHA256SUMS.txt',
-  'web-react-dist', 'assets-desktop', 'assets-android', 'assets-sources',
-  'dist/dl/*'
+  // 桌面端走 reusable workflow（desktop-rn.yml），artifact 名是 assets-desktop-rn
+  'assets-desktop-rn', 'assets-android', 'assets-sources', 'dist/dl/*'
 ]) {
-  if (!releaseYml.includes(token)) warn(`release.yml 缺少预期片段：${token}`);
+  if (!releaseAndRnw.includes(token)) warn(`release.yml / desktop-rn.yml 缺少预期片段：${token}`);
+}
+if (!releaseYml.includes('desktop-rn.yml')) {
+  warn('release.yml 没有复用 .github/workflows/desktop-rn.yml：桌面端产物不会进 Release');
 }
 
 // 筛选 tab 的 data-group 必须能对应到实际资产分组，否则点了没反应

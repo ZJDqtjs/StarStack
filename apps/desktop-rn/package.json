@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "start": "react-native start",
-    "windows": "react-native run-windows",
+    "windows": "npx @react-native-community/cli run-windows",
     "windows:init": "powershell -ExecutionPolicy Bypass -File scripts/init-windows.ps1",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:windows": "jest --config jest.config.windows.js --passWithNoTests"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -23,10 +24,19 @@
     "@react-native/babel-preset": "0.84.1",
     "@react-native/metro-config": "0.84.1",
     "@react-native/typescript-config": "0.84.1",
+    "@rnx-kit/jest-preset": "^0.3.1",
     "@types/react": "^19.2.0",
+    "jest": "^30.5.2",
     "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=22.11.0"
+  },
+  "react-native-windows": {
+    "init-windows": {
+      "name": "StarStackDesktop",
+      "namespace": "StarStackDesktop",
+      "template": "cpp-app"
+    }
   }
 }

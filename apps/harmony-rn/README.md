@@ -47,6 +47,19 @@ ohpm install             # 从 ../node_modules/@react-native-oh/react-native-har
 调试态在 DevEco 里直接 Run 即可，`Index.ets` 会优先用 `MetroJSBundleProvider` 连本机 Metro；
 发布态用 rawfile 里的 `hermes_bundle.hbc`。
 
+### JS 产物已验证（2026-11-20）
+
+`npm install && npm run harmony` 可在没有 DevEco 的机器上跑通，产出
+`harmony/entry/src/main/resources/rawfile/hermes_bundle.hbc`（约 2.1 MB，Hermes 字节码），
+`Index.ets` 的发布态 `ResourceJSBundleProvider(..., 'hermes_bundle.hbc')` 就读它。
+
+> RN 0.84 把 `hermesc` 从 `react-native/sdks/hermesc` 移到了独立包 `hermes-compiler`，
+> CLI 的默认路径找不到会报 `Couldn't find hermesc at .../react-native/sdks/hermesc/win64-bin/hermesc.exe`。
+> `package.json` 的 `harmony` 脚本已显式带 `--hermesc-dir node_modules/hermes-compiler/hermesc`。
+
+**HAP 仍然只能在 DevEco 里编译**：`ohpm install` + `hvigorw assembleHap` 依赖 HarmonyOS SDK
+与华为账号签名，纯 npm 环境无法替代。
+
 ## ArkTS 节点服务（当前边界）
 
 `NodeService.ets` / `MediaPipeline.ets` 已实现：

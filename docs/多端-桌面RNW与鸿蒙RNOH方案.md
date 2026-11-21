@@ -79,7 +79,8 @@ apps/desktop-rn/
   （RNW 0.76+ 已废弃 `react-native-windows-init`），需要 PowerShell 7、.NET SDK 8+、
   VS2022 + C++ 工作负载 + Windows SDK。`init-windows` 在加载时会调用 `pwsh`，缺它时命令不会出现在
   `npx react-native --help` 中。
-- 本地节点走 `starstack-worker.exe`：沿用当前 WPF 的 `WorkerHost` 逻辑，改成 RNW TurboModule（C#/C++）。
+- 本地节点走 `starstack-worker.exe`：已从 WPF 的 `StartWorkerAsync` 搬成 RNW TurboModule
+  （`native/StarStackDesktopModule.cpp`，CreateProcessW + JobObject + stderr 解析）。
 
 ## 五、鸿蒙 RNOH 工程（下一步）
 
@@ -102,6 +103,28 @@ apps/harmony-rn/
   与 Android Kotlin 实现共用 Broker 契约，不共用代码。
 - Broker 侧还需要登记 `harmony` 平台（`launchOS` / `policy.launch_harmony` / 调度匹配），否则节点注册了也接不到活。
 - 构建需要 DevEco Studio 5.x + HarmonyOS SDK + hvigor + 签名证书。
+
+## 六、实施状态（2026-11-20 实测）
+
+| 链路 | 状态 | 说明 |
+|---|---|---|
+| desktop-rn：依赖 + 类型检查 | ✅ 通过 | `npm ci` / `npm run typecheck` |
+| desktop-rn：`windows/` 原生工程 | ✅ 已生成 | `init-windows --template cpp-app`，`apply-native.ps1` 已注入原生模块 |
+| desktop-rn：Metro 打包（windows） | ✅ 通过 | 修复 `metro.config.js` 被模板覆盖导致 `watchFolders` 丢失的问题 |
+| desktop-rn：MSVC 原生编译 | ✅ CI 通过（2026-11-21） | `.github/workflows/desktop-rn.yml`（windows-latest）出 `StarStack-Desktop-RN.zip`（21 MB）；本机 Win10 19045 仍不可行（VS 2026 装不齐 UWP VC 组件） |
+| harmony-rn：依赖 + 类型检查 | ✅ 通过 | `npm ci` / `npm run typecheck` |
+| harmony-rn：HBC bundle | ✅ 通过 | `npm run harmony` → `rawfile/hermes_bundle.hbc`（2.1 MB） |
+| harmony-rn：HAP 编译 | ⛔ 本机不可行 | 必须 DevEco Studio 5.x + HarmonyOS SDK + 华为签名 |
+
+三条必须记住的坑：
+
+1. `init-windows --overwrite` 会覆盖 `metro.config.js`（丢 `watchFolders`），bundle 立刻报
+   `Unable to resolve ../mobile-rn/src/screens/Auth`。仓库的 `metro.config.js` 已合并 RNW 模板的
+   `blockList` / `transformer` 与共享源码配置；init 之后用 git 恢复。
+2. RNW 的 `run-windows` 调 vswhere 不带 `-products *`，只装 BuildTools 的实例会被忽略，
+   报 “No public VS release found”。直接用 MSBuild 编 `.vcxproj` 可绕开。
+3. RN 0.84 的 `hermesc` 在 `hermes-compiler` 包里，`bundle-harmony` 必须带
+   `--hermesc-dir node_modules/hermes-compiler/hermesc`。
 
 ## 六、构建节点 84 需要装的东西
 

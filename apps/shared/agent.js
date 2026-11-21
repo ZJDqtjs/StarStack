@@ -32,7 +32,7 @@ export const WEB_ROUTES = {
   },
 }
 
-// 移动端（React + Capacitor / 桌面 WebView / 鸿蒙 Web 壳）路由表。
+// 移动端（RN 安卓 / 桌面 WebView / 鸿蒙 Web 壳 / 小程序）路由表。
 // 移动端没有服务市场/发布/会话/总览视图：market 即算力市场（web 的 pool）。
 export const MOBILE_ROUTES = {
   nav: [

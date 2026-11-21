@@ -7,7 +7,11 @@
 - `harmony-rn/` — **鸿蒙原生端**（RNOH 0.84.6 + ArkTS 长时任务），复用同一套页面。
 - `miniapp/` — 原生微信小程序，覆盖需求方的 5 个页面 + 登录 + 星舷助手。
 - `shared/` — 接口客户端、类型约定、状态文案、格式化函数与 Agent 意图引擎。
-- `mobile/`、`desktop/`、`harmony/` — Capacitor / WPF+WebView2 / ArkWeb 时代的旧壳，**仅作历史对照**，不再作为交付形态。
+- `harmony/`（ArkWeb）— 仍在出货的鸿蒙壳，内嵌 `web-react/dist`，自身不含业务 UI。
+
+> Capacitor 时代那套（`mobile/` 界面、`android/` 工程、`capacitor.config.ts`）已于 2026-11-20 删除；
+> WPF + WebView2 桌面壳（`desktop/`）与其验收脚本 `scripts/verify-desktop-proxy.cjs` 于 2026-11-21
+> 删除，桌面端只留 `desktop-rn/`（RNW 原生）。都只在 git 历史里可查。
 
 后端已支持 `Authorization: Bearer <session token>`（登录响应里新增 `token` 字段）与 `/api/*` 的 CORS 预检，浏览器 Cookie 会话保持原样。
 
@@ -24,70 +28,49 @@
 
 ### 构建戳：判断「谁落后了」的唯一依据
 
-exe 与鸿蒙 rawfile 内嵌的都是**构建期快照**（`EmbeddedResource` / rawfile），
-web 改了不会自动流过去，而且不会报错。所以每份产物自带一枚戳：
+只有鸿蒙壳还在内嵌网页，而 rawfile 是**构建期快照**：web 改了不会自动流过去，而且不会报错。
+所以每份产物自带一枚戳：
 
-- `web-react/vite.config.js` 与 `apps/vite.config.ts` 用 vite `define` 注入 `__BUILD__`（pkg / sha / time），
-  同时落盘 `dist/build.json`。
-- 桌面端「关于」直接读内嵌的 `web/build.json`，显示这枚 exe 里装的是哪一版网页；
-  web 端在「设置 → 关于构建」。两处戳对不上 = 壳里的网页落后了。
-- `apps/desktop/StarStack.Desktop.csproj` 的 `EnsureWebBuildStamp` target 会拦下没有 `build.json`
-  的旧产物：旧网页无法被静默打进 exe。
+- `web-react/vite.config.js` 用 vite `define` 注入 `__BUILD__`（pkg / sha / time），
+  同时落盘 `dist/build.json`；web 端在「设置 → 关于构建」显示。
+- `apps/harmony/.../rawfile/web/build.json` 就是被内嵌的那一版：跑
+  `npm --prefix apps run sync:harmony` 后应能看到本次 commit。
 
-> **exe 与鸿蒙都取 `web-react/dist`**（唯一 UI 源）。`apps/mobile` 是 Capacitor 时代的旧界面，
-> 已废弃，不再被任何交付形态内嵌；`apps/android` 与 `capacitor.config.ts` 仅作历史保留。
+> 桌面端（`desktop-rn`）与 Android（`mobile-rn`）都是 RN 原生界面，不再内嵌网页，
+> 也就没有「壳里的网页落后」这一类问题。
 
 校验命令：`npm --prefix apps run verify:sync`（CI 里是 `多端控制台同步检查` job）。
-它按 **L0 交易主链**（登录/余额/提交/进度/下载/账单）逐端打分，并检查废弃 UI 有没有
-继续给交付形态供血（csproj 内嵌路径、鸿蒙 rawfile 来源、Capacitor 工程、发布流水线）。
+它按 **L0 交易主链**（登录/余额/提交/进度/下载/账单）逐端打分，并检查鸿蒙 rawfile 的
+同步源仍是 `web-react/dist`、`release.yml` 确实复用了桌面端工作流。
 
 ## 目录
 
 ```
 apps/
-  shared/            api.js / constants.js / format.js / agent.js（ESM，两端共用）
-  mobile/src/        React 页面：Auth, Submit, Jobs, Market, Vm, Nodes, ApiView(+AgentChat), Bill, Forum, Me
-  mobile/dist/       构建产物，被打进 APK 的本地资源
+  shared/            api.js / constants.js / format.js / agent.js（ESM，仅小程序用 sync:core 打包）
+  mobile-rn/         RN 安卓端：src/screens 全套页面 + modules/starstack-node（Kotlin 前台服务）
+  desktop-rn/        RNW 原生桌面端（桌面端唯一形态，CI 构建）
+  harmony/           ArkTS 壳，rawfile/web 内嵌 web-react/dist 的副本
   miniapp/           原生小程序；utils/core.js 由 shared/ 打包生成
-  android/           Capacitor 生成的安卓工程
-  harmony/           ArkTS 壳，rawfile/web 内嵌同一份 dist
-  desktop/           WPF + WebView2，csproj 编译期把 dist 嵌入 exe
   scripts/           verify-miniapp.cjs（Node 侧校验小程序）、sync-harmony.cjs（同步鸿蒙产物）
 ```
 
 ## 安卓
 
+手机端只有 `mobile-rn/`（React Native + Kotlin 前台 Service，本身也是算力节点）。
+`android/` 原生工程由 Expo prebuild 生成、不入库，构建细节见 [mobile-rn/README.md](mobile-rn/README.md)。
+
 ```bash
-cd apps
+cd apps/mobile-rn
 npm install
-
-# 浏览器里调 UI（Vite 代理到 STARSTACK_BROKER，默认公网演练环境）
-STARSTACK_BROKER=http://127.0.0.1:8787 npm run dev   # http://127.0.0.1:5173
-
-# 构建网页产物并同步进原生工程
-npm run build
-npx cap sync android
-
-# 打 debug APK（需要 JDK 17 与 Android SDK）
-cd android && ./gradlew assembleDebug
-# 产物：android/app/build/outputs/apk/debug/app-debug.apk
-
-# 或者一键：./android/apk.ps1（Windows）/ ./android/apk.sh（Linux/macOS）
-# 两个脚本现在都会先 npm run build + npx cap sync android 再跑 gradle，
-# 杜绝把上一次残留的旧 assets 打进 APK；无 npm 的纯构建节点退回用仓库产物并打印提示。
+npx expo prebuild --platform android --no-install
+cd android && ./gradlew :app:assembleRelease
+# 产物：android/app/build/outputs/apk/release/app-release.apk
 ```
 
-装到设备/模拟器：
-
-```bash
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.starstack.compute/.MainActivity
-```
-
-- APK 内是本地资源，不依赖远程网页；默认连 `https://starstack.run`，可在登录页或「我的 → 服务器地址」改。
-- `capacitor.config.ts` 里 `androidScheme: 'http'` + `cleartext: true`，否则 `https://localhost` 的页面会被混合内容规则拦住明文请求；`localhost` 仍是安全上下文，剪贴板等 API 可用。
-- Gradle 分发包在 `android/gradle/wrapper/gradle-wrapper.properties` 指向腾讯镜像（`services.gradle.org` 在部分网络下会重置连接）；换回官方源删掉该行即可。
-- 文件上传走 WebView 的原生选择器，大文件没有分片续传，移动端建议只传小样。
+- 必须走 `assembleRelease`：debug 变体不打包 JS bundle，装到手机上没有 Metro 就是白屏。
+- APK 默认连 `https://starstack.run`，可在登录页或「我的 → 服务器地址」改。
+- 文件上传没有分片续传，2 GB 以上的源片会失败，UI 里已提示改用桌面端。
 
 ## 小程序
 
@@ -111,10 +94,10 @@ adb shell am start -n com.starstack.compute/.MainActivity
 正式版上线前必须：域名备案 + HTTPS + 在微信后台配置 request 合法域名；`http://20.24.210.119:8787` 只能用于开发与体验版。
 
 `utils/core.js` 是 `shared/` 的 CommonJS 打包产物，改完 `shared/` 后重新生成；
-`harmony/.../rawfile/web` 是入库的 React 构建产物，改完 `mobile/` 后要同步。一条命令全做：
+`harmony/.../rawfile/web` 是入库的 React 构建产物，改完 `web-react/` 后要同步。一条命令全做：
 
 ```bash
-npm run sync:all     # = vite build + sync:core + sync:harmony
+npm run sync:all     # = build:web + sync:core + sync:harmony
 ```
 
 ## 校验
@@ -124,7 +107,8 @@ npm run sync:all     # = vite build + sync:core + sync:harmony
 STARSTACK_SAMPLE=/path/to/sample.mp4 STARSTACK_BROKER=http://127.0.0.1:8787 \
   node scripts/verify-miniapp.cjs
 
-cd apps && npx tsc --noEmit && npm run build
+# 多端 L0 契约 + 构建戳
+node scripts/verify-console-sync.cjs
 ```
 
 ## 编译打包（共享算力任务）
@@ -140,19 +124,13 @@ cd apps && npx tsc --noEmit && npm run build
 - 缺环境自动补齐：同意编译的启动包会同时带 `--auto-provision`（安装 .NET SDK 等）；任务脚本也可自行引导安装（参考本次桌面端 `build.cmd` 安装 .NET SDK 到 `%LOCALAPPDATA%\starstack-sdk`）。
 - 产物：`GET /download/<job-id>`，zip 内含 `build.log`。
 
-本次桌面端就是用这条链路构建的：源码包 → 1145 节点 → `dotnet publish` → `result.zip` → 在本机安装。
+早期桌面端就是用这条链路构建的：源码包 → 1145 节点 → `dotnet publish` → `result.zip` → 在本机安装。
 
 ### 桌面端产物形态
 
-`desktop/build.cmd` 现在发布**自包含单文件**：
-
-```
-dotnet publish StarStack.Desktop.csproj -c Release -r win-x64 \
-  --self-contained true -p:PublishSingleFile=true \
-  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
-```
-
-产物目录里只有一个 `StarStack.Desktop.exe`（约 70–90 MB），**双击即可运行**，不需要预装 .NET 运行时，也不需要先解压一堆 DLL。`install.bat` / `install.ps1` 只在需要开始菜单快捷方式和固定安装目录时使用，属于备选。
+桌面端只有 `desktop-rn/`（RNW 原生），由 `.github/workflows/desktop-rn.yml` 在
+`windows-latest` 上编译，产出 `StarStack-Desktop-RN.zip`（约 21 MB，解压即用）。
+WPF + WebView2 套壳（`desktop/`，自包含单文件 exe）已于 2026-11-21 删除。
 
 ## Linux 支持
 
@@ -161,16 +139,8 @@ dotnet publish StarStack.Desktop.csproj -c Release -r win-x64 \
 | 节点 Agent | ✅ | 静态二进制 `starstack-node`；节点包含 `start.sh`，解压后 `sh start.sh` 即加入 |
 | 一键接入启动脚本 | ✅ | 控制台会按目标系统生成 `.sh` |
 | 编译任务（build） | ✅ | worker 用 `sh -c` 执行命令；解压后会自动给 `.sh` 加执行位 |
-| Android 打包 | ✅ | `apps/android/apk.sh`：缺 JDK 17 / Android SDK 时自动下载到 `out/`，Gradle 走腾讯镜像 |
+| Android 打包 | ✅ | CI 的 `build-android` 在 ubuntu 上跑 Expo prebuild + Gradle；本地需要 JDK 17 与 Android SDK/NDK |
 | Web/小程序 | ✅ | Node/Vite 与微信开发者工具无关平台 |
 | Windows 桌面端 | ❌ | WPF + WebView2 只能 Windows 构建；如需 Linux 桌面端，应改 Avalonia（另起项目） |
 
-Linux 上跑 Android 的编译任务：
-
-```bash
-# 源码包根目录放 apk.sh（从 apps/android/apk.sh 复制），任务命令填:
-./apk.sh          # 解压时已自动 chmod +x；也可写 sh apk.sh
-# 输出目录 out 会得到 StarStack.apk
-```
-
-前置条件：`curl`、`unzip`、`tar`、网络可访问 dl.google.com / api.adoptium.net / 腾讯 Gradle 镜像。
+Android 打包的前置条件：`curl`、`unzip`、`tar`、网络可访问 dl.google.com / api.adoptium.net / 腾讯 Gradle 镜像。

@@ -111,7 +111,8 @@ PUT https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/workers/domains
 | 工作流 | 触发 | 做什么 |
 |---|---|---|
 | `ci.yml` | push 到 `main` / `dev`、PR 到 `main`、手动 | `gofmt` 检查、`go vet ./...`、`go test ./...`、欢迎页 JS 语法 + `verify-site.cjs`；`main` 上额外部署欢迎页 |
-| `release.yml` | push `v*` 标签、手动填 tag | 五条构建线并行：Go 六平台节点 + Broker / Web 控制台产物 / Windows 桌面 exe / Android APK / 小程序+鸿蒙源码包 → 汇总生成 `SHA256SUMS.txt` → 创建 GitHub Release → 刷新欢迎页 |
+| `release.yml` | push `v*` 标签、手动填 tag | 四条构建线并行：Go 六平台节点 + Broker / Windows RNW 桌面包 / Android APK / 小程序+鸿蒙源码包 → 汇总生成 `SHA256SUMS.txt` → 创建 GitHub Release → 刷新欢迎页 |
+| `desktop-rn.yml` | PR / push（`apps/desktop-rn/**` 变更）、手动 | 在 `windows-latest` 上 init-windows + MSBuild 编 RNW 0.84 桌面端，产出 `StarStack-Desktop-RN.zip`；被 `release.yml` 以 reusable workflow 复用 |
 
 `verify-site.cjs` 专门防一类事故：**页面下载清单与 CI 实际产出的文件名漂移**。
 它要求 `app.js` 的 `ASSETS`（12 个文件）与 `release.yml` 的构建目标完全一致，
@@ -121,16 +122,16 @@ PUT https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/workers/domains
 
 | 端 | Release 资产 | 形态 | 怎么构建 |
 |---|---|---|---|
-| Windows 桌面 | `StarStack.Desktop.exe` | 安装包（自包含单文件，约 70–90 MB） | `windows-latest` + .NET 8 跑 `dotnet publish`；csproj 把 `apps/mobile/dist` 内嵌进 exe，双击即用 |
-| Android | `StarStack.apk` | 安装包（debug，未签名上架） | `npx cap sync android` 同步 Web 资源后，复用仓库 `apps/android/apk.sh`（自动备 JDK 17 + Android SDK）跑 `assembleDebug` |
+| Windows 桌面 | `StarStack-Desktop-RN.zip` | 压缩包（RNW 原生端，约 21 MB，已内嵌 JS bundle） | `desktop-rn.yml`：`windows-latest` 上 `init-windows` + `run-windows --release`；旧的 WPF 套壳 `StarStack.Desktop.exe` 已停止发布 |
+| Android | `StarStack-RN.apk` | 安装包（release，内嵌 JS bundle） | `apps/mobile-rn` 跑 `expo prebuild` + `gradlew :app:assembleRelease`（JDK 17 + Android SDK/NDK） |
 | 微信小程序 | `starstack-miniapp-source.zip` | **源码包** | 直接打包 `apps/miniapp`；`appid` 是 `touristappid` 测试号，需用微信开发者工具「导入项目」 |
-| HarmonyOS NEXT | `starstack-harmony-source.zip` | **源码包** | 直接打包 `apps/harmony`（ArkTS 壳 + 已内嵌的 `rawfile/web`）；HAP 需 DevEco Studio 5.x + 华为账号自动签名，CI 构建不了 |
+| HarmonyOS NEXT | `starstack-harmony-source.zip` | **源码包** | 打包 `apps/harmony`（ArkTS 壳 + 已内嵌的 `rawfile/web`）与 `apps/harmony-rn`（RNOH）；CI 会先跑 `npm run harmony` 预生成 `hermes_bundle.hbc` 一起打进去，HAP 本身仍需 DevEco Studio 5.x + 华为账号签名 |
 | 算力节点 | 6 个 `starstack-worker-*` + `starstack-server-linux-amd64` | Go 静态二进制 | 纯交叉编译，最快最稳 |
 
 小程序和鸿蒙刻意标成**源码包**：微信里不存在「下载安装小程序」这回事，鸿蒙 HAP 也必须在
 DevEco 里签名。页面 `download-legend` 把这两条限制写在明处，不给伪安装包。
 
-`build-desktop` / `build-android` 带 `continue-on-error` 与超时（25 / 40 分钟），
+`build-desktop-rn` / `build-android` 带 `continue-on-error` 与超时，
 **只有 Go 门禁失败才会阻断发布** —— 工具链下载挂了时，Release 仍然带着 Go 产物发出去，
 页面把缺失的那张卡标成「该版本未包含」，不会出现死链。
 
@@ -179,7 +180,7 @@ git tag v0.1.0 && git push origin v0.1.0
 **改了页面文案，要重新打标签吗？** 不用。push 到 `main` 就会重新部署；
 下载区版本号是访客浏览器实时读 GitHub API 的，与页面部署无关。
 
-**某次 Release 少了 exe 或 APK 怎么办？** 说明 `build-desktop` / `build-android` 这两条重工具链
+**某次 Release 少了桌面包或 APK 怎么办？** 说明 `build-desktop-rn` / `build-android` 这两条重工具链
 任务失败了（多在下载 .NET 8 / Android SDK 或 Gradle 依赖时超时）。Go 产物和源码包照常发布，
 页面会把缺的卡标成「该版本未包含」。到 Actions 里点 Retry 重跑失败任务，或按 `apps/README.md`
 本地构建后手动上传资产即可——`SHA256SUMS.txt` 是汇总时统一生成的，手动补传的话记得一起更新。
