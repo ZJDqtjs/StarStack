@@ -44,5 +44,8 @@ apps/desktop-rn/windows/
 # 本地起一个临时 Broker 做联调时留下的库与密钥
 tmp-broker/
 
+# 发布包验证产物（解压目录与 SHA256 校验文件，构建后可删）
+tmp-verify/
+
 #私密
 api.json
