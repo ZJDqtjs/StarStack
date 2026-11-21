@@ -8,11 +8,23 @@ name: Desktop (RNW)
 # 的镜像把这些都装好了，所以编译放 CI。
 #
 # workflow_call 给 release.yml 复用；workflow_dispatch 用来单独验证。
+# 路径过滤：只有动到 RNW 工程（或本文件）才跑，避免每次 push 都占 15 分钟 Windows runner。
+# 注意不要在 gh workflow run 之前指望它出现在默认分支 —— GitHub 只认默认分支上的可调度工作流，
+# 所以验证走 PR（pull_request 用的是分支里的这份文件）。
 on:
   workflow_call:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/desktop-rn/**'
+      - '.github/workflows/desktop-rn.yml'
+      - '.github/workflows/release.yml'
   push:
-    tags: ['v*']
+    branches: [main, dev]
+    paths:
+      - 'apps/desktop-rn/**'
+      - '.github/workflows/desktop-rn.yml'
 
 permissions:
   contents: read
