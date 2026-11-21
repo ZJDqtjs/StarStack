@@ -120,7 +120,14 @@ jobs:
           path: dist/dl/*
           if-no-files-found: warn
 
-  # ── 4. Android：RN 原生端（Expo prebuild + Gradle） ────────────
+  # ── 4. Windows 桌面：RNW 原生端（实验，复用 desktop-rn.yml） ───
+  # 旧的 WPF 套壳（apps/desktop）已作为交付形态下线；这里出的是 RNW 0.84 的原生 exe。
+  # 用 reusable workflow 而不是把步骤抄一遍：本地 Win10 编不出来，CI 是唯一验证入口。
+  build-desktop-rn:
+    name: Windows 桌面 RN 端（RNW）
+    uses: ./.github/workflows/desktop-rn.yml
+
+  # ── 5. Android：RN 原生端（Expo prebuild + Gradle） ────────────
   # 手机端唯一形态是 apps/mobile-rn（RN 界面 + Kotlin 前台 Service，同时是算力节点）。
   # 老的 Capacitor 包（apps/android + apps/mobile）已废弃停发：界面旧、还和 RN 包同名，
   # 两个包一起发出去只会让人下错。
@@ -216,11 +223,11 @@ jobs:
           if-no-files-found: error
 
   # ── 6. 汇总发布 ───────────────────────────────────────────────
-  # 重工具链的三个 job 允许失败；只有 Go 门禁失败才阻断发布。
+  # 重工具链的四个 job 允许失败；只有 Go 门禁失败才阻断发布。
   # 缺哪端资产，页面会把它标成「该版本未包含」，不会给出死链。
   publish:
     name: 汇总发布 GitHub Release
-    needs: [build-go, build-desktop, build-android, build-sources]
+    needs: [build-go, build-desktop, build-desktop-rn, build-android, build-sources]
     if: ${{ always() && needs.build-go.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
@@ -242,7 +249,8 @@ jobs:
           set -euo pipefail
           cd dist/dl
           missing=0
-          for f in StarStack.Desktop.exe StarStack-RN.apk starstack-server-linux-amd64 \
+          for f in StarStack.Desktop.exe StarStack-Desktop-RN.zip StarStack-RN.apk \
+                   starstack-server-linux-amd64 \
                    starstack-miniapp-source.zip starstack-harmony-source.zip; do
             if [ ! -f "$f" ]; then
               echo "::warning::本版缺少 $f（对应构建 job 失败或被跳过）"
@@ -269,11 +277,15 @@ jobs:
           generate_release_notes: true
           body: |
             由 `.github/workflows/release.yml` 自动构建：Go 六平台节点 + Linux Broker、
-            Windows 桌面单文件 exe、Android 安装包、微信小程序与 HarmonyOS 源码包。
+            Windows 桌面单文件 exe、Windows RNW 原生端、Android 安装包、
+            微信小程序与 HarmonyOS 源码包。
 
             - `SHA256SUMS.txt` 覆盖本版全部文件，用 `sha256sum -c SHA256SUMS.txt` 校验。
             - 微信小程序包是**源码**，用微信开发者工具「导入项目」打开（`touristappid` 为测试号）。
             - HarmonyOS 包是**源码**，需 DevEco Studio 5.x（API 12+）+ 华为账号自动签名。
+            - **Windows RNW（`StarStack-Desktop-RN.zip`）**：`react-native-windows` 原生桌面端
+              （不是 WebView 套壳），release 变体已内嵌 JS bundle，解压后双击
+              `StarStackDesktop.exe` 即可；需要与 `starstack-worker.exe` 放同目录才能开本机节点。
             - **Android（`StarStack-RN.apk`）**：RN + Kotlin 前台服务同一份安装包，release 变体已内嵌
               JS bundle，装上就能跑、不需要 Metro；arm64-v8a，minSdk 24。签名沿用工程内的 debug
               keystore（内测/自用），上架应用商店前必须换正式签名。

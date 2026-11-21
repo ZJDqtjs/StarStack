@@ -1,0 +1,88 @@
+name: Desktop (RNW)
+
+# Windows 桌面端（react-native-windows 0.84）。
+#
+# 为什么单独一个工作流：RNW 0.84.2 的门槛是 VS 18.6+（VS 2026），且它自带的包工程
+# 声明 ApplicationType=Windows Store，要 VC 的 UWP 生成工具组件 —— 这两件在
+# Windows 10 开发机上装不齐（详见 apps/desktop-rn/README.md）。windows-latest
+# 的镜像把这些都装好了，所以编译放 CI。
+#
+# workflow_call 给 release.yml 复用；workflow_dispatch 用来单独验证。
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-rn-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Windows 桌面端（RNW / release）
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/desktop-rn
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop-rn/package-lock.json
+
+      # init-windows / MSBuild 之后 RNW 的 targets 会用 dotnet 做 nuget 还原
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: npm ci
+        run: npm ci --no-audit --no-fund
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 生成 windows/ 原生工程
+        # init-windows 会用 RNW 模板覆盖 metro.config.js，覆盖后 watchFolders 为空，
+        # bundle 会报 “Unable to resolve ../mobile-rn/src/screens/Auth”。
+        # 所以生成完必须把仓库里那份合并过的配置恢复回来。
+        run: |
+          npx react-native init-windows --overwrite --template cpp-app --name StarStackDesktop --namespace StarStackDesktop --no-telemetry
+          git checkout -- metro.config.js
+          node -e "const c=require('./metro.config.js'); if(!c.watchFolders.length) throw new Error('metro.config.js 的 watchFolders 丢了'); console.log('watchFolders:', c.watchFolders)"
+
+      - name: 注入星栈原生模块
+        shell: pwsh
+        run: ./scripts/apply-native.ps1
+
+      # --release：把 JS bundle 打进产物，装到机器上不需要 Metro
+      - name: 编译（release）
+        run: npx react-native run-windows --release --no-launch --no-deploy --logging
+
+      - name: 收集产物
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path windows -Recurse -Filter StarStackDesktop.exe |
+            Where-Object { $_.FullName -notmatch '\\obj\\' } |
+            Select-Object -First 1
+          if (-not $exe) { throw '找不到 StarStackDesktop.exe：编译没有产出可执行文件' }
+          $dir = $exe.Directory.FullName
+          Write-Host "产物目录：$dir"
+          Get-ChildItem $dir | Select-Object Name, Length
+          New-Item -ItemType Directory -Force ../../dist/dl | Out-Null
+          Compress-Archive -Path (Join-Path $dir '*') `
+            -DestinationPath ../../dist/dl/StarStack-Desktop-RN.zip -Force
+          Get-Item ../../dist/dl/StarStack-Desktop-RN.zip | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-desktop-rn
+          path: dist/dl/StarStack-Desktop-RN.zip
+          if-no-files-found: error

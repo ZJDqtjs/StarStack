@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "react-native start",
-    "harmony": "react-native bundle-harmony --dev false --js-engine hermes --entry-file index.js --bundle-output harmony/entry/src/main/resources/rawfile/hermes_bundle.hbc --assets-dest harmony/entry/src/main/resources/rawfile/assets",
+    "harmony": "react-native bundle-harmony --dev false --js-engine hermes --hermesc-dir node_modules/hermes-compiler/hermesc --entry-file index.js --bundle-output harmony/entry/src/main/resources/rawfile/hermes_bundle.hbc --assets-dest harmony/entry/src/main/resources/rawfile/assets",
     "harmony:debug": "react-native bundle-harmony --dev true --entry-file index.js --bundle-output harmony/entry/src/main/resources/rawfile/bundle.harmony.js --assets-dest harmony/entry/src/main/resources/rawfile/assets",
     "typecheck": "tsc --noEmit"
   },

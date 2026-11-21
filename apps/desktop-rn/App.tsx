@@ -85,10 +85,8 @@ export default function App() {
       try {
         const [m] = await Promise.all([getTheme(), loadSession()])
         setMode(m)
-        if (await loadSession().then(() => true).catch(() => false)) {
-          // token 由 loadSession 灌进内存；没有 token 时 refresh 会返回 signed_in=false
-          await refresh()
-        }
+        // token 由 loadSession 灌进内存；没有 token 时 refresh 会返回 signed_in=false
+        await refresh()
       } catch {
         // 启动阶段网络不可用不阻塞登录页
       } finally {

@@ -103,6 +103,28 @@ apps/harmony-rn/
 - Broker 侧还需要登记 `harmony` 平台（`launchOS` / `policy.launch_harmony` / 调度匹配），否则节点注册了也接不到活。
 - 构建需要 DevEco Studio 5.x + HarmonyOS SDK + hvigor + 签名证书。
 
+## 六、实施状态（2026-11-20 实测）
+
+| 链路 | 状态 | 说明 |
+|---|---|---|
+| desktop-rn：依赖 + 类型检查 | ✅ 通过 | `npm ci` / `npm run typecheck` |
+| desktop-rn：`windows/` 原生工程 | ✅ 已生成 | `init-windows --template cpp-app`，`apply-native.ps1` 已注入原生模块 |
+| desktop-rn：Metro 打包（windows） | ✅ 通过 | 修复 `metro.config.js` 被模板覆盖导致 `watchFolders` 丢失的问题 |
+| desktop-rn：MSVC 原生编译 | ⛔ 本机不可行 | RNW 0.84.2 要求 VS 18.6+；其包工程还要 UWP VC 生成工具。Win10 19045 上装不齐 |
+| harmony-rn：依赖 + 类型检查 | ✅ 通过 | `npm ci` / `npm run typecheck` |
+| harmony-rn：HBC bundle | ✅ 通过 | `npm run harmony` → `rawfile/hermes_bundle.hbc`（2.1 MB） |
+| harmony-rn：HAP 编译 | ⛔ 本机不可行 | 必须 DevEco Studio 5.x + HarmonyOS SDK + 华为签名 |
+
+三条必须记住的坑：
+
+1. `init-windows --overwrite` 会覆盖 `metro.config.js`（丢 `watchFolders`），bundle 立刻报
+   `Unable to resolve ../mobile-rn/src/screens/Auth`。仓库的 `metro.config.js` 已合并 RNW 模板的
+   `blockList` / `transformer` 与共享源码配置；init 之后用 git 恢复。
+2. RNW 的 `run-windows` 调 vswhere 不带 `-products *`，只装 BuildTools 的实例会被忽略，
+   报 “No public VS release found”。直接用 MSBuild 编 `.vcxproj` 可绕开。
+3. RN 0.84 的 `hermesc` 在 `hermes-compiler` 包里，`bundle-harmony` 必须带
+   `--hermesc-dir node_modules/hermes-compiler/hermesc`。
+
 ## 六、构建节点 84 需要装的东西
 
 | 用途 | 工具 |
