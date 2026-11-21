@@ -75,14 +75,18 @@ jobs:
         run: ./scripts/apply-native.ps1
 
       # --release：把 JS bundle 打进产物，装到机器上不需要 Metro。
-      # 两个属性是为第三方 Windows 工程兜底：
+      # 几个属性各有原因：
       #   - react-native-svg 的 RNSVG.vcxproj 硬写 PlatformToolset=v143 + ApplicationType=Windows Store，
       #     runner 上没装 v143 的 UWP 生成工具，会报 MSB8020；强制到 v145（VS 18 自带）。
-      #   - @react-native-async-storage 的 WindowsAppSDK 传递依赖校验会直接报 error，按官方提示关掉。
+      #   - @react-native-async-storage 的 WindowsAppSDK 传递依赖校验直接报 error，按官方提示关掉。
+      #   - SDK 统一到 26100：它的工程钉的是 runner 上没有的 22621。
+      #   - WindowsPackageType=None + WindowsAppSDKSelfContained=true：默认按 MSIX 打包编译，
+      #     直接双击 exe 会因为没有包身份在启动时 fail-fast（0xC0000409）。改免安装 + 自带
+      #     WinAppSDK 运行时，解压即用，用户不用先装 Windows App Runtime。
       - name: 编译（release）
         run: >
           npx react-native run-windows --release --arch x64 --no-launch --no-deploy --logging
-          --msbuildprops "PlatformToolset=v145,PlatformToolsetVersion=145,WindowsTargetPlatformVersion=10.0.26100.0,TargetPlatformVersion=10.0.26100.0,WindowsAppSDKVerifyTransitiveDependencies=false"
+          --msbuildprops "PlatformToolset=v145,PlatformToolsetVersion=145,WindowsTargetPlatformVersion=10.0.26100.0,TargetPlatformVersion=10.0.26100.0,WindowsAppSDKVerifyTransitiveDependencies=false,WindowsPackageType=None,WindowsAppSDKSelfContained=true"
 
       - name: 收集产物
         shell: pwsh
