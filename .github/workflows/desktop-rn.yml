@@ -94,8 +94,22 @@ jobs:
           $dir = $exe.Directory.FullName
           Write-Host "产物目录：$dir"
           Get-ChildItem $dir | Select-Object Name, Length
+
+          # 去掉调试符号再打包（Release 也会生成 pdb/ilk，白占十几 MB）
+          $stage = Join-Path $env:RUNNER_TEMP 'rnw-stage'
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Get-ChildItem $dir -Recurse -File |
+            Where-Object { $_.Extension -notin '.pdb', '.ilk', '.exp' } |
+            ForEach-Object {
+              $rel = $_.FullName.Substring($dir.Length).TrimStart('\')
+              $dst = Join-Path $stage $rel
+              New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
+              Copy-Item $_.FullName $dst -Force
+            }
+
           New-Item -ItemType Directory -Force ../../dist/dl | Out-Null
-          Compress-Archive -Path (Join-Path $dir '*') `
+          Compress-Archive -Path (Join-Path $stage '*') `
             -DestinationPath ../../dist/dl/StarStack-Desktop-RN.zip -Force
           Get-Item ../../dist/dl/StarStack-Desktop-RN.zip | Select-Object Name, Length
 
