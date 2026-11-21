@@ -26,7 +26,7 @@ export default function Api({ tab }) {
       setKeys(k.keys || []); setUps(u.upstreams || []); setCat(c.models || []); setUsage(g)
       if (c.models && c.models.length) {
         const m = c.models.find(x => x.official) || c.models[0]
-        setModel(prev => prev || m.id); setExModel(prev => prev || m.id)
+        setExModel(prev => prev || m.id)
       }
     } catch (e) {}
   }, [])

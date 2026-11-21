@@ -17,9 +17,48 @@ SSH="ssh -i $KEY -o StrictHostKeyChecking=accept-new $USER_NAME@$HOST"
 # 表现就是 useradd/install 报 Permission denied 而脚本继续往下走。
 sudo_run() { $SSH 'sudo bash -s' <<< "$1"; }
 
-echo "== 1/5 交叉编译 =="
+echo "== 1/5 前端构建与交叉编译 =="
 cd ..
+
+# 默认把 web-react 生产构建产物自动内嵌进 starstack-server（WEB_UI=embedded 可回退零构建单页）。
+# 构建前先备份 internal/hub/web，退出时无条件还原，避免部署脚本污染 git 工作区。
+WEB_UI="${WEB_UI:-react}"
+WEB_BACKUP=""
+restore_web() {
+  if [ -n "$WEB_BACKUP" ] && [ -d "$WEB_BACKUP" ]; then
+    rm -rf internal/hub/web
+    mv "$WEB_BACKUP" internal/hub/web
+    WEB_BACKUP=""
+  fi
+}
+trap restore_web EXIT
+
+if [ "$WEB_UI" = "react" ]; then
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "缺少 npm，无法构建 web-react（如需临时回退内嵌单页可传 WEB_UI=embedded）"
+    exit 1
+  fi
+  if [ ! -d web-react/node_modules ]; then
+    npm --prefix web-react ci || exit 1
+  fi
+  npm --prefix web-react run build || exit 1
+  if [ ! -f web-react/dist/index.html ] || [ ! -f web-react/dist/build.json ]; then
+    echo "web-react/dist 缺少 index.html 或 build.json，中止部署"
+    exit 1
+  fi
+  WEB_BACKUP="$(mktemp -d "${TMPDIR:-/tmp}/starstack-web-bak.XXXXXX")"
+  rm -rf "$WEB_BACKUP"
+  cp -a internal/hub/web "$WEB_BACKUP" || exit 1
+  rm -rf internal/hub/web
+  mkdir -p internal/hub/web || exit 1
+  cp -a web-react/dist/. internal/hub/web/ || exit 1
+  echo "已内嵌 web-react 构建产物：$(cat web-react/dist/build.json | tr -d '\n')"
+else
+  echo "WEB_UI=$WEB_UI：沿用 internal/hub/web/ 零构建内嵌页面"
+fi
+
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o dist/linux-amd64/starstack-server ./cmd/server || exit 1
+restore_web
 # 节点程序是网页「一键提供算力」要下发的东西，六个平台都得有；
 # -s -w 剥掉符号表和 DWARF，20MB 出头的二进制在慢出口上少下载几分钟。
 for t in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64; do
