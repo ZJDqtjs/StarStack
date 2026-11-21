@@ -349,9 +349,23 @@ export default function Workbench({ svc }) {
                     <span>预扣</span><span className="big">{f2(est.hold)}</span><span className="q-unit">点</span>
                     <span className="q-basis">{est.hold_basis} {f2(est.hold_price)} 点/{est.unit}</span>
                   </div>
+                  {est.first_pick && (
+                    <div className="q-line" style={{ marginTop: 6 }}>
+                      预期首选派发：<b>{est.first_pick.name || est.first_pick.id}</b>
+                      {' · '}<span className="num">{f2(est.first_pick.price)}</span> 点/{est.unit}
+                      {est.first_pick.speed > 0 ? <> · 实测 <span className="num">{f2(est.first_pick.speed)}×</span></> : null}
+                      {est.duration > 0 ? <>（按此单价约 <b className="num">{f2(est.duration * est.first_pick.price)}</b> 点）</> : null}
+                    </div>
+                  )}
+                  {est.cheapest > 0 && est.cheapest < est.hold && (
+                    <div className="q-line">最省可达约 <b className="num">{f2(est.cheapest)}</b> 点 · 预扣按最贵可行节点保守预留，实结后退差</div>
+                  )}
                   <div className="q-line">余额 {f2(est.balance)} 点 {est.affordable ? '· 足够' : '· 不足，请到钱包充值'}</div>
                   {est.eligible > 0
-                    ? <div className="q-nodes">{est.nodes.map(n => <Tag key={n.name} tone={n.mine ? 'mine' : ''}>{n.name} · {f2(n.price)} 点/{est.unit}</Tag>)}</div>
+                    ? <div className="q-nodes">{est.nodes.map(n => {
+                      const isPick = est.first_pick && est.first_pick.id === n.id
+                      return <Tag key={n.id || n.name} tone={isPick ? 'on' : (n.mine ? 'mine' : '')}>{isPick ? '★ ' : ''}{n.name} · {f2(n.price)} 点/{est.unit}</Tag>
+                    })}</div>
                     : <div className="q-warn">没有在线节点满足要求，任务会排队等待。</div>}
                 </>
               )}

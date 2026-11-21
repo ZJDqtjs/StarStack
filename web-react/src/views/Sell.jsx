@@ -5,7 +5,8 @@ import { Card, Tabs, Btn, Tag, Empty, Chip, Field } from '../ui.jsx'
 import { OfferCard } from './Market.jsx'
 import { api, post, href, f2, CAT_LABEL } from '../api.js'
 
-const UNITS = ['点/次', '点/千 token', '点/视频秒', '点/小时', '点/帧']
+const UNITS = ['点/次', '点/千 token', '点/视频秒', '点/帧', '点/分钟', '点/小时']
+const CAT_DEFAULT_UNIT = { api: '点/千 token', image: '点/次', video: '点/次', render: '点/视频秒', build: '点/分钟' }
 const parsePorts = s => {
   const out = []
   for (const raw of String(s || '').split(',').map(x => x.trim()).filter(Boolean)) {
@@ -46,7 +47,23 @@ export default function Sell({ tab }) {
   const myNodes = workers.filter(w => w.mine)
   const vmNodes = myNodes.filter(w => w.vm && w.online)
   const selNode = workers.find(w => w.id === v.node)
+  const boundNode = f.auto && f.node ? myNodes.find(w => w.id === f.node) : null
   const mine = offers.filter(o => o.mine)
+
+  // 自动共享绑定节点时，挂牌价与节点实时单价对齐，避免挂牌价和实际结算价割裂
+  useEffect(() => {
+    if (boundNode && boundNode.price > 0) {
+      setF(x => {
+        const p = String(boundNode.price)
+        return x.price === p ? x : { ...x, price: p }
+      })
+    }
+  }, [boundNode && boundNode.id, boundNode && boundNode.price])
+
+  const pickCat = c => {
+    setCat(c)
+    if (CAT_DEFAULT_UNIT[c]) setF(x => ({ ...x, unit: CAT_DEFAULT_UNIT[c] }))
+  }
 
   const publish = async () => {
     if (!f.title.trim()) { setMsg('标题不能为空'); return }
@@ -59,15 +76,13 @@ export default function Sell({ tab }) {
     }
     const fd = new FormData()
     fd.set('category', cat); fd.set('title', f.title.trim()); fd.set('body', f.body.trim()); fd.set('spec', f.spec.trim())
-    fd.set('price', f.price || '0'); fd.set('unit', f.unit)
+    fd.set('price', boundNode ? String(boundNode.price) : (f.price || '0')); fd.set('unit', f.unit)
     if (f.auto) { fd.set('auto_share', '1'); if (f.node) fd.set('node_id', f.node); if (Object.keys(tpl).length) fd.set('scene', JSON.stringify(tpl)) }
     if (cover) fd.append('image', cover)
     setMsg('发布中…')
     try {
-      const r = await fetch(href('/api/offers'), { method: 'POST', body: fd })
-      const txt = await r.text(); let d = null; try { d = JSON.parse(txt) } catch (e) {}
-      if (!r.ok) throw (d && d.error) || txt
-      setF({ title: '', price: '0.8', unit: '点/次', spec: '', body: '', auto: false, node: '', scene: '', frames: '', samples: '' })
+      await api('/api/offers', { method: 'POST', body: fd })
+      setF({ title: '', price: '0.8', unit: CAT_DEFAULT_UNIT[cat] || '点/次', spec: '', body: '', auto: false, node: '', scene: '', frames: '', samples: '' })
       setCover(null); setCoverUrl(''); setMsg('')
       toast('已发布，服务市场里已经能看到这条服务', 'ok', '发布成功')
       loadOffers(); setT('mine')
@@ -117,10 +132,12 @@ export default function Sell({ tab }) {
       {t === 'publish' && (
         <Card kicker="Publish" title="发布你的服务">
           <label>服务类型</label>
-          <div className="chips">{Object.keys(CAT_LABEL).map(c => <Chip key={c} cat={c} on={cat === c} onClick={() => setCat(c)}><i className="cdot" />{CAT_LABEL[c]}</Chip>)}</div>
+          <div className="chips">{Object.keys(CAT_LABEL).map(c => <Chip key={c} cat={c} on={cat === c} onClick={() => pickCat(c)}><i className="cdot" />{CAT_LABEL[c]}</Chip>)}</div>
           <div className="row">
             <Field label="标题"><input maxLength={80} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="例如 4090 双卡 · Flux 出图" /></Field>
-            <Field label="单价（算力点）"><input type="number" min="0" step="0.01" value={f.price} onChange={e => setF({ ...f, price: e.target.value })} /></Field>
+            <Field label={boundNode ? '单价（已与绑定节点同步）' : '单价（算力点）'} hint={boundNode ? `实际结算按节点「${boundNode.name || boundNode.id}」实时单价 ${f2(boundNode.price)} 点执行，改价请到「我的节点」。` : undefined}>
+              <input type="number" min="0" step="0.01" value={boundNode ? String(boundNode.price) : f.price} readOnly={!!boundNode} disabled={!!boundNode} onChange={e => setF({ ...f, price: e.target.value })} />
+            </Field>
           </div>
           <div className="row">
             <Field label="计价单位"><select value={f.unit} onChange={e => setF({ ...f, unit: e.target.value })}>{UNITS.map(u => <option key={u}>{u}</option>)}</select></Field>
