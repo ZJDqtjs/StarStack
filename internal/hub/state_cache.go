@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"starstack/internal/ffx"
 	"starstack/internal/store"
 )
 
@@ -41,6 +42,11 @@ func stateETag(u *store.User, payload map[string]any) string {
 				c["parked_sec"] = v / bucketSeconds
 			} else {
 				delete(c, "parked_sec")
+			}
+			if cm, ok := c["comfy_models"].(*ffx.ComfyModels); ok && cm != nil {
+				cp := *cm
+				cp.UpdatedAt = 0
+				c["comfy_models"] = &cp
 			}
 			cleaned = append(cleaned, c)
 		}

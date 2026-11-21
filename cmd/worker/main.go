@@ -149,10 +149,13 @@ func main() {
 		info.Runtimes = append(info.Runtimes,
 			ffx.Runtime{Name: "comfyui", Version: "1", Path: *comfyURL})
 		log.Printf("ComfyUI 任务已启用：平台派发的 prompt 图将在 %s 上执行（--allow-comfy）", *comfyURL)
-		if err := comfyProbe(context.Background(), *comfyURL); err != nil {
-			log.Printf("警告：%s 现在连不上（%v）。ComfyUI 启动后无需重启节点，下一次派发会自动重试", *comfyURL, err)
+		models := comfyProbeModels(context.Background(), *comfyURL)
+		info.ComfyModels = models
+		if models == nil || !models.Reachable {
+			log.Printf("警告：%s 现在连不上。ComfyUI 启动后无需重启节点，后台会自动刷新模型列表并参与派发", *comfyURL)
 		} else {
-			log.Printf("ComfyUI 自检通过：%s/system_stats 可访问", strings.TrimRight(*comfyURL, "/"))
+			log.Printf("ComfyUI 自检通过：%s/system_stats 可访问（Checkpoint %d 个，LoRA %d 个）",
+				strings.TrimRight(*comfyURL, "/"), len(models.Checkpoints), len(models.LoRAs))
 		}
 	}
 	if *vmOn {
@@ -822,7 +825,24 @@ func (a *agent) postJSON(url string, v any, asNode bool) ([]byte, error) {
 func (a *agent) reannounce() {
 	t := time.NewTicker(10 * time.Second)
 	defer t.Stop()
+	tick := 0
 	for range t.C {
+		tick++
+		// Refresh local ComfyUI model summary once a minute so newly installed
+		// checkpoints/LoRAs (or a ComfyUI started after the worker) surface
+		// automatically in the compute pool without restarting the agent.
+		if a.comfyURL != "" && tick%6 == 0 {
+			m := comfyProbeModels(context.Background(), a.comfyURL)
+			a.mu.Lock()
+			if !comfyModelsEqual(a.lastHello.ComfyModels, m) {
+				a.lastHello.ComfyModels = m
+				if m != nil && m.Reachable {
+					log.Printf("ComfyUI 模型摘要已刷新：Checkpoint %d 个，LoRA %d 个",
+						len(m.Checkpoints), len(m.LoRAs))
+				}
+			}
+			a.mu.Unlock()
+		}
 		if _, _, err := a.hello(); err != nil {
 			log.Printf("re-announce: %v", err)
 		}

@@ -687,7 +687,70 @@ func (s *Server) handleMarket(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, *b)
 	}
-	writeJSON(w, map[string]any{"slices": out})
+	type serviceBucket struct {
+		Service     string  `json:"service"`
+		Nodes       int     `json:"nodes"`
+		FreeSlots   int     `json:"free_slots"`
+		MinPrice    float64 `json:"min_price"`
+		MaxPrice    float64 `json:"max_price"`
+		Unit        string  `json:"unit"`
+		Checkpoints int     `json:"checkpoints,omitempty"`
+		LoRAs       int     `json:"loras,omitempty"`
+	}
+	svcs := map[string]*serviceBucket{
+		"blender": {Service: "blender", Unit: "点/帧"},
+		"build":   {Service: "build", Unit: "点/分钟"},
+		"comfyui": {Service: "comfyui", Unit: "点/次"},
+		"vm":      {Service: "vm", Unit: "点/小时"},
+	}
+	ckptSeen := map[string]bool{}
+	loraSeen := map[string]bool{}
+	addSvc := func(k string, free int, price float64) {
+		sb := svcs[k]
+		sb.Nodes++
+		sb.FreeSlots += free
+		if price > 0 {
+			if sb.MinPrice == 0 || price < sb.MinPrice {
+				sb.MinPrice = price
+			}
+			if price > sb.MaxPrice {
+				sb.MaxPrice = price
+			}
+		}
+	}
+	for _, wd := range s.workers {
+		if !wd.online() {
+			continue
+		}
+		free := wd.Slots - s.activeLocked(wd)
+		if free < 0 {
+			free = 0
+		}
+		if wd.hasRuntime("blender") {
+			addSvc("blender", free, wd.Price)
+		}
+		if wd.hasRuntime("build") {
+			addSvc("build", free, wd.Price)
+		}
+		if wd.hasRuntime("comfyui") {
+			addSvc("comfyui", free, wd.Price)
+			if wd.ComfyModels != nil && wd.ComfyModels.Reachable {
+				for _, c := range wd.ComfyModels.Checkpoints {
+					ckptSeen[strings.ToLower(c)] = true
+				}
+				for _, l := range wd.ComfyModels.LoRAs {
+					loraSeen[strings.ToLower(l)] = true
+				}
+			}
+		}
+		if wd.VM != nil {
+			addSvc("vm", wd.VM.MaxVMs, 0)
+		}
+	}
+	svcs["comfyui"].Checkpoints = len(ckptSeen)
+	svcs["comfyui"].LoRAs = len(loraSeen)
+	svcOut := []serviceBucket{*svcs["blender"], *svcs["build"], *svcs["comfyui"], *svcs["vm"]}
+	writeJSON(w, map[string]any{"slices": out, "services": svcOut})
 }
 
 func (s *Server) handleLedger(w http.ResponseWriter, r *http.Request) {

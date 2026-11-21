@@ -1,8 +1,25 @@
 import React, { useEffect, useState } from 'react'
 import { useApp } from '../store.jsx'
 import { nav } from '../App.jsx'
-import { Card, Btn, Tag, Empty, Stat, Field } from '../ui.jsx'
-import { api, post, href, f2, workerTS } from '../api.js'
+import { Card, Btn, Tag, Empty, Stat, Field, Modal } from '../ui.jsx'
+import { api, post, href, f2, workerTS, apiTS, durCN } from '../api.js'
+
+const COMM_EVENT = { 'job.created': '任务创建', 'job.done': '任务完成', 'job.failed': '任务失败', 'job.cancelled': '任务取消', 'seg.dispatched': '派发给节点', 'seg.fetching': '节点取源', 'seg.running': '节点开始执行', 'seg.uploading': '节点回传', 'seg.done': '分片完成', 'seg.failed': '分片失败', 'seg.settled': '结算', 'offer.auto_share': '共享自动交付' }
+const COMM_ACTOR = { buyer: '买方', seller: '卖方', server: '平台' }
+function commDetail(e) {
+  try {
+    const d = JSON.parse(e.detail || '{}'), p = []
+    if (d.kind) p.push('类型 ' + d.kind)
+    if (d.index !== undefined) p.push('#' + d.index)
+    if (d.dur !== undefined) p.push('时长 ' + f2(d.dur))
+    if (d.price !== undefined) p.push('单价 ' + f2(d.price) + ' 点')
+    if (d.wall !== undefined) p.push('耗时 ' + durCN(d.wall))
+    if (d.match !== undefined) p.push(d.match ? '哈希一致' : '哈希不一致')
+    if (d.cost !== undefined) p.push('结算 ' + f2(d.cost) + ' 点')
+    if (d.err) p.push(String(d.err).slice(0, 160))
+    return p.join(' · ')
+  } catch (x) { return e.detail || '' }
+}
 
 // 设备系统标签：windows_x64 / linux_arm64 / darwin_x64 …
 // os 在 state 里是 "windows/amd64" 这样的组合值，arch 单独给，两者都兜底。
@@ -23,6 +40,17 @@ export default function Nodes() {
   const [code, setCode] = useState('')
   const [pairMsg, setPairMsg] = useState('')
   const [pending, setPending] = useState([])
+  const [logs, setLogs] = useState(null)
+  const [logsTitle, setLogsTitle] = useState('')
+  const [logsErr, setLogsErr] = useState('')
+  const openLogs = async (id, label) => {
+    setLogsTitle('节点通讯日志 · ' + (label || id))
+    setLogs([]); setLogsErr('')
+    try {
+      const d = await api('/api/nodes/' + encodeURIComponent(id) + '/logs')
+      setLogs(d.logs || [])
+    } catch (e) { setLogsErr(String(e)) }
+  }
   useEffect(() => {
     const ua = (navigator.userAgent || '').toLowerCase()
     setL(x => ({ ...x, os: ua.includes('windows') ? 'windows' : ua.includes('mac') ? 'darwin' : 'linux', arch: /arm|aarch64/.test(ua) ? 'arm64' : 'amd64' }))
@@ -205,9 +233,19 @@ export default function Nodes() {
                   <Stat v={w.ok + '/' + (w.ok + w.bad)} l="成功/总数" />
                 </div>
                 <div className="hint">编号 <span className="num">{w.id}</span> · {w.os} · {w.cpus} 核 · {w.mem_mb ? Math.round(w.mem_mb / 1024) + 'GB' : ''}{legacy > 0.01 ? ' · 含 ' + f2(legacy) + ' 点历史收益' : ''}</div>
+                {w.comfy_models && (
+                  <div className="hint" style={{ marginTop: 4 }}>
+                    ComfyUI 模型：{w.comfy_models.reachable
+                      ? <>Checkpoint <b>{(w.comfy_models.checkpoints || []).length}</b> 个 · LoRA <b>{(w.comfy_models.loras || []).length}</b> 个
+                        {(w.comfy_models.checkpoints || []).length > 0 && <>（{(w.comfy_models.checkpoints || []).slice(0, 3).join('、')}{(w.comfy_models.checkpoints || []).length > 3 ? ' 等' : ''}）</>}
+                      </>
+                      : <Tag tone="off">本机 ComfyUI 未连通</Tag>}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                   <Btn ghost tiny onClick={() => reprice(w.id, w.price)}>调整单价</Btn>
                   <Btn ghost tiny onClick={() => pause(w.id, !w.paused)}>{w.paused ? '恢复派活' : '暂停派活'}</Btn>
+                  <Btn ghost tiny onClick={() => openLogs(w.id, w.name || w.id)}>通讯日志</Btn>
                   <Btn ghost tiny danger onClick={() => del(w.id)}>删除节点</Btn>
                 </div>
               </div>
@@ -215,6 +253,21 @@ export default function Nodes() {
           }) : <Empty>还没有属于你的节点。填好左侧参数，下载节点包开始提供算力。</Empty>}
         </Card>
       </div>
+      <Modal open={logs !== null} onClose={() => { setLogs(null); setLogsErr('') }} title={logsTitle} size="lg">
+        {logsErr ? <div className="err">读取失败：{logsErr}</div> : logs && logs.length ? (
+          <div className="list">{logs.map((e, i) => (
+            <div className="listrow" key={i}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <b>{COMM_EVENT[e.event] || e.event}</b>
+                <Tag tone={e.actor === 'buyer' ? 'mine' : e.actor === 'seller' ? 'gpu' : ''}>{COMM_ACTOR[e.actor] || e.actor}</Tag>
+                {e.job_id && <Tag>任务 {String(e.job_id).slice(0, 10)}</Tag>}
+              </div>
+              <div className="hint" style={{ marginTop: 4 }}>{apiTS(e.ts)}</div>
+              {commDetail(e) && <div className="hint" style={{ marginTop: 2 }}>{commDetail(e)}</div>}
+            </div>
+          ))}</div>
+        ) : <Empty>暂无通讯记录（节点接活后会自动记入每次派发、校验与结算）</Empty>}
+      </Modal>
     </div>
   )
 }

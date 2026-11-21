@@ -80,7 +80,7 @@ func (s *Server) handleNodeLogs(w http.ResponseWriter, r *http.Request, nodeID s
 		return
 	}
 	owner, err := s.st.NodeOwner(nodeID)
-	if err != nil || owner != u.ID {
+	if (err != nil || owner != u.ID) && !s.isAdminReq(r) {
 		http.Error(w, jsonErr("只能查看自己节点的通讯记录"), http.StatusForbidden)
 		return
 	}

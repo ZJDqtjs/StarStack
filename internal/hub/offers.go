@@ -32,29 +32,71 @@ var offerCategories = map[string]bool{
 }
 
 type offerView struct {
-	ID        string  `json:"id"`
-	Category  string  `json:"category"`
-	Seller    string  `json:"seller"`
-	Title     string  `json:"title"`
-	Body      string  `json:"body"`
-	Spec      string  `json:"spec"`
-	Price     float64 `json:"price"`
-	Unit      string  `json:"unit"`
-	AutoShare bool    `json:"auto_share"`
-	NodeID    string  `json:"node_id,omitempty"`
-	Scene     string  `json:"scene,omitempty"`
-	HasImage  bool    `json:"has_image"`
-	Mine      bool    `json:"mine"`
-	CreatedAt int64   `json:"created_at"`
+	ID          string  `json:"id"`
+	Category    string  `json:"category"`
+	Seller      string  `json:"seller"`
+	Title       string  `json:"title"`
+	Body        string  `json:"body"`
+	Spec        string  `json:"spec"`
+	Price       float64 `json:"price"`
+	Unit        string  `json:"unit"`
+	AutoShare   bool    `json:"auto_share"`
+	NodeID      string  `json:"node_id,omitempty"`
+	NodeName    string  `json:"node_name,omitempty"`
+	NodePrice   float64 `json:"node_price,omitempty"`
+	NodeOnline  bool    `json:"node_online,omitempty"`
+	PriceSynced bool    `json:"price_synced,omitempty"`
+	Scene       string  `json:"scene,omitempty"`
+	HasImage    bool    `json:"has_image"`
+	Mine        bool    `json:"mine"`
+	CreatedAt   int64   `json:"created_at"`
 }
 
-func viewOffer(o *store.ServiceOffer, u *store.User) offerView {
-	return offerView{
+// nodeLiveInfo returns the bound node's live display name, settlement rate and
+// online status. Auto-shared listings settle through the normal scheduler using
+// the bound node's rate, so surfacing it here keeps the listing price aligned
+// with what the buyer will actually pay.
+func (s *Server) nodeLiveInfo(nodeID string) (name string, price float64, online bool, found bool) {
+	if nodeID == "" {
+		return "", 0, false, false
+	}
+	s.mu.Lock()
+	if wd := s.workers[nodeID]; wd != nil {
+		name, price, online, found = wd.Name, wd.Price, wd.online(), true
+	}
+	s.mu.Unlock()
+	if found {
+		return name, price, online, true
+	}
+	if rows, err := s.st.Nodes(); err == nil {
+		for _, n := range rows {
+			if n.ID == nodeID {
+				return n.Name, n.Price, false, true
+			}
+		}
+	}
+	return "", 0, false, false
+}
+
+func (s *Server) viewOffer(o *store.ServiceOffer, u *store.User) offerView {
+	v := offerView{
 		ID: o.ID, Category: o.Category, Seller: o.Seller, Title: o.Title, Body: o.Body,
 		Spec: o.Spec, Price: o.Price, Unit: o.Unit, AutoShare: o.AutoShare,
 		NodeID: o.NodeID, Scene: o.Scene,
 		HasImage: o.Image != "", Mine: o.UserID == u.ID, CreatedAt: o.CreatedAt,
 	}
+	if o.AutoShare && o.NodeID != "" {
+		if name, price, online, ok := s.nodeLiveInfo(o.NodeID); ok {
+			v.NodeName = name
+			v.NodeOnline = online
+			if price > 0 {
+				v.NodePrice = price
+				v.Price = price
+				v.PriceSynced = true
+			}
+		}
+	}
+	return v
 }
 
 func (s *Server) handleOffers(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +129,7 @@ func (s *Server) handleOffers(w http.ResponseWriter, r *http.Request) {
 		}
 		out := make([]offerView, 0, len(list))
 		for _, o := range list {
-			out = append(out, viewOffer(o, u))
+			out = append(out, s.viewOffer(o, u))
 		}
 		writePaged(w, p, map[string]any{"offers": out}, total)
 	case http.MethodPost:
@@ -150,6 +192,11 @@ func (s *Server) createOffer(w http.ResponseWriter, r *http.Request, u *store.Us
 				http.Error(w, jsonErr("只能绑定自己名下的节点"), 403)
 				return
 			}
+			// Auto-shared node listings always settle at the bound node's own
+			// rate, so align the stored listing price with it on creation too.
+			if _, np, _, ok := s.nodeLiveInfo(nodeID); ok && np > 0 {
+				price = np
+			}
 		}
 	}
 
@@ -176,7 +223,7 @@ func (s *Server) createOffer(w http.ResponseWriter, r *http.Request, u *store.Us
 		s.deny(w, 500, "发布失败", "create offer", err)
 		return
 	}
-	writeJSON(w, map[string]any{"offer": viewOffer(offer, u)})
+	writeJSON(w, map[string]any{"offer": s.viewOffer(offer, u)})
 }
 
 func (s *Server) handleOfferOp(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +286,7 @@ func (s *Server) handleOfferDetail(w http.ResponseWriter, r *http.Request, u *st
 		http.Error(w, jsonErr("共享不存在"), 404)
 		return
 	}
-	writeJSON(w, map[string]any{"offer": viewOffer(o, u)})
+	writeJSON(w, map[string]any{"offer": s.viewOffer(o, u)})
 }
 
 func (s *Server) serveOfferCover(w http.ResponseWriter, r *http.Request, id string) {
@@ -398,7 +445,7 @@ func (s *Server) handleOfferUse(w http.ResponseWriter, r *http.Request, u *store
 			Detail: commDetail(map[string]any{"name": o.Title, "kind": o.Category, "price": o.Price}),
 		})
 	}
-	writeJSON(w, map[string]any{"ok": true, "order": order, "offer": viewOffer(o, u)})
+	writeJSON(w, map[string]any{"ok": true, "order": order, "offer": s.viewOffer(o, u)})
 }
 
 // handleOfferConversationStart opens (or reuses) the buyer's thread for a listing.
@@ -434,7 +481,7 @@ func (s *Server) handleOfferConversationStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, map[string]any{
-		"conversation": c, "messages": viewOfferMessages(msgs, u.ID), "offer": viewOffer(o, u),
+		"conversation": c, "messages": viewOfferMessages(msgs, u.ID), "offer": s.viewOffer(o, u),
 	})
 }
 
@@ -512,7 +559,7 @@ func (s *Server) handleOfferConversation(w http.ResponseWriter, r *http.Request)
 		}
 		var ov any
 		if o, err := s.st.ServiceOffer(c.OfferID); err == nil && o != nil {
-			ov = viewOffer(o, u)
+			ov = s.viewOffer(o, u)
 		}
 		writePaged(w, p, map[string]any{
 			"conversation": cv, "messages": viewOfferMessages(msgs, u.ID), "offer": ov,

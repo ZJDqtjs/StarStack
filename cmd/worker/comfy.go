@@ -11,9 +11,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	"starstack/internal/ffx"
 	"starstack/internal/hub"
 	"starstack/internal/render"
 )
@@ -120,6 +122,164 @@ func comfyProbe(ctx context.Context, base string) error {
 		return fmt.Errorf("/system_stats 返回 %d", resp.StatusCode)
 	}
 	return nil
+}
+
+const (
+	maxComfyModelItems = 64
+	maxComfyModelChars = 160
+)
+
+// comfyProbeModels queries the provider's local ComfyUI for installed
+// checkpoints (and UNET/diffusion models) and LoRAs so the broker can expose a
+// compact summary in the compute pool and match prompt graphs to nodes that
+// actually have the model files.
+func comfyProbeModels(ctx context.Context, base string) *ffx.ComfyModels {
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+	if base == "" {
+		return nil
+	}
+	summary := &ffx.ComfyModels{UpdatedAt: time.Now().Unix()}
+	if err := comfyProbe(ctx, base); err != nil {
+		return summary
+	}
+	summary.Reachable = true
+
+	ckpts := comfyObjectInfoChoices(ctx, base, "CheckpointLoaderSimple", "ckpt_name")
+	if len(ckpts) == 0 {
+		ckpts = comfyModelFolder(ctx, base, "checkpoints")
+	}
+	unets := comfyObjectInfoChoices(ctx, base, "UNETLoader", "unet_name")
+	if len(unets) == 0 {
+		unets = comfyModelFolder(ctx, base, "diffusion_models")
+	}
+	summary.Checkpoints = cleanModelList(append(ckpts, unets...))
+
+	loras := comfyObjectInfoChoices(ctx, base, "LoraLoader", "lora_name")
+	if len(loras) == 0 {
+		loras = comfyModelFolder(ctx, base, "loras")
+	}
+	summary.LoRAs = cleanModelList(loras)
+	return summary
+}
+
+// comfyObjectInfoChoices reads the dropdown choices ComfyUI advertises at
+// /object_info/<nodeClass> -> input.required.<field>[0] (works across old and
+// new ComfyUI releases).
+func comfyObjectInfoChoices(ctx context.Context, base, nodeClass, field string) []string {
+	c, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(c, http.MethodGet,
+		base+"/object_info/"+url.PathEscape(nodeClass), nil)
+	if err != nil {
+		return nil
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		io.Copy(io.Discard, io.LimitReader(resp.Body, 16<<10))
+		return nil
+	}
+	var raw map[string]struct {
+		Input struct {
+			Required map[string][]json.RawMessage `json:"required"`
+			Optional map[string][]json.RawMessage `json:"optional"`
+		} `json:"input"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&raw); err != nil {
+		return nil
+	}
+	info, ok := raw[nodeClass]
+	if !ok {
+		return nil
+	}
+	spec := info.Input.Required[field]
+	if len(spec) == 0 {
+		spec = info.Input.Optional[field]
+	}
+	if len(spec) == 0 {
+		return nil
+	}
+	var choices []string
+	if err := json.Unmarshal(spec[0], &choices); err == nil {
+		return choices
+	}
+	return nil
+}
+
+// comfyModelFolder falls back to ComfyUI's newer /models/<folder> endpoint.
+func comfyModelFolder(ctx context.Context, base, folder string) []string {
+	c, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(c, http.MethodGet,
+		base+"/models/"+url.PathEscape(folder), nil)
+	if err != nil {
+		return nil
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		io.Copy(io.Discard, io.LimitReader(resp.Body, 16<<10))
+		return nil
+	}
+	var list []string
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&list); err != nil {
+		return nil
+	}
+	return list
+}
+
+func cleanModelList(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, raw := range in {
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			continue
+		}
+		if r := []rune(s); len(r) > maxComfyModelChars {
+			s = string(r[:maxComfyModelChars])
+		}
+		k := strings.ToLower(s)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	if len(out) > maxComfyModelItems {
+		out = out[:maxComfyModelItems]
+	}
+	return out
+}
+
+func comfyModelsEqual(a, b *ffx.ComfyModels) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil || a.Reachable != b.Reachable {
+		return false
+	}
+	if len(a.Checkpoints) != len(b.Checkpoints) || len(a.LoRAs) != len(b.LoRAs) {
+		return false
+	}
+	for i := range a.Checkpoints {
+		if a.Checkpoints[i] != b.Checkpoints[i] {
+			return false
+		}
+	}
+	for i := range a.LoRAs {
+		if a.LoRAs[i] != b.LoRAs[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // comfySubmit posts the graph and returns the prompt id the queue assigned.

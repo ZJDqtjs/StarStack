@@ -302,3 +302,60 @@ func TestOfferMigrationAddsAutoShareColumns(t *testing.T) {
 		t.Fatalf("unexpected migrated offer: %+v", o)
 	}
 }
+
+func TestOfferAutoSharePriceSyncedWithNode(t *testing.T) {
+	s := newTestServer(t, Policy{})
+	seller := asUser(t, s, "pseller")
+	buyer := asUser(t, s, "pbuyer")
+
+	nodeID := "n-sync-price"
+	if err := s.st.RegisterNode(&store.NodeRow{
+		ID: nodeID, OwnerID: "u-pseller", Name: "4090-rig",
+		Price: 1.5, Slots: 2, RegisteredAt: 1, LastSeen: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	wd := node(nodeID, 1.5, 0)
+	wd.OwnerID = "u-pseller"
+	wd.Name = "4090-rig"
+	s.workers[nodeID] = wd
+
+	// Even if form submits a mismatched price (9.99), auto_share bound to a node
+	// must align with the bound node's live settlement price (1.50).
+	rec := createOfferForTest(t, s, seller, map[string]string{
+		"category": "render", "title": "自动共享测试", "price": "9.99", "unit": "点/视频秒",
+		"auto_share": "1", "node_id": nodeID,
+	})
+	id := offerID(t, rec)
+
+	checkPrice := func(want float64) {
+		t.Helper()
+		r := offerCall(t, s, http.MethodGet, "/api/offers/"+id, buyer, "")
+		if r.Code != 200 {
+			t.Fatalf("get offer: %d %s", r.Code, r.Body.String())
+		}
+		var got struct {
+			Offer struct {
+				Price       float64 `json:"price"`
+				NodePrice   float64 `json:"node_price"`
+				NodeName    string  `json:"node_name"`
+				NodeOnline  bool    `json:"node_online"`
+				PriceSynced bool    `json:"price_synced"`
+			} `json:"offer"`
+		}
+		if err := json.Unmarshal(r.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if !got.Offer.PriceSynced || got.Offer.Price != want || got.Offer.NodePrice != want || !got.Offer.NodeOnline || got.Offer.NodeName != "4090-rig" {
+			t.Fatalf("want synced price %.2f, got %+v", want, got.Offer)
+		}
+	}
+	checkPrice(1.5)
+
+	// Repricing the node must immediately reflect in the auto-shared listing.
+	repriceRec := offerCall(t, s, http.MethodPut, "/api/nodes/"+nodeID, seller, `{"price":2.25}`)
+	if repriceRec.Code != 200 {
+		t.Fatalf("reprice node: %d %s", repriceRec.Code, repriceRec.Body.String())
+	}
+	checkPrice(2.25)
+}

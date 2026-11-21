@@ -8,14 +8,15 @@ const parseScene = s => { try { const v = JSON.parse(s || '{}'); return v && typ
 const fmtSecs = s => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return [h, m, x].map(n => String(n).padStart(2, '0')).join(':') }
 
 export function OfferCard({ o, manage, onOpen, onDel }) {
+  const displayPrice = o.price_synced && o.node_price > 0 ? o.node_price : o.price
   return (
     <article className={'mk-card cat-' + o.category} onClick={() => onOpen(o)}>
       <div className="mk-cover">
         {manage && <div className="mk-del"><button onClick={e => { e.stopPropagation(); onDel(o.id) }}>删除</button></div>}
         {o.has_image ? <img loading="lazy" src={href('/api/offers/media/' + encodeURIComponent(o.id))} alt={o.title} /> : <div className="mk-ph">{o.title.slice(0, 10)}</div>}
         <span className="mk-cat"><i className="cdot" />{CAT_LABEL[o.category] || o.category}</span>
-        {o.auto_share && <span className="mk-auto">自动共享</span>}
-        <span className="mk-price">{f2(o.price)} {o.unit}</span>
+        {o.auto_share && <span className="mk-auto">{o.node_id ? (o.node_online ? '自动共享 · 在线' : '自动共享 · 离线') : '自动共享'}</span>}
+        <span className="mk-price">{f2(displayPrice)} {o.unit}</span>
       </div>
       <h3 className="mk-title">{o.title}</h3>
       <div className="mk-meta"><Avatar name={o.seller} size={20} /><span className="oname">{o.seller}</span><span>·</span><span title={apiTS(o.created_at)}>{relTime(o.created_at)}</span></div>
@@ -154,13 +155,20 @@ export default function Market({ tab }) {
       <Modal open={!!od} onClose={() => setOd(null)} title={od ? od.title : ''} size="lg">
         {od && (
           <>
-            <div className="hint" style={{ marginTop: 0 }}>{CAT_LABEL[od.category] || od.category} · {f2(od.price)} {od.unit} · 卖家 {od.seller} · {apiTS(od.created_at)}</div>
+            <div className="hint" style={{ marginTop: 0 }}>{CAT_LABEL[od.category] || od.category} · {f2(od.price_synced && od.node_price > 0 ? od.node_price : od.price)} {od.unit} · 卖家 {od.seller} · {apiTS(od.created_at)}</div>
             {od.spec && <div className="postbody">{od.spec}</div>}
             {od.body ? <div className="postbody">{od.body}</div> : <div className="hint">卖家未填写简介和联系方式。</div>}
             <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               {od.auto_share ? <><Tag tone="on">已开通自动共享</Tag><span className="hint" style={{ margin: 0 }}>买家可直接使用，无需先沟通。</span></> : <><Tag tone="off">未开通自动共享</Tag><span className="hint" style={{ margin: 0 }}>请先联系卖家协商。</span></>}
+              {od.price_synced && <Tag tone="mine">已与节点实时单价对齐</Tag>}
             </div>
-            {od.node_id && <div className="hint num">共享节点 {od.node_id}</div>}
+            {od.node_id && (
+              <div className="hint" style={{ marginTop: 8 }}>
+                绑定节点：<b>{od.node_name || od.node_id}</b>（<span className="num">{od.node_id}</span>）{' '}
+                <Tag tone={od.node_online ? 'on' : 'off'}>{od.node_online ? '在线' : '离线（下单后排队等待）'}</Tag>
+                {od.node_price > 0 && <> · 实时结算单价 <b className="num">{f2(od.node_price)}</b> {od.unit}（以提交任务时的节点报价冻结结算）</>}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
               {od.mine ? <Btn sm onClick={() => { setOd(null); nav('messages') }}>查看买家咨询</Btn> : (
                 <>

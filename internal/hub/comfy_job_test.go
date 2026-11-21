@@ -247,3 +247,161 @@ func bundleConfig(t *testing.T, raw []byte) string {
 	t.Fatal("bundle has no starstack-node.json")
 	return ""
 }
+
+func TestComfyModelMatchingAndStatusSummary(t *testing.T) {
+	s := newTestServer(t, comfyPolicy("alice"))
+	ck := asUser(t, s, "alice")
+	if _, err := s.st.AddCredits("u-alice", 100); err != nil {
+		t.Fatalf("credits: %v", err)
+	}
+
+	sdxl := node("comfy-sdxl", 1.5, 0)
+	sdxl.Runtimes = []ffx.Runtime{{Name: "comfyui", Version: "1"}}
+	sdxl.GPUs = []ffx.GPUDetail{{Name: "RTX 4090", MemMB: 24576}}
+	sdxl.ComfyModels = &ffx.ComfyModels{
+		Reachable:   true,
+		Checkpoints: []string{"SDXL/sd_xl_base_1.0.safetensors"},
+		LoRAs:       []string{"detail_tweaker.safetensors"},
+	}
+
+	flux := node("comfy-flux", 3.0, 0)
+	flux.Runtimes = []ffx.Runtime{{Name: "comfyui", Version: "1"}}
+	flux.GPUs = []ffx.GPUDetail{{Name: "RTX 4090", MemMB: 24576}}
+	flux.ComfyModels = &ffx.ComfyModels{
+		Reachable:   true,
+		Checkpoints: []string{"flux1-dev.safetensors"},
+	}
+	s.workers[sdxl.ID], s.workers[flux.ID] = sdxl, flux
+
+	// 1. /api/comfy/status must expose pool_allowed, pool_nodes, pool_min_price & aggregated pool_models.
+	stRec := httptest.NewRecorder()
+	stReq := httptest.NewRequest("GET", "/api/comfy/status", nil)
+	stReq.AddCookie(ck)
+	s.Handlers().ServeHTTP(stRec, stReq)
+	if stRec.Code != 200 {
+		t.Fatalf("status: %d %s", stRec.Code, stRec.Body.String())
+	}
+	var st struct {
+		PoolAllowed  bool    `json:"pool_allowed"`
+		PoolNodes    int     `json:"pool_nodes"`
+		PoolMinPrice float64 `json:"pool_min_price"`
+		PoolModels   struct {
+			Checkpoints []comfyPoolModelEntry `json:"checkpoints"`
+			LoRAs       []comfyPoolModelEntry `json:"loras"`
+		} `json:"pool_models"`
+	}
+	if err := json.Unmarshal(stRec.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if !st.PoolAllowed || st.PoolNodes != 2 || st.PoolMinPrice != 1.5 {
+		t.Fatalf("unexpected comfy pool summary: %+v", st)
+	}
+	if len(st.PoolModels.Checkpoints) != 2 || len(st.PoolModels.LoRAs) != 1 {
+		t.Fatalf("unexpected pool models: %+v", st.PoolModels)
+	}
+
+	// 2. Submitting a graph referencing sd_xl_base_1.0.safetensors (basename match!)
+	// must only match comfy-sdxl (1.5 点/次), not comfy-flux (3.0 点/次).
+	graphWithCkpt := `{"1":{"class_type":"CheckpointLoaderSimple","inputs":{"ckpt_name":"sd_xl_base_1.0.safetensors"}},` +
+		`"2":{"class_type":"LoraLoader","inputs":{"lora_name":"detail_tweaker.safetensors"}},` +
+		`"9":{"class_type":"SaveImage","inputs":{"filename_prefix":"ss"}}}`
+	body := `{"kind":"image","name":"SDXL夜景","prompt":` + graphWithCkpt + `}`
+	rec := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/jobs/comfy", strings.NewReader(body))
+	r.AddCookie(ck)
+	s.handleCreateComfy(rec, r)
+	if rec.Code != 200 {
+		t.Fatalf("create comfy with ckpt: %d %s", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		ID         string  `json:"id"`
+		Hold       float64 `json:"hold"`
+		Checkpoint string  `json:"checkpoint"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Hold != 1.5 || got.Checkpoint != "sd_xl_base_1.0.safetensors" {
+		t.Fatalf("expected hold=1.50 (sdxl node only), got %+v", got)
+	}
+	j := s.jobs[got.ID]
+	s.mu.Lock()
+	picked := s.pickWorkerLocked(j.Req, "", j.Segs[0])
+	s.mu.Unlock()
+	if picked == nil || picked.ID != sdxl.ID {
+		t.Fatalf("expected scheduler to pick %s, got %+v", sdxl.ID, picked)
+	}
+}
+
+func TestComfyJobArtifactFilesListAndServe(t *testing.T) {
+	s := newTestServer(t, comfyPolicy("alice"))
+	alice := asUser(t, s, "alice")
+	bob := asUser(t, s, "bob")
+
+	jobID := "comfyjob1"
+	dir := filepath.Join(s.dataDir, "jobs", jobID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	zipPath := filepath.Join(dir, "result.zip")
+	f, err := os.Create(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	w, err := zw.Create("out_0001.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pngStub := []byte("\x89PNG\r\n\x1a\nfake-png-bytes")
+	w.Write(pngStub)
+	zw.Close()
+	f.Close()
+
+	s.mu.Lock()
+	s.jobs[jobID] = &Job{ID: jobID, OwnerID: "u-alice", Kind: render.KindComfy, Status: "done", out: zipPath}
+	s.mu.Unlock()
+
+	// List files as owner.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/jobs/"+jobID+"/files", nil)
+	req.AddCookie(alice)
+	s.Handlers().ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("list files: %d %s", rec.Code, rec.Body.String())
+	}
+	var listed struct {
+		Files []struct {
+			Filename string `json:"filename"`
+			Mime     string `json:"mime"`
+			URL      string `json:"url"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Files) != 1 || listed.Files[0].Filename != "out_0001.png" || listed.Files[0].Mime != "image/png" {
+		t.Fatalf("unexpected listed files: %+v", listed.Files)
+	}
+
+	// Fetch individual file as owner.
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest("GET", listed.Files[0].URL, nil)
+	req2.AddCookie(alice)
+	s.Handlers().ServeHTTP(rec2, req2)
+	if rec2.Code != 200 || !bytes.Equal(rec2.Body.Bytes(), pngStub) {
+		t.Fatalf("serve file: %d len=%d", rec2.Code, rec2.Body.Len())
+	}
+	if ct := rec2.Header().Get("Content-Type"); ct != "image/png" {
+		t.Fatalf("content-type = %q, want image/png", ct)
+	}
+
+	// Another user must not access the owner's generated files.
+	rec3 := httptest.NewRecorder()
+	req3 := httptest.NewRequest("GET", listed.Files[0].URL, nil)
+	req3.AddCookie(bob)
+	s.Handlers().ServeHTTP(rec3, req3)
+	if rec3.Code != 404 {
+		t.Fatalf("foreign user should get 404, got %d", rec3.Code)
+	}
+}

@@ -1934,9 +1934,67 @@
     const outputs = await waitOutputs(id, onTick);
     return { id, outputs: outputs.map(o => Object.assign({}, o, { url: viewUrl(o) })) };
   }
+  function buildPrompt(kind, params) {
+    const p = params || {};
+    const src = graphFor(kind);
+    const g = fromUI(toUI(src), src.name);
+    applyParams(g, kind, p);
+    if (p.checkpoint) {
+      for (const n of g.nodes) {
+        if (n.type === 'CheckpointLoaderSimple' || n.type === 'CheckpointLoader') {
+          const w = n.widgets.find(x => x.name === 'ckpt_name');
+          if (w) w.value = p.checkpoint;
+        } else if (n.type === 'UNETLoader') {
+          const w = n.widgets.find(x => x.name === 'unet_name');
+          if (w) w.value = p.checkpoint;
+        }
+      }
+    }
+    const prompt = toAPI(g);
+    if (p.lora) {
+      let existingLora = false;
+      let ckptId = null;
+      let maxId = 0;
+      for (const [id, node] of Object.entries(prompt)) {
+        const num = Number(id);
+        if (Number.isFinite(num) && num > maxId) maxId = num;
+        if (node && (node.class_type === 'LoraLoader' || node.class_type === 'LoraLoaderModelOnly')) {
+          node.inputs = node.inputs || {};
+          node.inputs.lora_name = p.lora;
+          existingLora = true;
+        }
+        if (!ckptId && node && (node.class_type === 'CheckpointLoaderSimple' || node.class_type === 'CheckpointLoader')) {
+          ckptId = id;
+        }
+      }
+      if (!existingLora && ckptId) {
+        const loraId = String(maxId + 1);
+        for (const [id, node] of Object.entries(prompt)) {
+          if (id === ckptId || !node || !node.inputs) continue;
+          for (const [k, v] of Object.entries(node.inputs)) {
+            if (Array.isArray(v) && v.length === 2 && String(v[0]) === String(ckptId)) {
+              if (v[1] === 0) node.inputs[k] = [loraId, 0];
+              else if (v[1] === 1) node.inputs[k] = [loraId, 1];
+            }
+          }
+        }
+        prompt[loraId] = {
+          class_type: 'LoraLoader',
+          inputs: {
+            model: [ckptId, 0],
+            clip: [ckptId, 1],
+            lora_name: p.lora,
+            strength_model: 0.8,
+            strength_clip: 0.8
+          }
+        };
+      }
+    }
+    return prompt;
+  }
 
   window.ComfyWorkbench = {
-    open, close, generate, run, tutorial,
+    open, close, generate, run, buildPrompt, tutorial,
     viewUrl,
     importFile: (file, kind) => importFile(file, kind || 'image'),
     refreshCards: renderCards,
