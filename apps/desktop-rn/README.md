@@ -86,8 +86,32 @@ npx react-native bundle --platform windows --dev false `
   /p:TargetPlatformVersion=10.0.26100.0 /p:WindowsTargetPlatformVersion=10.0.26100.0
 ```
 
-结论：**JS 层已可编译，原生层需要一台装齐 “Desktop development with C++” + UWP VC 生成工具的
-Windows 11 机器，或交给 windows-latest CI runner。** 本机（Win10 19045）不满足 VS 2026 的安装条件。
+结论：**JS 层本机可编译；原生层交给 CI 已经能出包**（见下节）。
+
+## CI 构建（已验证通过）
+
+`.github/workflows/desktop-rn.yml` 在 `windows-latest` 上跑，2026-11-21 首次全绿，
+产物 `StarStack-Desktop-RN.zip` 约 21 MB（png/dll 齐全，已剔掉 pdb/ilk/exp）。
+它也作为 reusable workflow 被 `release.yml` 的 `build-desktop-rn` job 复用，
+打 tag 发版时会一起附到 GitHub Release。
+
+关键一步是给 MSBuild 传这几个属性（第三方 Windows 工程在 runner 上的兼容坑）：
+
+```
+--msbuildprops "PlatformToolset=v145,PlatformToolsetVersion=145,
+                WindowsTargetPlatformVersion=10.0.26100.0,TargetPlatformVersion=10.0.26100.0,
+                WindowsAppSDKVerifyTransitiveDependencies=false"
+```
+
+| 属性 | 为什么 |
+|---|---|
+| `PlatformToolset=v145` + `PlatformToolsetVersion=145` | `react-native-svg` 的 `RNSVG.vcxproj` 硬写 `v143` + `ApplicationType=Windows Store`，runner 没装 v143 的 UWP 生成工具 → `MSB8020` |
+| `WindowsTargetPlatformVersion` / `TargetPlatformVersion` = 26100 | `@react-native-async-storage` 的工程钉的是 22621，runner 上只有 26100 → `MSB8036` |
+| `WindowsAppSDKVerifyTransitiveDependencies=false` | 该包的 WindowsAppSDK 传递依赖校验直接报 error（官方给的开关） |
+
+另外 `scripts/apply-native.ps1` 现在会给 `StarStackDesktopModule.cpp` 加
+`<PrecompiledHeader>NotUsing</PrecompiledHeader>` —— 模板工程开了预编译头，本模块自带 include，
+不关会报 `C1010`。
 
 ## 与旧 `apps/desktop` 的关系
 

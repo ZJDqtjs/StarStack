@@ -110,7 +110,7 @@ apps/harmony-rn/
 | desktop-rn：依赖 + 类型检查 | ✅ 通过 | `npm ci` / `npm run typecheck` |
 | desktop-rn：`windows/` 原生工程 | ✅ 已生成 | `init-windows --template cpp-app`，`apply-native.ps1` 已注入原生模块 |
 | desktop-rn：Metro 打包（windows） | ✅ 通过 | 修复 `metro.config.js` 被模板覆盖导致 `watchFolders` 丢失的问题 |
-| desktop-rn：MSVC 原生编译 | ⛔ 本机不可行 | RNW 0.84.2 要求 VS 18.6+；其包工程还要 UWP VC 生成工具。Win10 19045 上装不齐 |
+| desktop-rn：MSVC 原生编译 | ✅ CI 通过（2026-11-21） | `.github/workflows/desktop-rn.yml`（windows-latest）出 `StarStack-Desktop-RN.zip`（21 MB）；本机 Win10 19045 仍不可行（VS 2026 装不齐 UWP VC 组件） |
 | harmony-rn：依赖 + 类型检查 | ✅ 通过 | `npm ci` / `npm run typecheck` |
 | harmony-rn：HBC bundle | ✅ 通过 | `npm run harmony` → `rawfile/hermes_bundle.hbc`（2.1 MB） |
 | harmony-rn：HAP 编译 | ⛔ 本机不可行 | 必须 DevEco Studio 5.x + HarmonyOS SDK + 华为签名 |
