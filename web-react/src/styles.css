@@ -958,3 +958,47 @@ tr.tap{cursor:pointer}
 .gen-spinner{width:20px;height:20px;flex:0 0 20px;border-radius:50%;
   border:2px solid var(--accent-soft);border-top-color:var(--accent);animation:genspin .8s linear infinite}
 @keyframes genspin{to{transform:rotate(360deg)}}
+
+/* ===== 编译向导（build wizard） ===== */
+.wb-flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:9px 14px;border:1px solid var(--hair);border-radius:10px;background:var(--card);font-size:12px;color:var(--ink)}
+.wb-flow b{font-weight:650}.wb-flow i{font-style:normal;color:var(--mute)}.wb-flow span{margin-left:auto;color:var(--mute);font-size:11.5px}
+.wb-wiz{margin-top:2px}
+.wb-proj{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--accent);border-radius:11px;background:var(--accent-soft)}
+.wb-badge{flex:0 0 46px;height:46px;border-radius:12px;display:grid;place-items:center;color:#fff;font:700 13px var(--mono);letter-spacing:.02em;box-shadow:var(--shadow-sm)}
+.wb-proj-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.wb-proj-t b{font-size:14px;color:var(--ink);display:flex;align-items:center;gap:8px}
+.wb-proj-t span{font-size:11.5px;color:var(--mute)}
+.wb-proj-sel{width:auto;flex:0 0 auto;height:32px;font-size:12px}
+.wb-plats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.wb-plat{position:relative;display:flex;align-items:center;gap:8px;padding:9px 11px;border:1px solid var(--hair);border-radius:10px;background:var(--card);cursor:pointer;text-align:left;color:var(--ink)}
+.wb-plat:hover{border-color:var(--hair2)}
+.wb-plat.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 3px var(--accent-ring)}
+.wb-plat-b{flex:0 0 34px;height:26px;border-radius:7px;display:grid;place-items:center;background:var(--soft);font:650 10px var(--mono);color:var(--mute)}
+.wb-plat.on .wb-plat-b{background:var(--accent);color:var(--accent-ink)}
+.wb-plat b{font-size:12px;font-weight:600}
+.wb-plat em{position:absolute;top:-7px;right:8px;font-style:normal;font-size:9.5px;padding:1px 6px;border-radius:99px;background:var(--ok);color:#fff}
+.wb-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--card)}
+.wb-seg button{display:flex;flex-direction:column;gap:2px;align-items:flex-start;padding:9px 12px;border:0;background:transparent;cursor:pointer;color:var(--ink);text-align:left}
+.wb-seg button+button{border-left:1px solid var(--hair)}
+.wb-seg button b{font-size:12.5px;font-weight:650}.wb-seg button span{font-size:11px;color:var(--mute)}
+.wb-seg button.on{background:var(--accent-soft);box-shadow:inset 0 -2px 0 var(--accent)}
+.wb-seg button.on b{color:var(--accent)}
+.wb-sorts{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:12px 0 8px}
+.wb-sorts button:not(.btn){height:26px;padding:0 11px;border:1px solid var(--hair);border-radius:99px;background:var(--card);font-size:11.5px;color:var(--mute);cursor:pointer}
+.wb-sorts button.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.wb-sorts .btn,.wb-sorts button:last-child{margin-left:auto}
+.wb-cands{display:flex;flex-direction:column;gap:7px}
+.wb-cand{display:flex;align-items:center;gap:11px;padding:10px 12px;border:1px solid var(--hair);border-radius:10px;background:var(--card);cursor:pointer;text-align:left;color:var(--ink)}
+.wb-cand:hover{border-color:var(--hair2)}
+.wb-cand.on{border-color:var(--accent);background:var(--accent-soft)}
+.wb-cand-r{flex:0 0 16px;height:16px;border-radius:99px;border:2px solid var(--hair2)}
+.wb-cand.on .wb-cand-r{border-color:var(--accent);background:var(--accent);box-shadow:inset 0 0 0 3px var(--card)}
+.wb-cand-n{flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.wb-cand-n b{font-size:12.5px}.wb-cand-n small{flex-basis:100%;font-size:11px;color:var(--mute)}
+.wb-cand-m{flex:0 0 auto;text-align:right;font-size:11.5px;color:var(--mute)}
+.wb-cand-m b{font-size:14px;color:var(--ink)}.wb-cand-m small{display:block;font-size:10.5px}
+.wb-warn{padding:12px;border:1px dashed var(--hair2);border-radius:10px;font-size:12px;color:var(--mute)}
+.wb-placed{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--accent);border-radius:10px;background:var(--accent-soft);font-size:12.5px}
+.wb-placed b{color:var(--accent)}
+.wb-adv-tight{margin-top:16px}
+.wb-adv summary em{margin-left:6px;font:400 11px var(--mono);font-style:normal;color:var(--mute);max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -4,6 +4,29 @@ import { nav } from '../App.jsx'
 import { Card, Kpi, Btn, Tag, Empty } from '../ui.jsx'
 import { api, f1, f2, wbSize } from '../api.js'
 import { packFolder, extOk } from '../zip.js'
+import { listZipNames, detectProject, PROJECTS, CUSTOM_PROJECT, PLATFORMS, platformOf } from '../detect.js'
+
+const hasBuildRt = w => (w.runtimes || []).some(r => String(r.name || '').toLowerCase() === 'build')
+const nodeText = w => (String(w.os || '') + ' ' + String(w.arch || '')).toLowerCase()
+// 节点与平台是否匹配：true 匹配 / false 不匹配 / null 无法判断（上报信息不足）
+function platMatch(w, plat) {
+  const p = platformOf(plat)
+  if (!p.os && !p.arch) return true
+  const t = nodeText(w)
+  if (!t.trim()) return null
+  let osOk = true, archOk = true
+  if (p.os) osOk = p.os === 'darwin' ? /darwin|mac/.test(t) : t.includes(p.os)
+  if (p.arch) {
+    const isArm = /arm64|aarch64/.test(t), isX64 = /amd64|x86_64|x64/.test(t)
+    if (isArm || isX64) archOk = p.arch === 'arm64' ? isArm : isX64
+    else if (!/windows|linux|darwin|mac/.test(t) || !p.os) archOk = true
+    else archOk = null
+  }
+  if (!osOk || archOk === false) return false
+  return archOk === null ? null : true
+}
+const SORTS = { smart: '综合推荐', price: '最便宜', trust: '最稳', free: '最空闲' }
+const rate = w => (w.ok + w.bad > 0 ? w.ok / (w.ok + w.bad) : 0.9)
 
 const KIND_NAME = { transcode: '视频转码', blender: 'Blender 渲染', pr: '时间线渲染', build: '编译打包' }
 const DROP_HINT = { transcode: '视频 / 音频文件，自动读取时长', blender: '.blend 场景，或含贴图 / 缓存的 zip', pr: 'FCPXML 工程 + 全部素材打包的 zip', build: '源码 zip，解压目录即工作目录' }
@@ -22,6 +45,14 @@ export default function Workbench({ svc }) {
   const [estErr, setEstErr] = useState('')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
+  // 编译向导：识别结果 / 平台 / 运行位置
+  const [det, setDet] = useState(null)
+  const [projId, setProjId] = useState('')
+  const [platform, setPlatform] = useState('any')
+  const [place, setPlace] = useState('auto')
+  const [pick, setPick] = useState('')
+  const [sortBy, setSortBy] = useState('smart')
+  const cmdTouched = useRef(false)
   const formRef = useRef(null)
   const fileRef = useRef(null)
   const folderRef = useRef(null)
@@ -34,6 +65,11 @@ export default function Workbench({ svc }) {
       const tpl = prefill.tpl || {}
       if (prefill.kind) setKind(prefill.kind)
       else if (svc === 'render' && (tpl.scene || tpl.from || tpl.to || tpl.samples)) setKind('blender')
+      if (svc === 'build') {
+        if (tpl.command || tpl.scene) cmdTouched.current = true
+        if (prefill.node_id) { setPlace('market'); setPick(prefill.node_id) }
+        if (tpl.platform && PLATFORMS.some(p => p.id === tpl.platform)) setPlatform(tpl.platform)
+      }
       setTimeout(() => {
         const names = svc === 'build' ? ['command', 'output', 'timeout'] : ['scene', 'engine', 'samples', 'from', 'to', 'fps', 'percent']
         names.forEach(n => { if (tpl[n] !== undefined && tpl[n] !== null && tpl[n] !== '') { const el = formRef.current && formRef.current.querySelector('[name=' + n + ']'); if (el) el.value = tpl[n] } })
@@ -49,6 +85,52 @@ export default function Workbench({ svc }) {
     return el ? el.value : ''
   }, [])
   const bump = () => setVersion(v => v + 1)
+
+  // ---- 编译向导：当前项目类型 / 候选节点 ----
+  const proj = det ? ((projId && PROJECTS.find(p => p.id === projId)) || (projId === 'custom' ? CUSTOM_PROJECT : det.proj)) : null
+  const platOpt = platformOf(platform)
+  const cands = (kind === 'build' ? workers.filter(w => w.online && hasBuildRt(w)) : []).map(w => {
+    const m = platMatch(w, platform)
+    const free = Math.max(0, (w.slots || 0) - (w.active || 0))
+    return { w, m, free, price: Number(w.price) || 0, rate: rate(w) }
+  }).filter(c => c.m !== false)
+  const maxP = Math.max(1, ...cands.map(c => c.price))
+  const score = c => sortBy === 'price' ? -c.price : sortBy === 'trust' ? c.rate : sortBy === 'free' ? c.free
+    : (c.free > 0 ? 1 : 0) * 2 + c.rate * 1.5 - (c.price / maxP) + (c.m === true ? 0.3 : 0) + (c.w.mine ? 0.2 : 0)
+  cands.sort((a, b) => score(b) - score(a))
+  const shown = place === 'official' ? cands.filter(c => c.w.official) : cands
+  const best = shown[0]
+  // 实际派发的节点：商店里的指定 > 官方/市场里手选 > 官方自动取第一名；自动模式不指定
+  const effNode = target || (place === 'auto' ? '' : (pick && shown.some(c => c.w.id === pick) ? pick : (best ? best.w.id : '')))
+
+  // 应用识别结果的默认命令 / 产物目录（用户改过命令就不再覆盖）
+  const applyDefaults = (pj, plat, names) => {
+    if (!pj || !formRef.current) return
+    const set = (n, v) => { const el = formRef.current.querySelector('[name=' + n + ']'); if (el) el.value = v }
+    if (!cmdTouched.current && pj.cmd) set('command', pj.cmd(plat, names || (det && det.names) || { has: () => false, ext: () => false }))
+    if (!cmdTouched.current && pj.output) set('output', pj.output)
+    bump()
+  }
+  const runDetect = async f => {
+    if (!f || kind !== 'build') { setDet(null); return }
+    const d = detectProject(await listZipNames(f))
+    setDet(d); setProjId('')
+    if (d) {
+      cmdTouched.current = false
+      const plat = d.proj.rec || 'any'
+      setPlatform(plat)
+      applyDefaults(d.proj, plat, d.names)
+    }
+  }
+  const changeProj = id => {
+    setProjId(id)
+    const pj = id === 'custom' ? CUSTOM_PROJECT : PROJECTS.find(p => p.id === id)
+    cmdTouched.current = false
+    const plat = pj.rec || 'any'
+    setPlatform(plat)
+    applyDefaults(pj, plat)
+  }
+  const changePlatform = id => { setPlatform(id); setPick(''); if (proj) applyDefaults(proj, id) }
 
   // 画质预设写入字段
   useEffect(() => {
@@ -66,10 +148,10 @@ export default function Workbench({ svc }) {
     if (+g('min_mem') > 0) r.min_mem_mb = +g('min_mem')
     if (+g('max_price') > 0) r.max_price = +g('max_price')
     if (g('runtime')) r.runtime = g('runtime')
-    if (g('arch')) r.arch = g('arch')
-    if (target) r.node_id = target
+    if (kind === 'build') { if (platOpt.arch) r.arch = platOpt.arch } else if (g('arch')) r.arch = g('arch')
+    if (effNode) r.node_id = effNode
     return r
-  }, [g, target])
+  }, [g, effNode, kind, platOpt.arch])
 
   // 估价（debounce）
   useEffect(() => {
@@ -96,7 +178,7 @@ export default function Workbench({ svc }) {
 
   const onFileChange = e => {
     const f = e.target.files[0] || null
-    setFile(f); setFolderInfo(''); bump()
+    setFile(f); setFolderInfo(''); bump(); runDetect(f)
     if (f && kind === 'transcode') {
       const v = document.createElement('video'); v.preload = 'metadata'
       v.onloadedmetadata = () => { if (isFinite(v.duration) && v.duration > 0) { setDur(v.duration); const el = formRef.current.querySelector('[name=duration]'); if (el) el.value = Math.round(v.duration); bump() } }
@@ -119,11 +201,11 @@ export default function Workbench({ svc }) {
       const f = new File([r.blob], r.root + '.zip', { type: 'application/zip' })
       const dt = new DataTransfer(); dt.items.add(f)
       fileRef.current.files = dt.files
-      setFile(f); setFolderInfo('来自文件夹「' + r.root + '」· ' + r.count + ' 个文件 · ' + wbSize(r.total)); setMsg(''); bump()
+      setFile(f); setFolderInfo('来自文件夹「' + r.root + '」· ' + r.count + ' 个文件 · ' + wbSize(r.total)); setMsg(''); bump(); runDetect(f)
     } catch (err) { setMsg('打包失败：' + (err.message || err)) }
     finally { e.target.value = '' }
   }
-  const clearFile = () => { fileRef.current.value = ''; setFile(null); setFolderInfo(''); if (kind === 'transcode') { setDur(0); const el = formRef.current.querySelector('[name=duration]'); if (el) el.value = '0' } bump() }
+  const clearFile = () => { fileRef.current.value = ''; setFile(null); setFolderInfo(''); setDet(null); setProjId(''); if (kind === 'transcode') { setDur(0); const el = formRef.current.querySelector('[name=duration]'); if (el) el.value = '0' } bump() }
 
   const submit = async e => {
     e.preventDefault()
@@ -180,13 +262,7 @@ export default function Workbench({ svc }) {
         <div className="phead-actions"><Btn ghost onClick={() => nav('jobs')}>我的任务 →</Btn></div>
       </div>
       {svc === 'build' && (
-        <div className="wb-pipe">
-          <div className="wb-pipe-step"><b>① 上传源码</b><span>zip 打包上传，解压后的目录就是工作目录</span></div>
-          <i className="wb-pipe-line" />
-          <div className="wb-pipe-step"><b>② 节点编译</b><span>开启 --allow-build 的节点执行命令，按墙钟分钟计费</span></div>
-          <i className="wb-pipe-line" />
-          <div className="wb-pipe-step"><b>③ 产物回传</b><span>输出目录打包 result.zip，校验后在我的任务下载</span></div>
-        </div>
+        <div className="wb-flow"><b>上传源码</b><i>→</i><b>节点编译</b><i>→</i><b>下载产物</b><span>按墙钟分钟结算，失败不结算</span></div>
       )}
       <div className="kpis">
         <Kpi label="在线节点" value={on.length} icon="◉" />
@@ -194,7 +270,7 @@ export default function Workbench({ svc }) {
         <Kpi label="最低单价" value={min === null ? '—' : f2(min) + ' 点/秒'} icon="◈" />
         <Kpi action={<Btn ghost tiny onClick={() => nav('market')}>去市场看卖家 →</Btn>} />
       </div>
-      {target && (
+      {target && svc !== 'build' && (
         <div className="targetchip">仅派发到 <b>{targetW ? (targetW.name || targetW.id) : target}</b>
           <Btn ghost tiny onClick={() => { setTarget(null); bump() }}>取消指定</Btn></div>
       )}
@@ -251,6 +327,71 @@ export default function Workbench({ svc }) {
             </div>
             {folderInfo && <div className="hint">{folderInfo}</div>}
 
+            {kind === 'build' && hasFile && (
+              <div className="wb-wiz">
+                <div className="wb-sec"><i>2</i>识别结果<small>{det ? (det.count + ' 个文件') : '解析中…'}</small></div>
+                {proj ? (
+                  <div className="wb-proj">
+                    <span className="wb-badge" style={{ background: proj.tone }}>{proj.badge}</span>
+                    <div className="wb-proj-t">
+                      <b>{proj.label}{proj.id !== 'custom' && <Tag tone="on">已识别</Tag>}</b>
+                      <span>{proj.id === 'custom' ? '没有匹配到常见构建文件，请在下方选择类型或手写命令' : '依据 ' + proj.why + ' · 产物 ' + proj.artifact}</span>
+                    </div>
+                    <select className="wb-proj-sel" value={proj.id} onChange={e => changeProj(e.target.value)} aria-label="更换项目类型">
+                      {PROJECTS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                      <option value="custom">自定义 / 其他</option>
+                    </select>
+                  </div>
+                ) : <div className="hint">正在读取 zip 文件清单…</div>}
+
+                <div className="wb-sec"><i>3</i>目标平台<small>决定派给哪类机器</small></div>
+                <div className="wb-plats">
+                  {PLATFORMS.map(p => (
+                    <button type="button" key={p.id} className={'wb-plat' + (platform === p.id ? ' on' : '')} onClick={() => changePlatform(p.id)}>
+                      <span className="wb-plat-b">{p.badge}</span><b>{p.label}</b>
+                      {proj && proj.rec === p.id && p.id !== 'any' && <em>推荐</em>}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="wb-sec"><i>4</i>运行节点<small>{target ? '已从市场指定' : shown.length + ' 台可用'}</small></div>
+                {target ? (
+                  <div className="wb-placed">仅派发到 <b>{(workers.find(w => w.id === target) || {}).name || target}</b>
+                    <Btn ghost tiny type="button" onClick={() => { setTarget(null); setPick(''); bump() }}>取消指定</Btn></div>
+                ) : (
+                  <>
+                    <div className="wb-seg">
+                      {[['auto', '自动推荐', '系统挑最合适的'], ['official', '官方节点', '稳定 · 固定价'], ['market', '服务市场', '自己挑卖家']].map(([k, t, d]) => (
+                        <button type="button" key={k} className={place === k ? 'on' : ''} onClick={() => { setPlace(k); setPick(''); bump() }}><b>{t}</b><span>{d}</span></button>
+                      ))}
+                    </div>
+                    {place === 'auto' && (
+                      <div className="hint" style={{ marginTop: 8 }}>{best ? <>将优先派给 <b>{best.w.name || best.w.id}</b> · {f2(best.price)} 点/分钟，其余节点作为备选。</> : '当前没有匹配该平台的在线编译节点，任务会排队等待。'}</div>
+                    )}
+                    {place !== 'auto' && (
+                      <>
+                        <div className="wb-sorts">{Object.keys(SORTS).map(k => <button type="button" key={k} className={sortBy === k ? 'on' : ''} onClick={() => setSortBy(k)}>{SORTS[k]}</button>)}
+                          <Btn ghost tiny type="button" onClick={() => nav('pool')}>看算力市场 →</Btn></div>
+                        <div className="wb-cands">
+                          {shown.length ? shown.slice(0, 6).map((c, i) => {
+                            const on = effNode === c.w.id
+                            return (
+                              <button type="button" key={c.w.id} className={'wb-cand' + (on ? ' on' : '')} onClick={() => { setPick(c.w.id); bump() }}>
+                                <span className="wb-cand-r" />
+                                <span className="wb-cand-n"><b>{c.w.name || c.w.id}</b>{i === 0 && <Tag tone="on">推荐</Tag>}{c.w.mine && <Tag tone="mine">我的</Tag>}{c.w.official && <Tag>官方</Tag>}
+                                  <small>{c.w.os || '系统未知'}{c.w.arch ? ' / ' + c.w.arch : ''} · {c.w.cpus || '?'} 核{c.w.mem_mb ? ' · ' + Math.round(c.w.mem_mb / 1024) + 'GB' : ''}{c.m === null ? ' · 架构未上报' : ''}</small></span>
+                                <span className="wb-cand-m"><b className="num">{f2(c.price)}</b> 点/分钟<small>空闲 {c.free} · 成功率 {Math.round(c.rate * 100)}%</small></span>
+                              </button>
+                            )
+                          }) : <div className="wb-warn">{place === 'official' ? '暂无官方节点上线（节点需带 official 标记），可切换到“服务市场”。' : '没有匹配该平台的在线编译节点，可换平台或稍后再试。'}</div>}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {showAdv && (
               <div>
                 {kind === 'transcode' && policy && policy.local_path && (
@@ -276,19 +417,21 @@ export default function Workbench({ svc }) {
                 )}
                 {kind === 'pr' && <div className="hint">上传 zip：从 Premiere 导出 Final Cut Pro XML（或 FCPXML），连同所有素材一起打包。</div>}
                 {kind === 'build' && (
-                  <div>
-                    <div className="wb-sec"><i>2</i>编译配置<small>zip → result.zip</small></div>
+                  <details className="wb-adv wb-adv-tight">
+                    <summary>编译配置<em>{(formRef.current && g('command').trim()) || (hasFile ? '请填写编译命令' : '识别后自动填写')}</em></summary>
+                    <div className="wb-adv-body">
                     <label>编译命令</label>
-                    <div className="wb-cmd"><span className="wb-cmd-ps">$</span><input name="command" placeholder="powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1" /></div>
+                    <div className="wb-cmd"><span className="wb-cmd-ps">$</span><input name="command" placeholder="powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1" onInput={() => { cmdTouched.current = true }} /></div>
                     <div className="wb-cmd-chips">
-                      {CMD_CHIPS.map(c => <button type="button" key={c} className="wb-cmd-chip" onClick={() => { const el = formRef.current.querySelector('[name=command]'); el.value = c; bump() }}>{c.split(' ')[0]}</button>)}
+                      {CMD_CHIPS.map(c => <button type="button" key={c} className="wb-cmd-chip" onClick={() => { const el = formRef.current.querySelector('[name=command]'); el.value = c; cmdTouched.current = true; bump() }}>{c.split(' ')[0]}</button>)}
                     </div>
                     <div className="row">
                       <div><label>输出目录（相对路径）</label><input name="output" defaultValue="out" /></div>
                       <div><label>超时（秒）</label><input name="timeout" defaultValue="1800" inputMode="numeric" /></div>
                     </div>
                     <div className="hint">按实际墙钟分钟结算，预扣 10 分钟；编译失败不结算。</div>
-                  </div>
+                    </div>
+                  </details>
                 )}
                 {kind === 'transcode' && (
                   <fieldset className="fieldset"><legend>编码参数</legend>
@@ -317,7 +460,7 @@ export default function Workbench({ svc }) {
                       </div>
                       <div className="row">
                         <div><label>要求运行时</label><select name="runtime"><option value="">不限</option><option>ffmpeg</option><option>blender</option><option>cuda</option><option>docker</option><option>python</option></select></div>
-                        <div><label>限定系统架构</label><select name="arch"><option value="">不限</option><option>amd64</option><option>arm64</option></select></div>
+                        {kind !== 'build' && <div><label>限定系统架构</label><select name="arch"><option value="">不限</option><option>amd64</option><option>arm64</option></select></div>}
                       </div>
                       <div className="row">
                         <div><label>单价上限 点/单位</label><input name="max_price" defaultValue="0" inputMode="decimal" /></div>
@@ -338,6 +481,8 @@ export default function Workbench({ svc }) {
             <div className="wb-sumrows">
               <div className="wb-sumrow"><span>任务类型</span><b>{KIND_NAME[kind]}</b></div>
               <div className="wb-sumrow"><span>素材</span><b>{file ? file.name : '未选择'}</b></div>
+              {kind === 'build' && <div className="wb-sumrow"><span>项目 / 平台</span><b>{proj ? proj.label : '—'} · {platOpt.label}</b></div>}
+              {kind === 'build' && <div className="wb-sumrow"><span>运行节点</span><b>{effNode ? ((workers.find(w => w.id === effNode) || {}).name || effNode) : '自动选择'}</b></div>}
             </div>
             <div className="quote">
               {estErr && <div className="q-note">{estErr}</div>}
