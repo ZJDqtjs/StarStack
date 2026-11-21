@@ -54,6 +54,10 @@ type Req struct {
 	// constraint like any other: the scheduler will leave the job queued rather
 	// than quietly place it somewhere else.
 	NodeID string `json:"node_id,omitempty"`
+	// ComfyCheckpoint / ComfyLoRAs constrain ComfyUI pool dispatch to nodes
+	// whose reported local ComfyUI actually has those model files installed.
+	ComfyCheckpoint string   `json:"comfy_checkpoint,omitempty"`
+	ComfyLoRAs      []string `json:"comfy_loras,omitempty"`
 }
 
 type Seg struct {
@@ -178,19 +182,20 @@ type Worker struct {
 	MemMB    uint64 `json:"mem_mb"`
 	// disk is what this machine had free at its last registration; it is
 	// deliberately not live data, so it can only be a coarse constraint
-	DiskFree uint64           `json:"disk_free_mb"`
-	GPUs     []ffx.GPUDetail  `json:"gpus"`
-	Encoders []string         `json:"encoders"`
-	Runtimes []ffx.Runtime    `json:"runtimes"`
-	IPv6     []string         `json:"ipv6,omitempty"`
-	VM       *ffx.VMInventory `json:"vm,omitempty"`
-	Price    float64          `json:"price"`
-	Slots    int              `json:"slots"`
-	Speed    float64          `json:"speed"`
-	OK       int              `json:"ok"`
-	Bad      int              `json:"bad"`
-	Billed   float64          `json:"seconds_billed"`
-	Earned   float64          `json:"earned"`
+	DiskFree    uint64           `json:"disk_free_mb"`
+	GPUs        []ffx.GPUDetail  `json:"gpus"`
+	Encoders    []string         `json:"encoders"`
+	Runtimes    []ffx.Runtime    `json:"runtimes"`
+	IPv6        []string         `json:"ipv6,omitempty"`
+	VM          *ffx.VMInventory `json:"vm,omitempty"`
+	ComfyModels *ffx.ComfyModels `json:"comfy_models,omitempty"`
+	Price       float64          `json:"price"`
+	Slots       int              `json:"slots"`
+	Speed       float64          `json:"speed"`
+	OK          int              `json:"ok"`
+	Bad         int              `json:"bad"`
+	Billed      float64          `json:"seconds_billed"`
+	Earned      float64          `json:"earned"`
 	// Contribution split by market: task seconds and VM runtime seconds are
 	// different units and must never be presented as one figure.
 	EarnedTask    float64 `json:"earned_task"`
@@ -339,7 +344,48 @@ func (w *Worker) meets(r Req, vcodec string) bool {
 	if r.MaxPrice > 0 && w.Price > r.MaxPrice {
 		return false
 	}
+	if r.ComfyCheckpoint != "" && !w.hasComfyCheckpoint(r.ComfyCheckpoint) {
+		return false
+	}
+	for _, lora := range r.ComfyLoRAs {
+		if strings.TrimSpace(lora) != "" && !w.hasComfyLoRA(lora) {
+			return false
+		}
+	}
 	return true
+}
+
+func comfyModelMatch(installed []string, want string) bool {
+	want = strings.TrimSpace(strings.ReplaceAll(want, "\\", "/"))
+	if want == "" {
+		return true
+	}
+	wantLower := strings.ToLower(want)
+	wantBase := strings.ToLower(filepath.Base(want))
+	for _, cand := range installed {
+		c := strings.TrimSpace(strings.ReplaceAll(cand, "\\", "/"))
+		if c == "" {
+			continue
+		}
+		if strings.ToLower(c) == wantLower || strings.ToLower(filepath.Base(c)) == wantBase {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *Worker) hasComfyCheckpoint(want string) bool {
+	if w.ComfyModels == nil || !w.ComfyModels.Reachable {
+		return false
+	}
+	return comfyModelMatch(w.ComfyModels.Checkpoints, want)
+}
+
+func (w *Worker) hasComfyLoRA(want string) bool {
+	if w.ComfyModels == nil || !w.ComfyModels.Reachable {
+		return false
+	}
+	return comfyModelMatch(w.ComfyModels.LoRAs, want)
 }
 
 type Claim struct {
@@ -451,12 +497,19 @@ func (s *Server) restore() {
 				caps = &c
 			}
 		}
+		var comfyModels *ffx.ComfyModels
+		if n.ComfyModels != "" {
+			var cm ffx.ComfyModels
+			if json.Unmarshal([]byte(n.ComfyModels), &cm) == nil {
+				comfyModels = &cm
+			}
+		}
 		s.workers[n.ID] = &Worker{
 			ID: n.ID, Name: n.Name, OwnerID: n.OwnerID, Hostname: n.Hostname,
 			OS: n.OS, Arch: n.Arch, CPUs: n.CPUs, MemMB: uint64(n.MemMB),
 			DiskFree: uint64(n.DiskFreeMB), GPUs: fromStoreGPUs(n.GPUs),
 			Encoders: n.Encoders, Runtimes: fromStoreRuntimes(n.Runtimes),
-			IPv6: n.IPv6, VM: caps,
+			IPv6: n.IPv6, VM: caps, ComfyModels: comfyModels,
 			Price: n.Price, Slots: n.Slots, Speed: n.Speed, OK: n.OK, Bad: n.Bad,
 			Billed: n.SecondsBilled, Earned: n.Earned, Paused: n.Paused,
 			DeviceID:   n.DeviceID,
@@ -857,7 +910,7 @@ func (s *Server) handleHello(w http.ResponseWriter, r *http.Request) {
 	wd.DeviceID = info.DeviceID
 	wd.CPUs, wd.MemMB, wd.DiskFree = info.CPUs, info.MemMB, info.DiskFreeMB
 	wd.GPUs, wd.Encoders, wd.Runtimes = info.GPUs, info.Encoders, info.Runtimes
-	wd.IPv6, wd.VM = info.IPv6, info.VM
+	wd.IPv6, wd.VM, wd.ComfyModels = info.IPv6, info.VM, info.ComfyModels
 	wd.Slots = info.Slots
 	wd.seen, wd.Address = time.Now(), r.RemoteAddr
 	if wd.Price <= 0 {
@@ -898,7 +951,7 @@ func (s *Server) handleHello(w http.ResponseWriter, r *http.Request) {
 		OS:       wd.OS, Arch: wd.Arch, CPUs: wd.CPUs, MemMB: int(wd.MemMB),
 		DiskFreeMB: int64(wd.DiskFree), GPUs: toStoreGPUs(wd.GPUs),
 		Encoders: wd.Encoders, Runtimes: toStoreRuntimes(wd.Runtimes),
-		IPv6: wd.IPv6, VM: vmCapsJSON(wd.VM),
+		IPv6: wd.IPv6, VM: vmCapsJSON(wd.VM), ComfyModels: comfyModelsJSON(wd.ComfyModels),
 		Price: wd.Price, Slots: wd.Slots, Speed: wd.Speed, OK: wd.OK, Bad: wd.Bad,
 		RegisteredAt: time.Now().Unix(), LastSeen: time.Now().Unix(),
 	}
@@ -2053,7 +2106,23 @@ func boolStr(b bool, yes, no string) string {
 }
 
 func (s *Server) handleJobFile(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/") // api jobs id field
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/") // api jobs id field [name]
+	if len(parts) < 4 || len(parts) > 5 {
+		http.NotFound(w, r)
+		return
+	}
+	if parts[3] == "files" {
+		if r.Method != http.MethodGet {
+			http.Error(w, "GET only", http.StatusMethodNotAllowed)
+			return
+		}
+		name := ""
+		if len(parts) == 5 {
+			name = parts[4]
+		}
+		s.handleJobArtifactFiles(w, r, parts[2], name)
+		return
+	}
 	if len(parts) != 4 {
 		http.NotFound(w, r)
 		return
@@ -2062,6 +2131,14 @@ func (s *Server) handleJobFile(w http.ResponseWriter, r *http.Request) {
 	j := s.jobs[parts[2]]
 	s.mu.Unlock()
 	if j == nil {
+		if parts[3] == "logs" {
+			if r.Method != http.MethodGet {
+				http.Error(w, "GET only", http.StatusMethodNotAllowed)
+				return
+			}
+			s.handleJobLogs(w, r, parts[2])
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -2193,6 +2270,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 				// hypervisor capability is shown to everyone (it is what the VM market
 				// is selling); the interface addresses only to their owner
 				"vm": wd.VM,
+			}
+			if wd.ComfyModels != nil {
+				view["comfy_models"] = wd.ComfyModels
 			}
 			// last_seen lets the console print the moment a node was last heard
 			// from instead of a bare "N seconds ago"; "since" stays for clients

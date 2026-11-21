@@ -610,6 +610,19 @@ type Inventory struct {
 	// will not let a seller publish a VM offer without the latter.
 	IPv6 []string     `json:"ipv6,omitempty"`
 	VM   *VMInventory `json:"vm,omitempty"`
+	// ComfyModels is a compact summary of the checkpoints and LoRAs installed
+	// in the provider's local ComfyUI (present only when --allow-comfy is on).
+	// It lets the scheduler match prompt graphs to machines that actually carry
+	// the model files instead of failing mid-queue.
+	ComfyModels *ComfyModels `json:"comfy_models,omitempty"`
+}
+
+// ComfyModels summarises the model files installed on a provider's ComfyUI.
+type ComfyModels struct {
+	Checkpoints []string `json:"checkpoints,omitempty"`
+	LoRAs       []string `json:"loras,omitempty"`
+	Reachable   bool     `json:"reachable"`
+	UpdatedAt   int64    `json:"updated_at,omitempty"`
 }
 
 type GPUDetail struct {

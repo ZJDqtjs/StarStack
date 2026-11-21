@@ -1,17 +1,81 @@
 package hub
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	"starstack/internal/ffx"
 	"starstack/internal/render"
 	"starstack/internal/store"
 )
+
+// comfyModelsJSON encodes a worker's reported ComfyUI model summary for SQLite.
+func comfyModelsJSON(m *ffx.ComfyModels) string {
+	if m == nil {
+		return ""
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// extractComfyModels inspects an API-format ComfyUI prompt graph for the first
+// referenced checkpoint/unet and any LoRA filenames.
+func extractComfyModels(raw json.RawMessage) (checkpoint string, loras []string) {
+	var nodes map[string]struct {
+		ClassType string         `json:"class_type"`
+		Inputs    map[string]any `json:"inputs"`
+	}
+	if json.Unmarshal(raw, &nodes) != nil {
+		return "", nil
+	}
+	// Deterministic order over node IDs.
+	ids := make([]string, 0, len(nodes))
+	for id := range nodes {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	seenLora := map[string]bool{}
+	for _, id := range ids {
+		n := nodes[id]
+		ct := strings.TrimSpace(n.ClassType)
+		if checkpoint == "" {
+			switch ct {
+			case "CheckpointLoaderSimple", "CheckpointLoader":
+				if s, ok := n.Inputs["ckpt_name"].(string); ok && strings.TrimSpace(s) != "" {
+					checkpoint = strings.TrimSpace(s)
+				}
+			case "UNETLoader":
+				if s, ok := n.Inputs["unet_name"].(string); ok && strings.TrimSpace(s) != "" {
+					checkpoint = strings.TrimSpace(s)
+				}
+			}
+		}
+		if ct == "LoraLoader" || ct == "LoraLoaderModelOnly" {
+			if s, ok := n.Inputs["lora_name"].(string); ok {
+				s = strings.TrimSpace(s)
+				if s != "" && !seenLora[strings.ToLower(s)] {
+					seenLora[strings.ToLower(s)] = true
+					loras = append(loras, s)
+				}
+			}
+		}
+	}
+	return checkpoint, loras
+}
 
 // defaultComfyURL is where a provider's ComfyUI normally listens. It is written
 // into starstack-node.json so a provider can point the agent elsewhere without
@@ -45,11 +109,13 @@ func (s *Server) handleCreateComfy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name    string          `json:"name"`
-		Kind    string          `json:"kind"` // image | video
-		Prompt  json.RawMessage `json:"prompt"`
-		Timeout int             `json:"timeout"`
-		Req     *Req            `json:"req"`
+		Name       string          `json:"name"`
+		Kind       string          `json:"kind"` // image | video
+		Prompt     json.RawMessage `json:"prompt"`
+		Timeout    int             `json:"timeout"`
+		Checkpoint string          `json:"checkpoint"`
+		LoRAs      []string        `json:"loras"`
+		Req        *Req            `json:"req"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, int64(render.MaxComfyPromptBytes)+(64<<10))
 	if err := json.NewDecoder(io.LimitReader(r.Body, int64(render.MaxComfyPromptBytes)+(64<<10))).Decode(&req); err != nil {
@@ -93,6 +159,17 @@ func (s *Server) handleCreateComfy(w http.ResponseWriter, r *http.Request) {
 	// honest default: image and video samplers both want VRAM, and a CPU-only
 	// node that advertises comfyui cannot actually finish one in time.
 	hard.NeedGPU = true
+	if hard.ComfyCheckpoint == "" && strings.TrimSpace(req.Checkpoint) != "" {
+		hard.ComfyCheckpoint = strings.TrimSpace(req.Checkpoint)
+	}
+	if len(hard.ComfyLoRAs) == 0 && len(req.LoRAs) > 0 {
+		for _, l := range req.LoRAs {
+			if s := strings.TrimSpace(l); s != "" {
+				hard.ComfyLoRAs = append(hard.ComfyLoRAs, s)
+			}
+		}
+	}
+	graphCkpt, graphLoRAs := extractComfyModels(req.Prompt)
 
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -116,6 +193,28 @@ func (s *Server) handleCreateComfy(w http.ResponseWriter, r *http.Request) {
 	job.Segs = []*Seg{{ID: id + "-0", JobID: id, Index: 0, Status: "pending"}}
 
 	s.mu.Lock()
+	// Auto-apply model constraints inferred from the prompt graph when at least
+	// one online ComfyUI node reports its installed models, so graphs land on a
+	// node that actually has the referenced checkpoint/LoRA without stranding
+	// legacy workers that do not report ComfyModels yet.
+	if hard.ComfyCheckpoint == "" || len(hard.ComfyLoRAs) == 0 {
+		anyModelAware := false
+		for _, wd := range s.workers {
+			if wd.online() && wd.hasRuntime("comfyui") && wd.ComfyModels != nil && wd.ComfyModels.Reachable {
+				anyModelAware = true
+				break
+			}
+		}
+		if anyModelAware {
+			if hard.ComfyCheckpoint == "" && graphCkpt != "" {
+				hard.ComfyCheckpoint = graphCkpt
+			}
+			if len(hard.ComfyLoRAs) == 0 && len(graphLoRAs) > 0 {
+				hard.ComfyLoRAs = graphLoRAs
+			}
+			job.Req = hard
+		}
+	}
 	if live := s.countLiveJobsLocked(u.ID); live >= s.policy.MaxActiveJobs {
 		s.mu.Unlock()
 		http.Error(w, jsonErr(fmt.Sprintf("你有 %d 个任务在跑或排队，单账户上限 %d 个",
@@ -125,10 +224,18 @@ func (s *Server) handleCreateComfy(w http.ResponseWriter, r *http.Request) {
 	hold, holdPrice, basis := s.estimateHoldLocked(job)
 	job.Hold = hold
 	if n := s.eligibleLocked(hard, ""); n == 0 {
-		job.Note = "ComfyUI 任务；当前没有开启 --allow-comfy 的在线节点，任务将排队等待"
+		if hard.ComfyCheckpoint != "" {
+			job.Note = fmt.Sprintf("ComfyUI 任务；当前没有安装了 %s 的在线节点，任务将排队等待", hard.ComfyCheckpoint)
+		} else {
+			job.Note = "ComfyUI 任务；当前没有开启 --allow-comfy 的在线节点，任务将排队等待"
+		}
 	} else {
-		job.Note = fmt.Sprintf("ComfyUI 任务；共 %d 台可执行节点；预扣依据：%s（%.2f 点/次）",
-			n, basis, holdPrice)
+		modelTag := ""
+		if hard.ComfyCheckpoint != "" {
+			modelTag = " · 模型 " + filepath.Base(strings.ReplaceAll(hard.ComfyCheckpoint, "\\", "/"))
+		}
+		job.Note = fmt.Sprintf("ComfyUI 任务%s；共 %d 台可执行节点；预扣依据：%s（%.2f 点/次）",
+			modelTag, n, basis, holdPrice)
 	}
 	if u.Credits < hold {
 		s.mu.Unlock()
@@ -155,5 +262,139 @@ func (s *Server) handleCreateComfy(w http.ResponseWriter, r *http.Request) {
 	log.Printf("comfy job %s queued by %s: %s graph, timeout %ds, hold=%.3f points",
 		id, u.Name, kind, timeout, hold)
 	writeJSON(w, map[string]any{"ok": true, "id": id, "kind": render.KindComfy,
-		"hold": hold, "note": job.Note, "unit": "次", "timeout": timeout})
+		"hold": hold, "note": job.Note, "unit": "次", "timeout": timeout,
+		"checkpoint": hard.ComfyCheckpoint, "loras": hard.ComfyLoRAs})
+}
+
+// handleJobArtifactFiles lists or serves individual files inside a completed
+// job's zip artifact (e.g. ComfyUI generated images/videos in result.zip) so
+// the web console can display outputs inline without forcing a manual unzip.
+func (s *Server) handleJobArtifactFiles(w http.ResponseWriter, r *http.Request, jobID, wantName string) {
+	u := s.currentUser(r)
+	if u == nil {
+		http.Error(w, jsonErr("请先登录"), http.StatusUnauthorized)
+		return
+	}
+	s.mu.Lock()
+	j := s.jobs[jobID]
+	outPath := ""
+	allowed := j != nil && j.OwnerID == u.ID
+	if allowed {
+		outPath = j.out
+	}
+	s.mu.Unlock()
+	if !allowed {
+		if row, err := s.st.Job(jobID); err == nil && row.OwnerID == u.ID {
+			allowed = true
+		}
+	}
+	if !allowed {
+		http.NotFound(w, r)
+		return
+	}
+	if outPath == "" {
+		for _, cand := range []string{"result.zip", "out.zip"} {
+			p := filepath.Join(s.dataDir, "jobs", jobID, cand)
+			if _, err := os.Stat(p); err == nil {
+				outPath = p
+				break
+			}
+		}
+	}
+	if outPath == "" || !strings.EqualFold(filepath.Ext(outPath), ".zip") {
+		if wantName == "" {
+			writeJSON(w, map[string]any{"job_id": jobID, "files": []any{}})
+			return
+		}
+		http.NotFound(w, r)
+		return
+	}
+	zr, err := zip.OpenReader(outPath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer zr.Close()
+
+	if wantName == "" {
+		type fileItem struct {
+			Filename string `json:"filename"`
+			Size     uint64 `json:"size"`
+			Mime     string `json:"mime"`
+			URL      string `json:"url"`
+		}
+		files := make([]fileItem, 0, len(zr.File))
+		for _, f := range zr.File {
+			if f.FileInfo().IsDir() {
+				continue
+			}
+			base := filepath.Base(strings.ReplaceAll(f.Name, "\\", "/"))
+			if base == "" || base == "." || base == ".." {
+				continue
+			}
+			ct := artifactMime(base)
+			files = append(files, fileItem{
+				Filename: base,
+				Size:     f.UncompressedSize64,
+				Mime:     ct,
+				URL:      "/api/jobs/" + url.PathEscape(jobID) + "/files/" + url.PathEscape(base),
+			})
+		}
+		writeJSON(w, map[string]any{"job_id": jobID, "files": files})
+		return
+	}
+
+	decoded, err := url.PathUnescape(wantName)
+	if err != nil {
+		decoded = wantName
+	}
+	cleanWant := filepath.Base(strings.ReplaceAll(decoded, "\\", "/"))
+	if cleanWant == "" || cleanWant == "." || cleanWant == ".." {
+		http.NotFound(w, r)
+		return
+	}
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		base := filepath.Base(strings.ReplaceAll(f.Name, "\\", "/"))
+		if base != cleanWant {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			http.Error(w, jsonErr("读取产物失败"), http.StatusInternalServerError)
+			return
+		}
+		defer rc.Close()
+		w.Header().Set("Content-Type", artifactMime(base))
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Cache-Control", "private, max-age=3600")
+		io.Copy(w, io.LimitReader(rc, 256<<20))
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func artifactMime(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	}
+	if ct := mime.TypeByExtension(filepath.Ext(name)); ct != "" {
+		return ct
+	}
+	return "application/octet-stream"
 }

@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS nodes(
   paused         INTEGER NOT NULL DEFAULT 0,
   ipv6           TEXT NOT NULL DEFAULT '',
   vm             TEXT NOT NULL DEFAULT '',
+  comfy_models   TEXT NOT NULL DEFAULT '',
   -- device_id is the machine's stable fingerprint: one account + one physical
   -- machine maps to exactly one node, no matter how many launchers it runs.
   device_id      TEXT NOT NULL DEFAULT '',
@@ -436,6 +437,7 @@ ALTER TABLE service_offers ADD COLUMN node_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE service_offers ADD COLUMN scene TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT '';
 ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE nodes ADD COLUMN comfy_models TEXT NOT NULL DEFAULT '';
 `
 
 // Indexes on columns introduced by columnMigrations must be created after the
@@ -666,6 +668,7 @@ type NodeRow struct {
 	// Both are what the cloud-host market can promise a buyer.
 	IPv6         []string
 	VM           string
+	ComfyModels  string
 	RegisteredAt int64
 	LastSeen     int64
 }
@@ -676,18 +679,18 @@ type NodeRow struct {
 // not wipe the identity the broker already knows for this machine.
 func (s *Store) RegisterNode(n *NodeRow) error {
 	_, err := s.db.Exec(`INSERT INTO nodes(id,owner_id,name,hostname,os,arch,cpus,mem_mb,disk_free_mb,
-			gpus,encoders,runtimes,price,slots,speed,ok,bad,ipv6,vm,device_id,registered_at,last_seen)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+			gpus,encoders,runtimes,price,slots,speed,ok,bad,ipv6,vm,comfy_models,device_id,registered_at,last_seen)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET owner_id=COALESCE(excluded.owner_id, nodes.owner_id),
 			name=excluded.name, hostname=excluded.hostname, os=excluded.os, arch=excluded.arch,
 			cpus=excluded.cpus, mem_mb=excluded.mem_mb, disk_free_mb=excluded.disk_free_mb,
 			gpus=excluded.gpus, encoders=excluded.encoders, runtimes=excluded.runtimes,
-			ipv6=excluded.ipv6, vm=excluded.vm,
+			ipv6=excluded.ipv6, vm=excluded.vm, comfy_models=excluded.comfy_models,
 			device_id=CASE WHEN excluded.device_id<>'' THEN excluded.device_id ELSE nodes.device_id END,
 			price=nodes.price, slots=excluded.slots, last_seen=excluded.last_seen`,
 		n.ID, nullStr(n.OwnerID), n.Name, n.Hostname, n.OS, n.Arch, n.CPUs, n.MemMB, n.DiskFreeMB,
 		enc(n.GPUs), enc(n.Encoders), enc(n.Runtimes), n.Price, n.Slots, n.Speed, n.OK, n.Bad,
-		enc(n.IPv6), n.VM, n.DeviceID, n.RegisteredAt, n.LastSeen)
+		enc(n.IPv6), n.VM, n.ComfyModels, n.DeviceID, n.RegisteredAt, n.LastSeen)
 	return err
 }
 
@@ -726,7 +729,7 @@ func (s *Store) TouchNode(id string, speed float64, ok, bad int) error {
 
 func (s *Store) Nodes() ([]*NodeRow, error) {
 	rows, err := s.db.Query(`SELECT id,owner_id,name,hostname,os,arch,cpus,mem_mb,disk_free_mb,gpus,encoders,
-		runtimes,price,slots,speed,ok,bad,seconds_billed,earned,paused,ipv6,vm,
+		runtimes,price,slots,speed,ok,bad,seconds_billed,earned,paused,ipv6,vm,comfy_models,
 		device_id,earned_task,earned_vm,billed_task_sec,billed_vm_sec,
 		registered_at,last_seen FROM nodes ORDER BY registered_at`)
 	if err != nil {
@@ -736,17 +739,18 @@ func (s *Store) Nodes() ([]*NodeRow, error) {
 	var out []*NodeRow
 	for rows.Next() {
 		n := &NodeRow{}
-		var owner, g, e, r, ipv6, vmCaps sql.NullString
+		var owner, g, e, r, ipv6, vmCaps, comfyModels sql.NullString
 		var paused int
 		if err := rows.Scan(&n.ID, &owner, &n.Name, &n.Hostname, &n.OS, &n.Arch, &n.CPUs, &n.MemMB,
 			&n.DiskFreeMB, &g, &e, &r, &n.Price, &n.Slots, &n.Speed, &n.OK, &n.Bad, &n.SecondsBilled,
-			&n.Earned, &paused, &ipv6, &vmCaps, &n.DeviceID, &n.EarnedTask, &n.EarnedVM,
+			&n.Earned, &paused, &ipv6, &vmCaps, &comfyModels, &n.DeviceID, &n.EarnedTask, &n.EarnedVM,
 			&n.BilledTaskSec, &n.BilledVMSec, &n.RegisteredAt, &n.LastSeen); err != nil {
 			return nil, err
 		}
 		n.OwnerID = owner.String
 		n.Paused = paused != 0
 		n.VM = vmCaps.String
+		n.ComfyModels = comfyModels.String
 		dec(g, &n.GPUs)
 		dec(e, &n.Encoders)
 		dec(r, &n.Runtimes)

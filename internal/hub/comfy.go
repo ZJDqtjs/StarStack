@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -141,7 +142,80 @@ func (s *Server) handleComfyStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out["active"] = active
+	out["pool_allowed"] = s.policy.comfyAllowed(u.Name)
+	poolNodes, poolMinPrice, poolModels := s.comfyPoolSummary()
+	out["pool_nodes"] = poolNodes
+	out["pool_min_price"] = poolMinPrice
+	out["pool_models"] = poolModels
 	writeJSON(w, out)
+}
+
+type comfyPoolModelEntry struct {
+	Name     string  `json:"name"`
+	Nodes    int     `json:"nodes"`
+	MinPrice float64 `json:"min_price"`
+}
+
+// comfyPoolSummary aggregates currently online GPU nodes advertising the
+// comfyui runtime and deduplicates their reported checkpoints & LoRAs so the
+// Create view can route default image/video generation straight to the pool.
+func (s *Server) comfyPoolSummary() (nodes int, minPrice float64, models map[string][]comfyPoolModelEntry) {
+	ckpts := map[string]*comfyPoolModelEntry{}
+	loras := map[string]*comfyPoolModelEntry{}
+	add := func(m map[string]*comfyPoolModelEntry, name string, price float64) {
+		k := strings.ToLower(strings.TrimSpace(name))
+		if k == "" {
+			return
+		}
+		e := m[k]
+		if e == nil {
+			e = &comfyPoolModelEntry{Name: strings.TrimSpace(name), MinPrice: price}
+			m[k] = e
+		}
+		e.Nodes++
+		if price > 0 && (e.MinPrice == 0 || price < e.MinPrice) {
+			e.MinPrice = price
+		}
+	}
+	s.mu.Lock()
+	for _, wd := range s.workers {
+		if !wd.online() || wd.Paused || wd.cooling() {
+			continue
+		}
+		if !wd.hasRuntime("comfyui") || len(wd.GPUs) == 0 {
+			continue
+		}
+		nodes++
+		if wd.Price > 0 && (minPrice == 0 || wd.Price < minPrice) {
+			minPrice = wd.Price
+		}
+		if wd.ComfyModels != nil && wd.ComfyModels.Reachable {
+			for _, c := range wd.ComfyModels.Checkpoints {
+				add(ckpts, c, wd.Price)
+			}
+			for _, l := range wd.ComfyModels.LoRAs {
+				add(loras, l, wd.Price)
+			}
+		}
+	}
+	s.mu.Unlock()
+	flatten := func(m map[string]*comfyPoolModelEntry) []comfyPoolModelEntry {
+		out := make([]comfyPoolModelEntry, 0, len(m))
+		for _, e := range m {
+			out = append(out, *e)
+		}
+		sort.Slice(out, func(i, j int) bool {
+			if out[i].Nodes != out[j].Nodes {
+				return out[i].Nodes > out[j].Nodes
+			}
+			return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+		})
+		return out
+	}
+	return nodes, minPrice, map[string][]comfyPoolModelEntry{
+		"checkpoints": flatten(ckpts),
+		"loras":       flatten(loras),
+	}
 }
 
 func (s *Server) handleComfyWorkflows(w http.ResponseWriter, r *http.Request) {
