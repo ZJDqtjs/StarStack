@@ -7,12 +7,11 @@
 - `harmony-rn/` — **鸿蒙原生端**（RNOH 0.84.6 + ArkTS 长时任务），复用同一套页面。
 - `miniapp/` — 原生微信小程序，覆盖需求方的 5 个页面 + 登录 + 星舷助手。
 - `shared/` — 接口客户端、类型约定、状态文案、格式化函数与 Agent 意图引擎。
-- `desktop/`（WPF+WebView2）— **已停止发布**（2026-11-21），源码保留作对照；桌面端交付形态换成
-  `desktop-rn/`（RNW 原生，CI 出 `StarStack-Desktop-RN.zip`）。
 - `harmony/`（ArkWeb）— 仍在出货的鸿蒙壳，内嵌 `web-react/dist`，自身不含业务 UI。
 
-> Capacitor 时代那套（`mobile/` 界面、`android/` 工程、`capacitor.config.ts`）已于 2026-11-20 删除，
-> 只在 git 历史里可查。手机端唯一形态是 `mobile-rn/`。
+> Capacitor 时代那套（`mobile/` 界面、`android/` 工程、`capacitor.config.ts`）已于 2026-11-20 删除；
+> WPF + WebView2 桌面壳（`desktop/`）与其验收脚本 `scripts/verify-desktop-proxy.cjs` 于 2026-11-21
+> 删除，桌面端只留 `desktop-rn/`（RNW 原生）。都只在 git 历史里可查。
 
 后端已支持 `Authorization: Bearer <session token>`（登录响应里新增 `token` 字段）与 `/api/*` 的 CORS 预检，浏览器 Cookie 会话保持原样。
 
@@ -29,22 +28,20 @@
 
 ### 构建戳：判断「谁落后了」的唯一依据
 
-exe 与鸿蒙 rawfile 内嵌的都是**构建期快照**（`EmbeddedResource` / rawfile），
-web 改了不会自动流过去，而且不会报错。所以每份产物自带一枚戳：
+只有鸿蒙壳还在内嵌网页，而 rawfile 是**构建期快照**：web 改了不会自动流过去，而且不会报错。
+所以每份产物自带一枚戳：
 
-- `web-react/vite.config.js` 与 `apps/vite.config.ts` 用 vite `define` 注入 `__BUILD__`（pkg / sha / time），
-  同时落盘 `dist/build.json`。
-- 桌面端「关于」直接读内嵌的 `web/build.json`，显示这枚 exe 里装的是哪一版网页；
-  web 端在「设置 → 关于构建」。两处戳对不上 = 壳里的网页落后了。
-- `apps/desktop/StarStack.Desktop.csproj` 的 `EnsureWebBuildStamp` target 会拦下没有 `build.json`
-  的旧产物：旧网页无法被静默打进 exe。
+- `web-react/vite.config.js` 用 vite `define` 注入 `__BUILD__`（pkg / sha / time），
+  同时落盘 `dist/build.json`；web 端在「设置 → 关于构建」显示。
+- `apps/harmony/.../rawfile/web/build.json` 就是被内嵌的那一版：跑
+  `npm --prefix apps run sync:harmony` 后应能看到本次 commit。
 
-> **exe 与鸿蒙都取 `web-react/dist`**（唯一 UI 源）。Capacitor 时代那套已删除，
-> 不再有任何交付形态依赖它。
+> 桌面端（`desktop-rn`）与 Android（`mobile-rn`）都是 RN 原生界面，不再内嵌网页，
+> 也就没有「壳里的网页落后」这一类问题。
 
 校验命令：`npm --prefix apps run verify:sync`（CI 里是 `多端控制台同步检查` job）。
-它按 **L0 交易主链**（登录/余额/提交/进度/下载/账单）逐端打分，并检查交付形态的
-界面来源是否仍是 `web-react/dist`（csproj 内嵌路径、鸿蒙 rawfile 同步源）。
+它按 **L0 交易主链**（登录/余额/提交/进度/下载/账单）逐端打分，并检查鸿蒙 rawfile 的
+同步源仍是 `web-react/dist`、`release.yml` 确实复用了桌面端工作流。
 
 ## 目录
 
@@ -52,8 +49,7 @@ web 改了不会自动流过去，而且不会报错。所以每份产物自带�
 apps/
   shared/            api.js / constants.js / format.js / agent.js（ESM，仅小程序用 sync:core 打包）
   mobile-rn/         RN 安卓端：src/screens 全套页面 + modules/starstack-node（Kotlin 前台服务）
-  desktop/           WPF + WebView2 套壳（已停止发布，仅作对照）
-  desktop-rn/        RNW 原生桌面端（当前桌面交付形态，CI 构建）
+  desktop-rn/        RNW 原生桌面端（桌面端唯一形态，CI 构建）
   harmony/           ArkTS 壳，rawfile/web 内嵌 web-react/dist 的副本
   miniapp/           原生小程序；utils/core.js 由 shared/ 打包生成
   scripts/           verify-miniapp.cjs（Node 侧校验小程序）、sync-harmony.cjs（同步鸿蒙产物）
@@ -132,10 +128,9 @@ node scripts/verify-console-sync.cjs
 
 ### 桌面端产物形态
 
-桌面端交付形态已换成 `desktop-rn/`（RNW 原生），由 `.github/workflows/desktop-rn.yml` 在
+桌面端只有 `desktop-rn/`（RNW 原生），由 `.github/workflows/desktop-rn.yml` 在
 `windows-latest` 上编译，产出 `StarStack-Desktop-RN.zip`（约 21 MB，解压即用）。
-旧的 WPF 套壳 `desktop/build.cmd` 仍保留源码（`dotnet publish` 自包含单文件，
-产物约 70–90 MB），但已不再随 Release 发布。
+WPF + WebView2 套壳（`desktop/`，自包含单文件 exe）已于 2026-11-21 删除。
 
 ## Linux 支持
 

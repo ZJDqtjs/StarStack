@@ -1,7 +1,6 @@
 # 构建产物
 bin/
 dist/
-dist-desktop/
 build-output/
 
 # 运行时数据与本地测试产生的目录
@@ -39,8 +38,8 @@ apps/mobile-rn/node_modules/
 apps/mobile-rn/android/
 apps/desktop-rn/node_modules/
 apps/harmony-rn/node_modules/
-# WPF 的中间产物：dotnet build 会生成 x64/Debug 的 obj，进库只会让 diff 变噪音
-apps/desktop/obj/
+# RNW 生成的原生工程（init-windows 产出，构建时重建）
+apps/desktop-rn/windows/
 
 # 本地起一个临时 Broker 做联调时留下的库与密钥
 tmp-broker/

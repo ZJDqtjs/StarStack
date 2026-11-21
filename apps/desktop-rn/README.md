@@ -115,5 +115,13 @@ npx react-native bundle --platform windows --dev false `
 
 ## 与旧 `apps/desktop` 的关系
 
-旧 WPF + WebView2 壳已不再作为交付形态；本工程是桌面端的唯一目标。
-旧的 worker 管理逻辑（`MainWindow.xaml.cs` 的 `StartWorkerAsync`）保留作原生模块的行为参考。
+旧 WPF + WebView2 壳（`apps/desktop`）已于 2026-11-21 删除，本工程是桌面端唯一形态。
+它原来的 worker 管理逻辑（`StartWorkerAsync`：拉起 `starstack-worker.exe`、
+JobObject 兜底、解析日志）已经搬进 `native/StarStackDesktopModule.cpp`：
+
+| 能力 | WPF 壳 | 现在（RNW） |
+|---|---|---|
+| 启动/停止本机节点 | `Process` + JobObject | `CreateProcessW` + JobObject（`nodeStart` / `nodeStop`） |
+| 节点状态与统计 | 只把日志塞进队列，页面看不到 | stderr 管道解析：相位 / 分片号 / 编码器 / 已完成片数，进程退出带退出码 |
+| 选择文件 / 下载产物 | WebView2 原生选择器 + 主进程反代 | `pickFile` / `download`（`GetOpenFileNameW` / WinHTTP + Bearer） |
+| 界面 | 内嵌 `web-react/dist`（受 CORS/构建戳约束） | 原生 RN 页面（复用 `mobile-rn/src`），无网页快照问题 |

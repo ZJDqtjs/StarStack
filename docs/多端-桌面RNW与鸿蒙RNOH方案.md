@@ -79,7 +79,8 @@ apps/desktop-rn/
   （RNW 0.76+ 已废弃 `react-native-windows-init`），需要 PowerShell 7、.NET SDK 8+、
   VS2022 + C++ 工作负载 + Windows SDK。`init-windows` 在加载时会调用 `pwsh`，缺它时命令不会出现在
   `npx react-native --help` 中。
-- 本地节点走 `starstack-worker.exe`：沿用当前 WPF 的 `WorkerHost` 逻辑，改成 RNW TurboModule（C#/C++）。
+- 本地节点走 `starstack-worker.exe`：已从 WPF 的 `StartWorkerAsync` 搬成 RNW TurboModule
+  （`native/StarStackDesktopModule.cpp`，CreateProcessW + JobObject + stderr 解析）。
 
 ## 五、鸿蒙 RNOH 工程（下一步）
 
